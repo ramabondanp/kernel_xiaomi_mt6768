@@ -161,6 +161,13 @@ irqreturn_t __handle_irq_event_percpu(struct irq_desc *desc, unsigned int *flags
 	for_each_action_of_desc(desc, action) {
 		irqreturn_t res;
 
+		/*
+		 * If this IRQ would be threaded under force_irqthreads, mark it so.
+		 */
+		if (irq_settings_can_thread(desc) &&
+		    !(action->flags & (IRQF_NO_THREAD | IRQF_PERCPU | IRQF_ONESHOT)))
+			trace_hardirq_threaded();
+
 		trace_irq_handler_entry(irq, action);
 #ifdef CONFIG_MTK_RT_THROTTLE_MON
 		t1 = sched_clock();
