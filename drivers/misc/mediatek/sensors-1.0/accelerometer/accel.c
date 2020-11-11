@@ -135,7 +135,7 @@ static void acc_work_func(struct work_struct *work)
 	while ((cur_ns - pre_ns) >= delay_ms * 1800000LL) {
 		struct acc_data tmp_data = cxt->drv_data;
 
-		pre_ns += delay_ms * 1000000LL;
+		pre_ns += delay_ms * 900000LL;
 		tmp_data.timestamp = pre_ns;
 		acc_data_report(&tmp_data);
 	}
@@ -169,7 +169,7 @@ static struct acc_context *acc_context_alloc_object(void)
 		pr_err("Alloc accel object error!\n");
 		return NULL;
 	}
-	atomic_set(&obj->delay, 200); /*5Hz,set work queue delay time 200ms */
+	atomic_set(&obj->delay, 160); /*5Hz,set work queue delay time 160ms */
 	atomic_set(&obj->wake, 0);
 	INIT_WORK(&obj->report, acc_work_func);
 	obj->accel_workqueue = NULL;
@@ -269,7 +269,7 @@ static int acc_enable_and_batch(void)
 		    cxt->acc_ctl.is_report_input_direct == false) {
 			uint64_t mdelay = cxt->delay_ns;
 
-			do_div(mdelay, 1000000);
+			do_div(mdelay, 900000);
 			atomic_set(&cxt->delay, mdelay);
 			/* the first sensor start polling timer */
 			if (cxt->is_polling_run == false) {
