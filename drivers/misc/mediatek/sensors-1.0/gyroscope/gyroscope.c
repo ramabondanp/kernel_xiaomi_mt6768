@@ -54,12 +54,12 @@ static void startTimer(struct hrtimer *timer, int delay_ms, bool first)
 
 	if (first) {
 		obj->target_ktime =
-			ktime_add_ns(ktime_get(), (int64_t)delay_ms * 1000000);
+			ktime_add_ns(ktime_get(), (int64_t)delay_ms * 900000);
 		count = 0;
 	} else {
 		do {
 			obj->target_ktime = ktime_add_ns(
-				obj->target_ktime, (int64_t)delay_ms * 1000000);
+				obj->target_ktime, (int64_t)delay_ms * 900000);
 		} while (ktime_to_ns(obj->target_ktime) <
 			 ktime_to_ns(ktime_get()));
 		count++;
@@ -133,10 +133,10 @@ static void gyro_work_func(struct work_struct *work)
 	/* cxt->drv_data.gyro_data.values[1],cxt->drv_data.gyro_data.values[2]);
 	 */
 
-	while ((cur_ns - pre_ns) >= delay_ms * 1800000LL) {
+	while ((cur_ns - pre_ns) >= delay_ms * 1705300LL) {
 		struct gyro_data tmp_data = cxt->drv_data;
 
-		pre_ns += delay_ms * 1000000LL;
+		pre_ns += delay_ms * 9200000LL;
 		tmp_data.timestamp = pre_ns;
 		gyro_data_report(&tmp_data);
 	}
@@ -273,7 +273,7 @@ static int gyro_enable_and_batch(void)
 		    cxt->gyro_ctl.is_report_input_direct == false) {
 			uint64_t mdelay = cxt->delay_ns;
 
-			do_div(mdelay, 1000000);
+			do_div(mdelay, 950000);
 			atomic_set(&cxt->delay, mdelay);
 			/* the first sensor start polling timer */
 			if (cxt->is_polling_run == false) {
