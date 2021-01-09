@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,26 +31,23 @@ DECLARE_WORK(swap_work, swap_fn);
 
 /* User knob to enable/disable process reclaim feature */
 static int enable_process_reclaim;
-module_param_named(enable_process_reclaim, enable_process_reclaim, int,
-	S_IRUGO | S_IWUSR);
+module_param_named(enable_process_reclaim, enable_process_reclaim, int, 0644);
 
 /* The max number of pages tried to be reclaimed in a single run */
 int per_swap_size = SWAP_CLUSTER_MAX * 32;
-module_param_named(per_swap_size, per_swap_size, int, S_IRUGO | S_IWUSR);
+module_param_named(per_swap_size, per_swap_size, int, 0644);
 
 int reclaim_avg_efficiency;
-module_param_named(reclaim_avg_efficiency, reclaim_avg_efficiency,
-			int, S_IRUGO);
+module_param_named(reclaim_avg_efficiency, reclaim_avg_efficiency, int, 0444);
 
 /* The vmpressure region where process reclaim operates */
 static unsigned long pressure_min = 50;
 static unsigned long pressure_max = 90;
-module_param_named(pressure_min, pressure_min, ulong, S_IRUGO | S_IWUSR);
-module_param_named(pressure_max, pressure_max, ulong, S_IRUGO | S_IWUSR);
+module_param_named(pressure_min, pressure_min, ulong, 0644);
+module_param_named(pressure_max, pressure_max, ulong, 0644);
 
 static short min_score_adj = 360;
-module_param_named(min_score_adj, min_score_adj, short,
-	S_IRUGO | S_IWUSR);
+module_param_named(min_score_adj, min_score_adj, short, 0644);
 
 /*
  * Scheduling process reclaim workqueue unecessarily
@@ -62,10 +59,10 @@ module_param_named(min_score_adj, min_score_adj, short,
  * efficincy used as theshold for this.
  */
 static int swap_eff_win = 2;
-module_param_named(swap_eff_win, swap_eff_win, int, S_IRUGO | S_IWUSR);
+module_param_named(swap_eff_win, swap_eff_win, int, 0644);
 
 static int swap_opt_eff = 50;
-module_param_named(swap_opt_eff, swap_opt_eff, int, S_IRUGO | S_IWUSR);
+module_param_named(swap_opt_eff, swap_opt_eff, int, 0644);
 
 static atomic_t skip_reclaim = ATOMIC_INIT(0);
 /* Not atomic since only a single instance of swap_fn run at a time */
