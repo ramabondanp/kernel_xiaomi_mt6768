@@ -243,6 +243,7 @@
 #define MSDC_PB2_RESPWAIT         (0x3 << 2)    /* RW */
 #define MSDC_PB2_RESPSTSENSEL     (0x7 << 16)   /* RW */
 #define MSDC_PB2_CRCSTSENSEL      (0x7 << 29)   /* RW */
+#define MSDC_PATCH_BIT1_CMDTA     (0x7 << 3)    /* RW */
 
 #define MSDC_PAD_TUNE_DATWRDLY	  (0x1f <<  0)	/* RW */
 #define MSDC_PAD_TUNE_DATRRDLY	  (0x1f <<  8)	/* RW */
@@ -1987,6 +1988,7 @@ static int hs400_tune_response(struct mmc_host *mmc, u32 opcode)
 
 	/* select EMMC50 PAD CMD tune */
 	sdr_set_bits(host->base + PAD_CMD_TUNE, BIT(0));
+	sdr_set_field(host->base + MSDC_PATCH_BIT1, MSDC_PATCH_BIT1_CMDTA, 2);
 
 	if (mmc->ios.timing == MMC_TIMING_MMC_HS200 ||
 	    mmc->ios.timing == MMC_TIMING_UHS_SDR104)
