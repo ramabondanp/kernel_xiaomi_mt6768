@@ -69,6 +69,14 @@
 
 #define RTC_AL_SEC		0x0018
 
+#define RTC_AL_SEC_MASK		0x003f
+#define RTC_AL_MIN_MASK		0x003f
+#define RTC_AL_HOU_MASK		0x001f
+#define RTC_AL_DOM_MASK		0x001f
+#define RTC_AL_DOW_MASK		0x0007
+#define RTC_AL_MTH_MASK		0x000f
+#define RTC_AL_YEA_MASK		0x007f
+
 #define RTC_PDN2		0x002e
 #define RTC_PDN1		0x002c
 #define RTC_SPAR0		0x0030
@@ -786,6 +794,7 @@ static int mtk_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alm)
 	tm->tm_year -= RTC_MIN_YEAR_OFFSET;
 	tm->tm_mon++;
 
+	mutex_lock(&rtc->lock);
 	ret = regmap_bulk_read(rtc->regmap, rtc->addr_base + RTC_AL_SEC,
 			       data_b, RTC_OFFSET_COUNT);
 	if (ret < 0)
@@ -809,7 +818,6 @@ static int mtk_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alm)
 		   tm->tm_year + RTC_MIN_YEAR, tm->tm_mon, tm->tm_mday,
 		   tm->tm_hour, tm->tm_min, tm->tm_sec, alm->enabled);
 
-	mutex_lock(&rtc->lock);
 	switch (alm->enabled) {
 	case 2:
 		/* enable power-on alarm */
