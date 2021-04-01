@@ -241,7 +241,7 @@ static const struct file_operations kbasep_gpu_frequency_debugfs_fops = {
 };
 
 /* 4. For query GPU dynamically enable DVFS */
-static int g_dvfs_enabled = 1;
+static int g_dvfs_enabled = 0;
 
 static int mtk_kbase_is_gpu_dvfs_enabled(void)
 {
