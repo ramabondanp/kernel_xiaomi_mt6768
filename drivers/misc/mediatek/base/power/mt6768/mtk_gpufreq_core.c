@@ -271,6 +271,12 @@ struct mt_gpufreq_power_table_info *pass_gpu_table_to_eara(void)
 	return g_power_table;
 }
 
+/* API : get immediate gpu temperature */
+int mt_gpufreq_get_immed_gpu_temp(void)
+{
+	return get_immediate_gpu_wrap();
+}
+
 /*
  * API : handle frequency change request
  * @Input : is_real_idx
