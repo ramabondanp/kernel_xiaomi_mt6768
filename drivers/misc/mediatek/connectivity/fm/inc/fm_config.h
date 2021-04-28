@@ -44,12 +44,15 @@
 
 /* space */
 #define FM_SPACE_UNKNOWN    0
-#define FM_SPACE_100K       10
-#define FM_SPACE_200K       20
+#define FM_SPACE_100K       1
+#define FM_SPACE_200K       2
 #define FM_SPACE_50K        5
 
+#ifdef CONFIG_MTK_FM_50KHZ_SUPPORT
+#define FM_SPACE_DEFAULT    FM_SPACE_50K
+#else
 #define FM_SPACE_DEFAULT    FM_SPACE_100K
-
+#endif
 
 #define FM_INVALID_CHAN_NOISE_REDUCING    0
 

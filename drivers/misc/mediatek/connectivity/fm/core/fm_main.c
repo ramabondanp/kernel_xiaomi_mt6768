@@ -821,6 +821,24 @@ signed int fm_desense_check(struct fm *pfm, unsigned short freq, signed int rssi
 	return ret;
 }
 
+signed int fm_set_desense_list(struct fm * pfm, signed int op, unsigned short freq)
+{
+    signed int ret = 0;
+
+    if (pfm == NULL) {
+        WCN_DBG(FM_ERR | MAIN, "%s,invalid pointer\n", __func__);
+        return -FM_EPARA;
+    }
+    if (fm_low_ops.bi.set_desense_list) {
+        if (FM_LOCK(fm_ops_lock))
+            return -FM_ELOCK;
+        ret = fm_low_ops.bi.set_desense_list(op, freq);
+        FM_UNLOCK(fm_ops_lock);
+    }
+
+    return ret;
+}
+
 signed int fm_dump_reg(void)
 {
 	signed int ret = 0;
@@ -1535,23 +1553,6 @@ signed int fm_i2s_set(struct fm *fm, signed int onoff, signed int mode, signed i
 	return ret;
 }
 
-signed int fm_atj_set(unsigned short value)
-{
-	signed int ret = 0;
-
-	if (fm_low_ops.bi.atj_set == NULL) {
-		WCN_DBG(FM_ERR | MAIN, "%s, invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (FM_LOCK(fm_ops_lock))
-		return -FM_ELOCK;
-
-	ret = fm_low_ops.bi.atj_set(value);
-
-	FM_UNLOCK(fm_ops_lock);
-	return ret;
-}
-
 /*
  *  fm_tune_tx
  */
@@ -1719,7 +1720,7 @@ signed int fm_pre_search(struct fm *fm)
 	if (FM_LOCK(fm_ops_lock))
 		return -FM_ELOCK;
 
-	WCN_DBG(FM_DBG | MAIN, "%s\n", __func__);
+	WCN_DBG(FM_INF | MAIN, "%s\n", __func__);
 
 	ret = fm_low_ops.bi.pre_search();
 	FM_UNLOCK(fm_ops_lock);
@@ -1740,7 +1741,7 @@ signed int fm_restore_search(struct fm *fm)
 	if (FM_LOCK(fm_ops_lock))
 		return -FM_ELOCK;
 
-	WCN_DBG(FM_DBG | MAIN, "%s\n", __func__);
+	WCN_DBG(FM_INF | MAIN, "%s\n", __func__);
 
 	ret = fm_low_ops.bi.restore_search();
 	FM_UNLOCK(fm_ops_lock);

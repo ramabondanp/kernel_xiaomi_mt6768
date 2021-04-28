@@ -24,6 +24,8 @@
 #include <linux/sched.h>
 #include <linux/delay.h>	/* udelay() */
 #include <linux/version.h>
+#include <linux/gpio.h>
+#include <linux/compiler.h>
 
 #include "fm_config.h"
 #include "fm_main.h"
@@ -77,9 +79,6 @@ static const struct file_operations fm_proc_ops = {
 };
 
 #ifdef CONFIG_COMPAT
-
-#define IOCTL_NR(x) (x & 0xff)
-
 static long fm_ops_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	long ret;
@@ -95,10 +94,7 @@ static long fm_ops_compat_ioctl(struct file *filp, unsigned int cmd, unsigned lo
 		break;
 		}
 	default:
-		if ((cmd & 0xFF) == IOCTL_NR(FM_IOCTL_PRE_SEARCH))
-			ret = filp->f_op->unlocked_ioctl(filp, FM_IOCTL_PRE_SEARCH, arg);
-		else
-			ret = filp->f_op->unlocked_ioctl(filp, ((cmd & 0xFF) | (FM_IOCTL_POWERUP & 0xFFFFFF00)), arg);
+		ret = filp->f_op->unlocked_ioctl(filp, ((cmd & 0xFF) | (FM_IOCTL_POWERUP & 0xFFFFFF00)), arg);
 		break;
 	}
 	return ret;
@@ -227,8 +223,6 @@ static long fm_ops_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		{
 			struct fm_softmute_tune_t parm;
 
-			WCN_DBG(FM_DBG | MAIN, "FM_IOCTL_SOFT_MUTE_TUNE:0\n");
-
 			fm_cqi_log();	/* cqi log tool */
 			if (copy_from_user(&parm, (void *)arg, sizeof(struct fm_softmute_tune_t))) {
 				ret = -EFAULT;
@@ -243,26 +237,16 @@ static long fm_ops_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				ret = -EFAULT;
 				goto out;
 			}
-
-			WCN_DBG(FM_DBG | MAIN, "FM_IOCTL_SOFT_MUTE_TUNE:1\n");
 			break;
 		}
 	case FM_IOCTL_PRE_SEARCH:
 		{
-			WCN_DBG(FM_DBG | MAIN, "FM_IOCTL_PRE_SEARCH:0\n");
-
 			ret = fm_pre_search(fm);
-
-			WCN_DBG(FM_DBG | MAIN, "FM_IOCTL_PRE_SEARCH:1\n");
 			break;
 		}
 	case FM_IOCTL_RESTORE_SEARCH:
 		{
-			WCN_DBG(FM_DBG | MAIN, "FM_IOCTL_RESTORE_SEARCH:0\n");
-
 			ret = fm_restore_search(fm);
-
-			WCN_DBG(FM_DBG | MAIN, "FM_IOCTL_RESTORE_SEARCH:1\n");
 			break;
 		}
 	case FM_IOCTL_CQI_GET:{
@@ -888,21 +872,6 @@ static long fm_ops_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			break;
 		}
 
-	case FM_IOCTL_SET_ATJ:{
-			unsigned short value = 0;
-
-			WCN_DBG(FM_DBG | MAIN, "FM_IOCTL_SET_ATJ\n");
-
-			if (copy_from_user(&value, (void *)arg, sizeof(unsigned short))) {
-				WCN_DBG(FM_ALT | MAIN, "is set atj, copy_from_user err\n");
-				ret = -EFAULT;
-				goto out;
-			}
-
-			ret = fm_atj_set(value);
-			break;
-		}
-
 	case FM_IOCTL_IS_DESE_CHAN:{
 			signed int tmp;
 
@@ -946,6 +915,20 @@ static long fm_ops_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 			break;
 		}
+        case FM_IOCTL_SET_DESENSE_LIST:
+            {
+                struct fm_set_desense_list_t tmp;
+                WCN_DBG(FM_NTC | MAIN, "......FM_IOCTL_SET_DESNSE_LIST......\n");
+
+                if (copy_from_user(&tmp, (void *)arg, sizeof(struct fm_set_desense_list_t))) {
+                    WCN_DBG(FM_ALT | MAIN, "fix desene list, copy_from_user err\n");
+                    ret = -EFAULT;
+                    goto out;
+                }
+                ret = fm_set_desense_list(fm, tmp.opid, (unsigned short) tmp.freq);
+
+                break;
+            }
 	case FM_IOCTL_SCAN_GETRSSI:
 		{
 			WCN_DBG(FM_ALT | MAIN, "FM_IOCTL_SCAN_GETRSSI:not support\n");
@@ -1210,9 +1193,6 @@ out:
 		}
 	}
 
-	WCN_DBG(FM_DBG | MAIN, "%s---pid(%d)---cmd(0x%08x)---ret(%d)\n", current->comm,
-		current->pid, cmd, (signed int) ret);
-
 	return ret;
 }
 
@@ -1451,6 +1431,78 @@ static signed int fm_cdev_setup(struct fm *fm)
 	return ret;
 }
 
+#define FM_LAN_ENABLE    398 /* ana swtich gpio73 */
+
+void fm_lan_enable(void)
+{
+	struct fm *fm = g_fm;
+
+	gpio_set_value(FM_LAN_ENABLE, 1);
+	fm->lan_enable = 1;
+}
+EXPORT_SYMBOL(fm_lan_enable);
+
+void fm_lan_disable(void)
+{
+	struct fm *fm = g_fm;
+
+	gpio_set_value(FM_LAN_ENABLE, 0);
+	fm->lan_enable = 0;
+}
+EXPORT_SYMBOL(fm_lan_disable);
+
+static ssize_t lan_enable_store(struct device *dev,
+		        struct device_attribute *attr, const char *buf, size_t count)
+{
+	uint16_t value;
+	int ret;
+
+	ret = kstrtou16(buf, 0, &value);
+	if (ret < 0)
+		return ret;
+
+	printk("%s, value %d\n", __func__, value);
+
+	if (value == 0)
+		fm_lan_disable();
+	else if (value > 0)
+		fm_lan_enable();
+
+	return count;
+}
+
+static ssize_t lan_enable_show(struct device *dev, struct device_attribute *attr,
+		        char *buf)
+{
+	struct fm *fm = g_fm;
+
+	return sprintf(buf, "%d\n", fm->lan_enable);
+}
+
+static DEVICE_ATTR(lan_enable, 0660, lan_enable_show, lan_enable_store);
+
+static signed int fm_lan_setup(struct fm *fm)
+{
+	signed int ret = 0;
+	struct fm_platform *plat = &fm->platform;
+
+	/* default low */
+	ret = gpio_request(FM_LAN_ENABLE, "fm_lan_enable");
+	if (ret < 0) {
+		printk("%s, request fm lan enable failed\n", __func__);
+		return ret;
+	}
+	gpio_set_value(FM_LAN_ENABLE, 0);
+
+	fm->lan_enable = 0;
+
+	ret = device_create_file(plat->dev, &dev_attr_lan_enable);
+	if (ret < 0)
+		printk("%s, create file lan_enable failed\n", __func__);
+
+	return ret;
+}
+
 static signed int fm_cdev_destroy(struct fm *fm)
 {
 	if (fm == NULL) {
@@ -1481,6 +1533,12 @@ static signed int fm_mod_init(unsigned int arg)
 	ret = fm_cdev_setup(fm);
 	if (ret)
 		goto ERR_EXIT;
+
+	ret = fm_lan_setup(fm);
+	if (ret) {
+		WCN_DBG(FM_NTC | MAIN, "fm lan setup failed\n");
+		goto ERR_EXIT;
+	}
 
 	/* fm proc file create "/proc/fm" */
 	g_fm_proc = proc_create(FM_PROC_FILE, 0444, NULL, &fm_proc_ops);

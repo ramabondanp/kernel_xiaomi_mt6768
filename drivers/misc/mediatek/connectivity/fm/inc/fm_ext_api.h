@@ -16,6 +16,12 @@
 
 #include <linux/platform_device.h>
 
+enum fm_spi_speed {
+	FM_SPI_SPEED_26M,
+	FM_SPI_SPEED_64M,
+	FM_SPI_SPEED_MAX
+};
+
 struct fm_ext_interface {
 	void (*eint_handler)(void);
 	void (*eint_cb)(void);
@@ -30,7 +36,8 @@ struct fm_ext_interface {
 	int (*wmt_ic_info_get)(void);
 	int (*wmt_chipid_query)(void);
 	unsigned char (*get_top_index)(void);
-	int (*spi_clock_switch)(void);
+	int (*spi_clock_switch)(enum fm_spi_speed speed);
+	bool (*is_bus_hang)(void);
 
 	struct platform_driver *drv;
 	unsigned int irq_id;

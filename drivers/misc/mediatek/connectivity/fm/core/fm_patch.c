@@ -29,7 +29,7 @@
  */
 signed int fm_file_read(const signed char *filename, unsigned char *dst, signed int len, signed int position)
 {
-	const struct firmware *fw;
+	const struct firmware *fw = NULL;
 	signed int ret = 0;
 
 	ret = request_firmware(&fw, filename, NULL);

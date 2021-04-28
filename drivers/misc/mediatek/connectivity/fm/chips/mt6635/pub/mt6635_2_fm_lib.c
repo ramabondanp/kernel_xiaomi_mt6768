@@ -198,6 +198,7 @@ static signed int mt6635_rampdown(unsigned char *buf, signed int buf_size)
 /* FMSYS Ramp Down Sequence*/
 static signed int mt6635_RampDown(void)
 {
+	struct fm_ext_interface *ei = &fm_wcn_ops.ei;
 	signed int ret = 0;
 	unsigned int tem = 0;
 	unsigned short pkt_size;
@@ -206,14 +207,15 @@ static signed int mt6635_RampDown(void)
 	WCN_DBG(FM_DBG | CHIP, "ramp down\n");
 
 	/* switch SPI clock to 26MHz */
-	ret = fm_host_reg_read(0x18004004, &tem);   /* Set 0x18004004[0] = 0x0 */
-	tem = tem & 0xFFFFFFFE;
-	ret = fm_host_reg_write(0x18004004, tem);
-	if (ret) {
-		WCN_DBG(FM_ALT | CHIP, "RampDown Switch SPI clock to 26MHz failed\n");
-		return ret;
+	if (ei->spi_clock_switch)
+		ret = ei->spi_clock_switch(FM_SPI_SPEED_26M);
+	else {
+		ret = -1;
+		WCN_DBG(FM_ERR | CHIP, "Clock switch cb is null\n");
 	}
-	WCN_DBG(FM_DBG | CHIP, "RampDown Switch SPI clock to 26MHz\n");
+	if (ret)
+		WCN_DBG(FM_ERR | CHIP,
+			"RampDown Switch SPI clock to 26MHz failed\n");
 
 	/* unlock 64M */
 	ret = fm_host_reg_read(0x18003004, &tem);
@@ -837,6 +839,7 @@ static signed int mt6635_PowerUp(unsigned short *chip_id, unsigned short *device
 
 static signed int mt6635_PowerDown(void)
 {
+	struct fm_ext_interface *ei = &fm_wcn_ops.ei;
 	signed int ret = 0;
 	unsigned int tem = 0;
 	unsigned short pkt_size;
@@ -863,13 +866,17 @@ static signed int mt6635_PowerDown(void)
 		return ret;
 	}
 
-	/*switch SPI clock to 26M*/
+	/* switch SPI clock to 26M */
 	WCN_DBG(FM_DBG | CHIP, "PowerDown: switch SPI clock to 26M\n");
-	ret = fm_host_reg_read(0x18004004, &tem);
-	tem = tem & 0xFFFFFFFE;
-	ret = fm_host_reg_write(0x18004004, tem);
+	if (ei->spi_clock_switch)
+		ret = ei->spi_clock_switch(FM_SPI_SPEED_26M);
+	else {
+		ret = -1;
+		WCN_DBG(FM_ERR | CHIP, "Clock switch cb is null\n");
+	}
 	if (ret)
-		WCN_DBG(FM_ALT | CHIP, "PowerDown: switch SPI clock to 26M failed\n");
+		WCN_DBG(FM_ERR | CHIP,
+			"PowerDown: Switch SPI clock to 26M failed\n");
 
 	/* unlock 64M */
 	ret = fm_host_reg_read(0x18003004, &tem);
@@ -1015,12 +1022,15 @@ static bool mt6635_do_SPI_hopping(unsigned short freq)
 				"%s: POLLING PLL_RDY success !\n", __func__);
 			/* switch SPI clock to 64MHz */
 			if (ei->spi_clock_switch)
-				ei->spi_clock_switch();
+				ret = ei->spi_clock_switch(FM_SPI_SPEED_64M);
 			else {
-				ret = fm_host_reg_read(0x18004004, &reg_val);
-				reg_val |= 0x00000001;
-				ret = fm_host_reg_write(0x18004004, reg_val);
+				ret = -1;
+				WCN_DBG(FM_ERR | CHIP,
+					"Clock switch cb is null\n");
 			}
+			if (ret)
+				WCN_DBG(FM_ERR | CHIP,
+					"Switch SPI clock to 64M failed\n");
 			break;
 		}
 		fm_delayus(10);

@@ -54,10 +54,6 @@ static signed int fm_state_set(struct fm_state_machine *thiz, signed int new_sta
 })
 
 static unsigned short (*rds_get_freq)(void);
-static unsigned int g_rt_stable_counter;
-static unsigned int g_rt_stable_flag;
-static unsigned int g_rtp_updated;
-static unsigned int g_rtp_not_update_counter;
 
 /* RDS spec related handle flow */
 /*
@@ -563,85 +559,6 @@ static signed int rds_g0_ps_get(unsigned short crc, unsigned short blkD, unsigne
 	return 0;
 }
 
-#if 0
-/*
- * rds_g0_ps_cmp
- * this function is the most importent flow for PS parsing
- * 1.Compare fresh buf with once buf per byte, if eque copy this byte to twice buf, else copy it to once buf
- * 2.Check whether we got a full segment
- * If success return 0, else return error code
-*/
-static signed int rds_g0_ps_cmp(unsigned char addr, unsigned short cbc, unsigned char *fresh,
-	unsigned char *once, unsigned char *twice, unsigned char *bm,
-	unsigned char *once_bm, unsigned char *firstCollectionDone)
-{
-	signed int ret = 0, indx;
-
-	unsigned char PS_Num;
-	/* unsigned char corrBitCnt_BlkB, corrBitCnt_BlkD; */
-	static signed char Pre_PS_Num = -1;
-
-	if (fresh == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-
-	if (once == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-
-	if (twice == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-
-	if (addr > 3) {		/* ps limited in 8 chars */
-		WCN_DBG(FM_NTC | RDSC, "PS Address error, addr=%x\n", addr);
-		return -1;
-	}
-
-	PS_Num = addr;
-	for (indx = 0; indx < 2; indx++) {
-
-		if (once[2 * PS_Num + indx] == fresh[2 * PS_Num + indx]) {
-			/* set once bimmap 1 */
-			*once_bm |= 1 << (2 * PS_Num + indx);
-
-			if (twice[2 * PS_Num + indx] == once[2 * PS_Num + indx]) {
-				/* set twice bitmap 1 */
-				*bm  |= 1 << (2 * PS_Num + indx);
-			} else {
-				/* set twice bitmap */
-				*bm &= ~(1 << (2 * PS_Num + indx));
-				/* memcpy from once to twice */
-				twice[2 * PS_Num + indx] = once[2 * PS_Num + indx];
-			}
-		} else {
-			/* set once bitmap */
-			*once_bm &= ~(1 << (2 * PS_Num + indx));
-			/* memcpy from fresh to once */
-			once[2 * PS_Num + indx] = fresh[2 * PS_Num + indx];
-		}
-	}
-
-
-	WCN_DBG(FM_NTC | RDSC, "current firstCollection = %x, addr=%d. Prev_PS_NUM = %d\n",
-		*firstCollectionDone, addr, Pre_PS_Num);
-	*firstCollectionDone |= 1 << PS_Num;
-
-	Pre_PS_Num = PS_Num;
-
-	WCN_DBG(FM_NTC | RDSC, "firstCollection=%x, addr = %x\n", *firstCollectionDone, addr);
-	WCN_DBG(FM_NTC | RDSC, "PS[0]=%x %x %x %x %x %x %x %x\n", fresh[0], fresh[1], fresh[2],
-		fresh[3], fresh[4], fresh[5], fresh[6], fresh[7]);
-	WCN_DBG(FM_NTC | RDSC, "PS[1]=%x %x %x %x %x %x %x %x\n", once[0], once[1], once[2],
-		once[3], once[4], once[5], once[6], once[7]);
-	WCN_DBG(FM_NTC | RDSC, "PS[2]=%x %x %x %x %x %x %x %x\n", twice[0], twice[1], twice[2],
-		twice[3], twice[4], twice[5], twice[6], twice[7]);
-	return ret;
-}
-#else
 /*
  * rds_g0_ps_cmp
  * this function is the most importent flow for PS parsing
@@ -732,15 +649,44 @@ static signed int rds_g0_ps_cmp(unsigned char addr, unsigned short cbc, unsigned
 	}
 
 	Pre_PS_Num = PS_Num;
+#if	0
+	if (rds_cbc_get(cbc, RDS_BLK_D) == 0) {
+		once[j * addr] = fresh[j * addr];
+		once[j * addr + 1] = fresh[j * addr + 1];
+	}
+	if ((once[j * addr] == fresh[j * addr]) && (once[j * addr + 1] == fresh[j * addr + 1])) {
+		twice[j * addr] = once[j * addr];
+		twice[j * addr + 1] = once[j * addr + 1];
+		*valid = true;
+	} else {
+		once[j * addr] = fresh[j * addr];
+		once[j * addr + 1] = fresh[j * addr + 1];
+		*valid = false;
+	}
+#endif
+#if	0
+	for (i = 0; i < j; i++) {
+		if (fresh[j * addr + i] == once[j * addr + i]) {
+			twice[j * addr + i] = once[j * addr + i];	/* get the same byte 2 times */
+			cnt++;
+		} else {
+			once[j * addr + i] = fresh[j * addr + i];	/* use new val */
+		}
+	}
 
+	/* check if we got a valid segment */
+	if (cnt == j)
+		*valid = true;
+	else
+		*valid = false;
+#endif
 	/* WCN_DBG(FM_NTC | RDSC, "PS seg=%s\n", *valid == true ? "true" : "false"); */
-	WCN_DBG(FM_NTC | RDSC, "bitmap=%x\n", *bm);
-	WCN_DBG(FM_NTC | RDSC, "PS[%02x][1][2]=%x %x|%x %x|%x %x|%x %x|%x %x|%x %x|%x %x|%x %x\n",
+	WCN_DBG(FM_INF | RDSC, "bitmap=%x\n", *bm);
+	WCN_DBG(FM_INF | RDSC, "PS[%02x][1][2]=%x %x|%x %x|%x %x|%x %x|%x %x|%x %x|%x %x|%x %x\n",
 		addr, once[0], twice[0], once[1], twice[1], once[2], twice[2], once[3], twice[3],
 		once[4], twice[4], once[5], twice[5], once[6], twice[6], once[7], twice[7]);
 	return ret;
 }
-#endif
 
 struct rds_bitmap {
 	unsigned short bm;
@@ -928,117 +874,7 @@ static signed int rds_g2_rt_get(unsigned short crc, unsigned char subtype, unsig
 		buf[idx + 1], buf[idx + 2], buf[idx + 3]);
 	return ret;
 }
-#if 0
-static signed int rds_g2_rt_cmp_new(unsigned char addr, unsigned short cbc, unsigned char subtype,
-				unsigned char *fresh, unsigned char *once, unsigned char *twice,
-				unsigned char *bitmap_once, unsigned char *bitmap_twice,
-				unsigned short *firstCollectionDone)
-{
-	signed int ret = 0;
-	signed int seg_width = 0;
-	signed int i = 0;
-	signed int x = 0, y = 0;
 
-	if (fresh == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (once == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (twice == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (bitmap_once == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (bitmap_twice == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (firstCollectionDone == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-
-	seg_width = (subtype == RDS_GRP_VER_A) ? 4 : 2; /* RT segment width */
-#if 0
-	if (addr == 0) {
-		*firstCollectionDone = 0;
-		WCN_DBG(FM_NTC | RDSC, "start from addr zero");
-	}
-	*firstCollectionDone |= 1 << addr;
-#endif
-	for (i = 0; i < seg_width ; i++) {
-		x = (seg_width * addr + i) / 8;
-		y = (seg_width * addr + i) % 8;
-		WCN_DBG(FM_INF | RDSC, "addr * seg_width + i = %d, x = %d, y = %d\n", seg_width * addr + i, x, y);
-
-		if (fresh[seg_width * addr + i] == once[seg_width * addr + i]) {
-			/* set bitmap_once 1 */
-			bitmap_once[x] |= 1 << y;
-			if (twice[seg_width * addr + i] == once[seg_width * addr + i]) {
-				/* set bitmap_twice 1 */
-				bitmap_twice[x] |= 1 << y;
-			} else {
-				/* set bitmap_twice 0 */
-				bitmap_twice[x] &= ~(1 << y);
-				/* memcpy from once to twice */
-				twice[seg_width * addr + i] = once[seg_width * addr + i];
-				WCN_DBG(FM_NTC | RDSC, "twice[%d]= 0x%02x\n",
-						seg_width * addr + i, twice[seg_width * addr + i]);
-			}
-
-		} else {
-			bitmap_once[x] &= ~(1 << y);
-			bitmap_twice[x] &= ~(1 << y);
-			once[seg_width * addr + i] = fresh[seg_width * addr + i];	/* use new val */
-			WCN_DBG(FM_INF | RDSC, "once[%d]= 0x%02x\n", seg_width * addr + i, once[seg_width * addr + i]);
-		}
-	}
-
-	return ret;
-}
-
-/*
- * rds_g2_rt_check_end
- * check 0x0D end flag
- * If we got the end, then caculate the RT length
- * If success return 0, else return error code
-*/
-static signed int rds_g2_rt_check_end(unsigned char addr, unsigned char subtype,
-	unsigned char *twice, bool *end, unsigned int *rt_len)
-{
-	signed int index = 0;
-	signed int seg_width = 0;
-
-	if (twice == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (end == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-
-	seg_width = (subtype == RDS_GRP_VER_A) ? 4 : 2;	/* RT segment width */
-	*end = false;
-	for (index = 0; index < seg_width; index++) {
-			/* if we got 0x0D twice, it means a RT end */
-		if (twice[seg_width * addr + index] == 0x0D) {
-			*rt_len = seg_width * addr + index + 1;
-			*end = true;
-			WCN_DBG(FM_NTC | RDSC, "get 0x0D, addr = %d, index = %d, rt_len = %d\n", addr, index, *rt_len);
-			break;
-		}
-	}
-
-	return 0;
-}
-#else
 static signed int rds_g2_rt_get_len(unsigned char subtype, signed int pos, signed int *len)
 {
 	signed int ret = 0;
@@ -1179,17 +1015,11 @@ static signed int rds_g2_rt_check_end(unsigned char addr, unsigned char subtype,
 			WCN_DBG(FM_NTC | RDSC, "get 0x0D\n");
 			break;
 		}
-		/* if we got 0x00 0x00 twice, it means a unicode end */
-		if (i + 1 < j && twice[j * addr + i] == 0 && twice[j * addr + i + 1] == 0) {
-			*end = true;
-			WCN_DBG(FM_NTC | RDSC, "get 0x00 0x00\n");
-			break;
-		}
 	}
 
 	return 0;
 }
-#endif
+
 static signed int rds_retrieve_g0_af(unsigned short *block_data, unsigned char SubType, struct rds_t *pstRDSData)
 {
 	static signed short preAF_Num;
@@ -1458,167 +1288,30 @@ static signed int rds_retrieve_g0_di(unsigned short *block_data, unsigned char S
 	return ret;
 }
 
-#if 0
-static signed int rds_retrieve_g0_ps(unsigned short *block_data, unsigned char SubType, struct rds_t *pstRDSData)
-{
-	unsigned char ps_addr;
-	signed int ret = 0, i = 0;
-	bool valid = false;
-
-	static unsigned char bm_once;
-	static struct fm_state_machine ps_sm = {
-		.state = RDS_PS_START,
-		.state_get = fm_state_get,
-		.state_set = fm_state_set,
-	};
-	static unsigned char collectFirstStringDone;
-
-	unsigned short *event = &pstRDSData->event_status;
-
-	/* parsing Program service name segment (in BlockD) */
-	ret = rds_checksum_check(block_data[4], FM_RDS_GDBK_IND_D, &valid);
-
-	if (valid == false) {
-		WCN_DBG(FM_WAR | RDSC, "Group0 BlockD crc err\n");
-		return -FM_ECRC;
-	}
-
-	rds_g0_ps_addr_get(block_data[1], &ps_addr);
-
-	/* PS parsing state machine run */
-	while (1) {
-		switch (STATE_GET(&ps_sm)) {
-		case RDS_PS_START:
-			if (rds_g0_ps_get(block_data[4], block_data[3], ps_addr, pstRDSData->PS_Data.PS[0])) {
-				STATE_SET(&ps_sm, RDS_PS_FINISH);	/* if CRC error, we should not do parsing */
-				break;
-			}
-
-			rds_g0_ps_cmp(ps_addr, block_data[5], pstRDSData->PS_Data.PS[0],
-				      pstRDSData->PS_Data.PS[1], pstRDSData->PS_Data.PS[2],
-					&pstRDSData->PS_Data.Addr_Cnt, &bm_once, &collectFirstStringDone);
-			WCN_DBG(FM_NTC | RDSC, "PS[3]=%x %x %x %x %x %x %x %x\n",
-					pstRDSData->PS_Data.PS[3][0],
-					pstRDSData->PS_Data.PS[3][1],
-					pstRDSData->PS_Data.PS[3][2],
-					pstRDSData->PS_Data.PS[3][3],
-					pstRDSData->PS_Data.PS[3][4],
-					pstRDSData->PS_Data.PS[3][5],
-					pstRDSData->PS_Data.PS[3][6],
-					pstRDSData->PS_Data.PS[3][7]);
-
-			STATE_SET(&ps_sm, RDS_PS_DECISION);
-			break;
-		case RDS_PS_DECISION:
-
-			if (collectFirstStringDone == 0x0F || pstRDSData->PS_Data.Addr_Cnt == 0xFF || bm_once == 0xFF) {
-				STATE_SET(&ps_sm, RDS_PS_GETLEN);
-				WCN_DBG(FM_DBG | RDSC, "collecction = 0x%2x, addr = 0x%2x, bm_once = 0x%2x\n",
-						collectFirstStringDone, pstRDSData->PS_Data.Addr_Cnt, bm_once);
-			} else {
-				STATE_SET(&ps_sm, RDS_PS_FINISH);
-			}
-
-			break;
-		case RDS_PS_GETLEN:
-
-			for (i = 0; i < 8; i++) {
-				if (pstRDSData->PS_Data.Addr_Cnt & (1 << i))
-					pstRDSData->PS_Data.PS[3][i] =  pstRDSData->PS_Data.PS[2][i];
-				else if (bm_once & (1 << i))
-					pstRDSData->PS_Data.PS[3][i] =  pstRDSData->PS_Data.PS[1][i];
-				else if (collectFirstStringDone & (1 << (i / 2)))
-					pstRDSData->PS_Data.PS[3][i] =  pstRDSData->PS_Data.PS[0][i];
-			}
-
-			if ((collectFirstStringDone == 0x0F)
-					&& !(bm_once == 0xFF)
-					&& !(pstRDSData->PS_Data.Addr_Cnt == 0xFF)) {
-
-				collectFirstStringDone = 0;
-			} else if ((bm_once == 0xFF) && !(pstRDSData->PS_Data.Addr_Cnt == 0xFF)) {
-				collectFirstStringDone = 0;
-				bm_once = 0;
-			} else if (pstRDSData->PS_Data.Addr_Cnt == 0xFF) {
-				bm_once = 0;
-				collectFirstStringDone = 0;
-			}
-
-			rds_event_set(event, RDS_EVENT_PROGRAMNAME);
-			WCN_DBG(FM_NTC | RDSC, "get an PS!\n");
-
-			WCN_DBG(FM_NTC | RDSC, "PS[3]=%x %x %x %x %x %x %x %x\n",
-				pstRDSData->PS_Data.PS[3][0],
-				pstRDSData->PS_Data.PS[3][1],
-				pstRDSData->PS_Data.PS[3][2],
-				pstRDSData->PS_Data.PS[3][3],
-				pstRDSData->PS_Data.PS[3][4],
-				pstRDSData->PS_Data.PS[3][5],
-				pstRDSData->PS_Data.PS[3][6],
-				pstRDSData->PS_Data.PS[3][7]);
-
-			for (i = 0; i < 8; i++) {	/* compare with last PS. */
-				if (pstRDSData->PS_Data.PS[3][i] == pstRDSData->PS_Data.PS[2][i])
-					num++;
-			}
-			if (num != 8) {
-				num = 0;
-				for (i = 0; i < 8; i++) {
-					/* even ps=0x20 and bitmap=0xF, send event to host to cover last ps. */
-					if (pstRDSData->PS_Data.PS[2][i] == 0x0)
-						num++;
-				}
-				if (num != 8) {
-					fm_memcpy(pstRDSData->PS_Data.PS[3], pstRDSData->PS_Data.PS[2], 8);
-					rds_event_set(event, RDS_EVENT_PROGRAMNAME);
-					WCN_DBG(FM_NTC | RDSC, "Yes, get an PS!\n");
-				} else {
-					/* clear bitmap */
-					pstRDSData->PS_Data.Addr_Cnt = 0;
-				}
-			} else {
-				/* if px3==ps2,clear bitmap */
-				pstRDSData->PS_Data.Addr_Cnt = 0;
-				/* clear buf */
-				fm_memset(pstRDSData->PS_Data.PS[0], 0x00, 8);
-				fm_memset(pstRDSData->PS_Data.PS[1], 0x00, 8);
-				fm_memset(pstRDSData->PS_Data.PS[2], 0x00, 8);
-			}
-		}
-#if 0
-			ps_bm.bm_clr(&ps_bm);
-			/* clear buf */
-			fm_memset(pstRDSData->PS_Data.PS[0], 0x20, 8);
-			fm_memset(pstRDSData->PS_Data.PS[1], 0x20, 8);
-			fm_memset(pstRDSData->PS_Data.PS[2], 0x20, 8);
-#endif
-			STATE_SET(&ps_sm, RDS_PS_FINISH);
-			break;
-		case RDS_PS_FINISH:
-			STATE_SET(&ps_sm, RDS_PS_START);
-			goto out;
-		default:
-			break;
-		}
-	}
-
-out:
-	return ret;
-}
-
-#else
 static signed int rds_retrieve_g0_ps(unsigned short *block_data, unsigned char SubType, struct rds_t *pstRDSData)
 {
 	unsigned char ps_addr;
 	signed int ret = 0, i, num;
 	bool valid = false;
-    /* signed int pos = 0; */
+/* signed int pos = 0; */
 	static struct fm_state_machine ps_sm = {
 		.state = RDS_PS_START,
 		.state_get = fm_state_get,
 		.state_set = fm_state_set,
 	};
-
+#if 0
+	static struct rds_bitmap ps_bm = {
+		.bm = 0,
+		.cnt = 0,
+		.max_addr = 0x03,
+		.bm_get = rds_bm_get,
+		.bm_cnt_get = rds_bm_cnt_get,
+		.bm_set = rds_bm_set,
+		.bm_get_pos = rds_bm_get_pos,
+		.bm_clr = rds_bm_clr,
+		.bm_cmp = rds_bm_cmp,
+	};
+#endif
 	unsigned short *event = &pstRDSData->event_status;
 
 	/* parsing Program service name segment (in BlockD) */
@@ -1662,7 +1355,7 @@ static signed int rds_retrieve_g0_ps(unsigned short *block_data, unsigned char S
 		case RDS_PS_GETLEN:
 		{
 			num = 0;
-			WCN_DBG(FM_NTC | RDSC, "PS[3]=%x %x %x %x %x %x %x %x\n",
+			WCN_DBG(FM_INF | RDSC, "PS[3]=%x %x %x %x %x %x %x %x\n",
 				pstRDSData->PS_Data.PS[3][0],
 				pstRDSData->PS_Data.PS[3][1],
 				pstRDSData->PS_Data.PS[3][2],
@@ -1718,7 +1411,6 @@ static signed int rds_retrieve_g0_ps(unsigned short *block_data, unsigned char S
 out:
 	return ret;
 }
-#endif
 
 static signed int rds_retrieve_g0(unsigned short *block_data, unsigned char SubType, struct rds_t *pstRDSData)
 {
@@ -1772,8 +1464,6 @@ static signed int rds_retrieve_g1(unsigned short *block_data, unsigned char SubT
 	signed int ret = 0;
 	bool dirty = false;
 
-	WCN_DBG(FM_NTC | RDSC, "variant code:%d\n", variant_code);
-
 	if (variant_code == 0) {
 		ret = rds_ecc_get(block_data[2], &pstRDSData->Extend_Country_Code, &dirty);
 			if (!ret) {
@@ -1792,268 +1482,7 @@ static signed int rds_retrieve_g1(unsigned short *block_data, unsigned char SubT
 
 	return ret;
 }
-#if 0
-static signed int rds_g2_rt_one_group_change(unsigned char *src, unsigned char *dst, unsigned char addr)
-{
-	unsigned int idx;
-	unsigned char temp[4];
 
-	idx = addr * 4;
-	memset(temp, 0x20, 4);
-#if 0
-	if (!memcmp(temp, &src[idx], 4) ||
-		!memcmp(temp, &dst[idx], 4)) {
-		WCN_DBG(FM_NTC | RDSC, "src or dst is space\n");
-		return 0;
-	}
-#endif
-	if (!memcmp(temp, &src[idx], 4) &&
-		!memcmp(temp, &dst[idx], 4)) {
-		WCN_DBG(FM_NTC | RDSC, "src and dst are space\n");
-		return 1;
-	}
-	if (memcmp(&src[idx], &dst[idx], 4))
-		return 1;
-
-	return 0;
-}
-
-static signed int rds_retrieve_g2(unsigned short *source, unsigned char subtype, struct rds_t *target)
-{
-	signed int ret = 0;
-	unsigned short crc, cbc;
-	unsigned short blkA, blkB, blkC, blkD;
-	unsigned char *fresh, *once, *twice, *display;
-	unsigned char temp[64];
-	unsigned short *event;
-	unsigned int *flag;
-	unsigned short i = 0, x = 0, y = 0;
-	static struct fm_state_machine rt_sm = {
-		.state = RDS_RT_START,
-		.state_get = fm_state_get,
-		.state_set = fm_state_set,
-	};
-
-
-	unsigned char rt_addr = 0;
-	/* text AB flag 0 --> 1 or 1-->0 meas new RT incoming */
-	bool txtAB_change = false;
-	bool txt_fresh_end = false;
-	bool txt_once_end = false;
-	bool txt_twice_end = false;
-
-	signed int indx = 0;
-	signed int seg_width = 0;
-	signed int rt_fresh_len = 0;
-	signed int rt_once_len = 0;
-	signed int rt_twice_len = 0;
-	signed int bufsize = 0;
-	static unsigned char bitmap_once[8];
-	static unsigned char bitmap_twice[8];
-	unsigned char bitmap_complete[8];
-	static unsigned short rt_firstCollectDone;
-	static unsigned char group_counter;
-
-	if (source == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	if (target == NULL) {
-		WCN_DBG(FM_ERR | RDSC, "%s,invalid pointer\n", __func__);
-		return -FM_EPARA;
-	}
-	/* source */
-	blkA = source[0];
-	blkB = source[1];
-	blkC = source[2];
-	blkD = source[3];
-	crc = source[4];
-	cbc = source[5];
-	if (cbc) {
-		WCN_DBG(FM_NTC | RDSC, "%s, cbc=0x%4x, return\n", __func__, cbc);
-		return 0;
-	}
-	WCN_DBG(FM_NTC | RDSC, "%s,blkA=0x%4x,blkB=0x%4x,blkC=0x%4x,blkD=0x%4x,crc=0x%4x,cbc=0x%4x\n",
-		__func__, blkA, blkB, blkC, blkD, crc, cbc);
-	/* target */
-	fresh = target->RT_Data.TextData[0];
-	once = target->RT_Data.TextData[1];
-	twice = target->RT_Data.TextData[2];
-	display = target->RT_Data.TextData[3];
-	event = &target->event_status;
-	flag = &target->RDSFlag.flag_status;
-	bufsize = sizeof(target->RT_Data.TextData[0]);
-
-	group_counter++;
-
-	for (i = 0; i < 8; i++)
-		bitmap_complete[i] = 0xFF;
-
-	/* get basic info: addr, txtAB */
-	if (rds_g2_rt_addr_get(blkB, &rt_addr))
-		return ret;
-
-	if (rt_addr == 0)
-		group_counter = 0;
-
-	if (rds_g2_rt_get(crc, subtype, blkC, blkD, rt_addr, fresh) != 0) {
-		WCN_DBG(FM_NTC | RDSC, "%s, crc error, drop this\n", __func__);
-		return ret;
-	}
-	if (rds_g2_txtAB_get(blkB, &target->RDSFlag.Text_AB, &txtAB_change))
-		return ret;
-	if (txtAB_change == true) {
-		/* clear buf */
-		fm_memset(fresh, 0x20, bufsize);
-		fm_memset(once, 0x20, bufsize);
-		fm_memset(twice, 0x20, bufsize);
-		target->RT_Data.isRTDisplay = 0;
-
-		fm_memset(bitmap_once, 0, sizeof(bitmap_once) / sizeof(unsigned char));
-		fm_memset(bitmap_twice, 0, sizeof(bitmap_twice) / sizeof(unsigned char));
-
-		rt_firstCollectDone = 0;
-		WCN_DBG(FM_NTC | RDSC, "%s, txtAB_change changed! clear bitmap, target->RT_Data.isRTDisplay = %d\n",
-				__func__, target->RT_Data.isRTDisplay);
-		g_rt_stable_counter = 0;
-		g_rt_stable_flag = 0;
-	}
-
-	if (rds_g2_rt_one_group_change(fresh, display, rt_addr)) {
-		/* some issue need to fix or this control may be not needed */
-		rt_firstCollectDone |= 1 << rt_addr;
-		WCN_DBG(FM_NTC | RDSC, "one group changed(%x)\n", rt_firstCollectDone);
-	}
-	fm_memset(temp, 0x20, 64);
-	/* RT parsing state machine run */
-	while (1) {
-		switch (STATE_GET(&rt_sm)) {
-		case RDS_RT_START:
-		{
-			if (rds_g2_rt_get(crc, subtype, blkC, blkD, rt_addr, fresh) == 0)
-				rds_g2_rt_cmp_new(rt_addr, cbc, subtype, fresh, once, twice,
-					bitmap_once, bitmap_twice, &rt_firstCollectDone);
-
-			rds_g2_rt_check_end(rt_addr, subtype, fresh, &txt_fresh_end, &rt_fresh_len);
-			rds_g2_rt_check_end(rt_addr, subtype, once, &txt_once_end, &rt_once_len);
-			rds_g2_rt_check_end(rt_addr, subtype, twice, &txt_twice_end, &rt_twice_len);
-			WCN_DBG(FM_NTC | RDSC, "fresh_len = %d, once_len =%d, twice_len = %d\n",
-				rt_fresh_len, rt_once_len, rt_twice_len);
-			if (!txt_fresh_end && !txt_once_end) {
-				txt_twice_end = false;
-				rt_twice_len = 0;
-			}
-			STATE_SET(&rt_sm, RDS_RT_DECISION);
-		break;
-		}
-		case RDS_RT_DECISION:
-		{
-			seg_width = (subtype == RDS_GRP_VER_A) ? 4 : 2;
-			WCN_DBG(FM_NTC | RDSC, "fresh_end = %d, once_end = %d, twice_end = %d\n",
-				txt_fresh_end, txt_once_end, txt_twice_end);
-
-			WCN_DBG(FM_NTC | RDSC, "width(%d), firstcd(0x%4x), bp_once(%d), bp_twice(%d)\n",
-				seg_width,
-				rt_firstCollectDone,
-				memcmp(&bitmap_once, &bitmap_complete, sizeof(unsigned char) * 8),
-				memcmp(&bitmap_twice, &bitmap_complete, sizeof(unsigned char) * 8));
-			WCN_DBG(FM_NTC | RDSC, "rt_addr:%d, group_counter:%d\n",
-				rt_addr, group_counter);
-
-			STATE_SET(&rt_sm, RDS_RT_GETLEN);
-
-			break;
-		}
-		case RDS_RT_GETLEN:
-		{
-			for (indx = 0; indx < 0x0F; indx++) {
-				for (i = 0; i < seg_width; i++) {
-					x = (indx * seg_width + i) / 8;
-					y = (indx * seg_width + i) % 8;
-					if (bitmap_twice[x] & (1 << y))
-						temp[indx * seg_width + i] = twice[indx * seg_width + i];
-					else if (bitmap_once[x] & (1 << y))
-						temp[indx * seg_width + i] = once[indx * seg_width + i];
-					else if (rt_firstCollectDone & (1 << indx))
-						temp[indx * seg_width + i] = fresh[indx * seg_width + i];
-					else
-						temp[indx * seg_width + i] = fresh[indx * seg_width + i];
-				}
-			}
-
-			if ((txt_twice_end && txt_once_end && txt_fresh_end)
-				|| memcmp(&bitmap_twice, &bitmap_complete,
-				sizeof(unsigned char) * 2 * seg_width) == 0) {
-				target->RT_Data.isRTDisplay = 4;
-				g_rt_stable_flag = 1;
-				WCN_DBG(FM_NTC | RDSC, "target->RT_Data.isRTDisplay = 4\n");
-			} else if ((txt_once_end && txt_fresh_end)
-				|| memcmp(&bitmap_once, &bitmap_complete,
-				sizeof(unsigned char) * 2 * seg_width) == 0) {
-				target->RT_Data.isRTDisplay = 3;
-				g_rt_stable_flag = 1;
-				WCN_DBG(FM_NTC | RDSC, "target->RT_Data.isRTDisplay = 3\n");
-			} else if (txt_fresh_end || rt_firstCollectDone == 0xFFFF) {
-				target->RT_Data.isRTDisplay = 2;
-				WCN_DBG(FM_NTC | RDSC, "target->RT_Data.isRTDisplay = 2\n");
-				rt_firstCollectDone = 0;
-				g_rt_stable_flag = 0;
-			} else if ((rt_addr == 0xf) && (group_counter >= 8)) {
-				target->RT_Data.isRTDisplay = 1;
-				g_rt_stable_flag = 0;
-				WCN_DBG(FM_NTC | RDSC, "target->RT_Data.isRTDisplay = 1\n");
-			} else {
-				target->RT_Data.isRTDisplay = 0;
-				rt_firstCollectDone = 0;
-				g_rt_stable_flag = 0;
-				WCN_DBG(FM_NTC | RDSC, "target->RT_Data.isRTDisplay = 0\n");
-			}
-
-
-			if (memcmp(display, temp, bufsize)) {
-				memcpy(display, temp, bufsize);
-
-				if (rt_twice_len)
-					target->RT_Data.TextLength = rt_twice_len;
-				else if (rt_once_len)
-					target->RT_Data.TextLength = rt_once_len;
-				else if (rt_fresh_len)
-					target->RT_Data.TextLength = rt_fresh_len;
-				else
-					target->RT_Data.TextLength = 16 * seg_width;
-
-				rds_event_set(event, RDS_EVENT_LAST_RADIOTEXT);
-
-				/* yes we got a new RT */
-				WCN_DBG(FM_NTC | RDSC, "Yes, get an RT[len=%d], isRTDisplay = %d, string:%s\n",
-					target->RT_Data.TextLength,
-					target->RT_Data.isRTDisplay,
-					display);
-				g_rt_stable_counter = 0;
-			} else {
-				g_rt_stable_counter++;
-				WCN_DBG(FM_NTC | RDSC, "RT NOT changed(%d)\n", g_rt_stable_counter);
-			}
-
-
-			STATE_SET(&rt_sm, RDS_RT_FINISH);
-			break;
-		}
-		case RDS_RT_FINISH:
-		{
-			STATE_SET(&rt_sm, RDS_RT_START);
-			goto out;
-		}
-		default:
-			break;
-		}
-	}
-
-out:
-
-	return ret;
-}
-#else
 static signed int rds_retrieve_g2(unsigned short *source, unsigned char subtype, struct rds_t *target)
 {
 	signed int ret = 0;
@@ -2226,155 +1655,6 @@ out:
 	target->RT_Data.Addr_Cnt = rt_bm.bm;
 	return ret;
 }
-#endif
-
-static signed int rds_retrieve_g3(unsigned short *block_data, unsigned char SubType,
-	signed short *aid, unsigned char *ODAgroup, struct rds_t *pstRDSData)
-{
-	signed int ret = 0;
-	signed short AID = 0;
-	unsigned char ODA_group = 0;
-	unsigned char RT_flag = 0;
-	unsigned char CB_flag = 0;
-	unsigned char SCB = 0;
-	unsigned char Template_number = 0;
-	bool valid = false;
-
-	ret = rds_checksum_check(block_data[4], FM_RDS_GDBK_IND_C | FM_RDS_GDBK_IND_D, &valid);
-	if (valid == false) {
-		WCN_DBG(FM_WAR | RDSC, "Group3 BlockC/D crc err\n");
-		return -FM_ECRC;
-	}
-
-	if (!SubType) {
-		AID = block_data[3];
-		WCN_DBG(FM_NTC | RDSC, "[sss]get AID = %04x =[int] %d\n", AID, AID);
-		*aid = AID;
-
-		if (AID == 0x4BD7) {
-
-			RT_flag = (block_data[2] & 0x2000) >> 13;
-			WCN_DBG(FM_NTC | RDSC, "get RT flag = %d\n", RT_flag);
-			if (RT_flag == 0)
-				WCN_DBG(FM_NTC | RDSC, "RT+ use RT group\n");
-			else if (RT_flag == 1)
-				WCN_DBG(FM_NTC | RDSC, "RT+ use eRT group\n");
-			else
-				WCN_DBG(FM_WAR | RDSC, "invalid RT flag\n");
-
-			CB_flag = (block_data[2] & 0x1000) >> 12;
-			WCN_DBG(FM_NTC | RDSC, "get CB flag = %d\n", CB_flag);
-			if (CB_flag == 1) {
-				WCN_DBG(FM_NTC | RDSC, "use SCB and template\n");
-				SCB = (block_data[2] & 0x0F00) >> 8;
-				Template_number = (block_data[2] & 0x00FF);
-				WCN_DBG(FM_NTC | RDSC, "SCB=%d,template_number=%d\n", SCB, Template_number);
-			} else if (CB_flag == 0)
-				WCN_DBG(FM_NTC | RDSC, "not use SCB and template\n");
-			else
-				WCN_DBG(FM_WAR | RDSC, "invalid CB flag\n");
-
-			ODA_group = (block_data[1] & 0x001E) >> 1;
-			if (ODA_group == 0x0) {
-				WCN_DBG(FM_NTC | RDSC, "NO inforamtion ODA group\n");
-				*ODAgroup = 0;
-			} else {
-				*ODAgroup = ODA_group;
-				WCN_DBG(FM_NTC | RDSC, "RT+ tag group : %dA\n", ODA_group);
-			}
-		}
-	} else
-		WCN_DBG(FM_NTC | RDSC, "No AID infor in group B\n");
-
-	return ret;
-}
-
-static signed int rds_retrieve_goda(unsigned short *block_data,
-	unsigned char SubType, signed short AID, struct rds_t *pstRDSData)
-{
-	signed int ret = 0;
-	bool valid = false;
-	unsigned char toggle, running, content1, startpos1, len1, content2, startpos2, len2;
-	struct rds_rtp_t temp;
-
-	WCN_DBG(FM_NTC | RDSC, "%s enter\n", __func__);
-
-	ret = rds_checksum_check(block_data[4], FM_RDS_GDBK_IND_C | FM_RDS_GDBK_IND_D, &valid);
-	if (valid == false) {
-		WCN_DBG(FM_WAR | RDSC, "BlockC/D crc err\n");
-		return -FM_ECRC;
-	}
-	WCN_DBG(FM_NTC | RDSC, "%s after rds_checksum_check\n", __func__);
-
-	switch (AID) {
-	case 0x4BD7:
-		WCN_DBG(FM_NTC | RDSC, "do RT+ infor parser\n");
-
-		if (!SubType) {
-			toggle = (block_data[1] & 0x0010) >> 4;
-			running = (block_data[1] & 0x0008) >> 3;
-			WCN_DBG(FM_NTC | RDSC, "RT+ toggle(%d), running(%d)\n", toggle, running);
-
-			content1 = (block_data[1] & 0x0007) << 3;
-			content1 |= (block_data[2] & 0xE000) >> 13;
-			startpos1 = (block_data[2] & 0x1F80) >> 7;
-			len1 = (block_data[2] & 0x007E) >> 1;
-			WCN_DBG(FM_NTC | RDSC, "content type1(%d),start_pos1(%d),len1(%d)\n",
-							content1, startpos1, len1);
-
-			content2 = (block_data[2] & 0x0001) << 5;
-			content2 |= (block_data[3] & 0xF800) >> 11;
-			startpos2 = (block_data[3] & 0x07E0) >> 5;
-			len2 = (block_data[3] & 0x001F);
-			WCN_DBG(FM_NTC | RDSC, "content type2(%d),start_pos2(%d),len2(%d)\n",
-							content2, startpos2, len2);
-
-			temp.running = running;
-			temp.toggle = toggle;
-			temp.rtp_tag[0].content_type = content1;
-			temp.rtp_tag[0].start_pos = startpos1;
-			temp.rtp_tag[0].additional_len = len1;
-			temp.rtp_tag[1].content_type = content2;
-			temp.rtp_tag[1].start_pos = startpos2;
-			temp.rtp_tag[1].additional_len = len2;
-
-			if (memcmp(&temp, &pstRDSData->RTP_Data, sizeof(struct rds_rtp_t))) {
-				fm_memcpy(&pstRDSData->RTP_Data, &temp, sizeof(struct rds_rtp_t));
-				g_rtp_updated = 1;
-				WCN_DBG(FM_NTC | RDSC, "RT+ updated!\n");
-			} else {
-				g_rtp_not_update_counter++;
-				WCN_DBG(FM_NTC | RDSC, "RT+ tag NO update(%d)\n", g_rtp_not_update_counter);
-			}
-			if (((g_rt_stable_counter >= 3) || g_rt_stable_flag)) {
-				if (g_rtp_updated) { /* handling the rtp repeat slow case */
-					rds_event_set(&pstRDSData->event_status, RDS_EVENT_RTP_TAG);
-					WCN_DBG(FM_NTC | RDSC, "get an new RTP,rtp updated(%d/%d)\n",
-					g_rt_stable_counter, g_rt_stable_flag);
-					g_rtp_updated = 0;
-				}
-				if (g_rtp_not_update_counter >= 2) { /* handling rtp block by HAL check fail */
-					rds_event_set(&pstRDSData->event_status, RDS_EVENT_RTP_TAG);
-					WCN_DBG(FM_NTC | RDSC, "rtp not updated for long(%d/%d/%d)\n",
-					g_rt_stable_counter, g_rt_stable_flag, g_rtp_not_update_counter);
-					g_rtp_not_update_counter = 0;
-				}
-			} else {
-				WCN_DBG(FM_NTC | RDSC, "rt not stable(%d/%d)\n",
-				g_rt_stable_counter, g_rt_stable_flag);
-			}
-
-
-		} else
-			WCN_DBG(FM_NTC | RDSC, "No RT+ infor in group B\n");
-		break;
-	default:
-		WCN_DBG(FM_WAR | RDSC, "not support AID(0x%04x)\n", AID);
-		break;
-	}
-
-	return 0;
-}
 
 static signed int rds_retrieve_g4(unsigned short *block_data, unsigned char SubType, struct rds_t *pstRDSData)
 {
@@ -2428,7 +1708,6 @@ static signed int rds_retrieve_g14(unsigned short *block_data, unsigned char Sub
 	static signed short preAFON_Num;
 	unsigned char TP_ON, TA_ON, PI_ON, PS_Num, AF_H, AF_L, indx, indx2, num;
 	signed int ret = 0;
-	signed short temp_H, temp_L;
 
 	WCN_DBG(FM_DBG | RDSC, "RetrieveGroup14 %d\n", SubType);
 	/* SubType = (*(block_data+1)&0x0800)>>11; */
@@ -2466,7 +1745,6 @@ static signed int rds_retrieve_g14(unsigned short *block_data, unsigned char Sub
 
 			if (AF_L < 205) {
 				pstRDSData->AFON_Data.AF[0][0] = AF_L + 875;
-				pstRDSData->AFON_Data.AF[0][0] *= 10;
 
 				if ((pstRDSData->AFON_Data.AF[0][0]) != (pstRDSData->AFON_Data.AF[1][0]))
 					pstRDSData->AFON_Data.AF[1][0] = pstRDSData->AFON_Data.AF[0][0];
@@ -2487,21 +1765,14 @@ static signed int rds_retrieve_g14(unsigned short *block_data, unsigned char Sub
 
 		/* Put AF freq into buffer and check if AF freq is repeat again */
 		for (indx = 1; indx < (num + 1); indx++) {
-			if ((AF_H == (pstRDSData->AFON_Data.AF[0][2 * indx - 1] / 10 - 875))
-			    && (AF_L == (pstRDSData->AFON_Data.AF[0][2 * indx] / 10 - 875))) {
+			if ((AF_H == (pstRDSData->AFON_Data.AF[0][2 * indx - 1]))
+			    && (AF_L == (pstRDSData->AFON_Data.AF[0][2 * indx]))) {
 				WCN_DBG(FM_NTC | RDSC, "RetrieveGroup14 AFON same as indx:%d\n", indx);
 				break;
 			} else if (!(pstRDSData->AFON_Data.AF[0][2 * indx - 1])) {
 				/* null buffer */
 				pstRDSData->AFON_Data.AF[0][2 * indx - 1] = AF_H + 875;
 				pstRDSData->AFON_Data.AF[0][2 * indx] = AF_L + 875;
-				pstRDSData->AFON_Data.AF[0][2 * indx - 1] *= 10;
-				pstRDSData->AFON_Data.AF[0][2 * indx] *= 10;
-				WCN_DBG(FM_NTC | RDSC,
-					"RetrieveGroup14 AF[0][%d]:%d, AF[0][%d]:%d\n",
-					2 * indx - 1,
-					pstRDSData->AFON_Data.AF[0][2 * indx - 1],
-					2 * indx, pstRDSData->AFON_Data.AF[0][2 * indx]);
 				break;
 			}
 		}
@@ -2518,25 +1789,25 @@ static signed int rds_retrieve_g14(unsigned short *block_data, unsigned char Sub
 		/* arrange frequency from low to high:start */
 		for (indx = 1; indx < num; indx++) {
 			for (indx2 = indx + 1; indx2 < (num + 1); indx2++) {
-				temp_H = pstRDSData->AFON_Data.AF[0][2 * indx - 1];
-				temp_L = pstRDSData->AFON_Data.AF[0][2 * indx];
+				AF_H = pstRDSData->AFON_Data.AF[0][2 * indx - 1];
+				AF_L = pstRDSData->AFON_Data.AF[0][2 * indx];
 
-				if (temp_H > (pstRDSData->AFON_Data.AF[0][2 * indx2 - 1])) {
+				if (AF_H > (pstRDSData->AFON_Data.AF[0][2 * indx2 - 1])) {
 					pstRDSData->AFON_Data.AF[0][2 * indx - 1] =
 					    pstRDSData->AFON_Data.AF[0][2 * indx2 - 1];
 					pstRDSData->AFON_Data.AF[0][2 * indx] =
 					    pstRDSData->AFON_Data.AF[0][2 * indx2];
 					pstRDSData->AFON_Data.AF[0][2 * indx2 - 1] =
-					    temp_H;
-					pstRDSData->AFON_Data.AF[0][2 * indx2] = temp_L;
-				} else if (temp_H == (pstRDSData->AFON_Data.AF[0][2 * indx2 - 1])) {
-					if (temp_L > (pstRDSData->AFON_Data.AF[0][2 * indx2])) {
+					    AF_H;
+					pstRDSData->AFON_Data.AF[0][2 * indx2] = AF_L;
+				} else if (AF_H == (pstRDSData->AFON_Data.AF[0][2 * indx2 - 1])) {
+					if (AF_L > (pstRDSData->AFON_Data.AF[0][2 * indx2])) {
 						pstRDSData->AFON_Data.AF[0][2 * indx - 1] =
 						    pstRDSData->AFON_Data.AF[0][2 * indx2 - 1];
 						pstRDSData->AFON_Data.AF[0][2 * indx] =
 						    pstRDSData->AFON_Data.AF[0][2 * indx2];
-						pstRDSData->AFON_Data.AF[0][2 * indx2 - 1] = temp_H;
-						pstRDSData->AFON_Data.AF[0][2 * indx2] = temp_L;
+						pstRDSData->AFON_Data.AF[0][2 * indx2 - 1] = AF_H;
+						pstRDSData->AFON_Data.AF[0][2 * indx2] = AF_L;
 					}
 				}
 			}
@@ -2616,8 +1887,6 @@ signed int rds_parser(struct rds_t *rds_dst, struct rds_rx_t *rds_raw,
 	/* block_data[4] = CRC,      block_data[5] = CBC */
 	unsigned short block_data[6];
 	unsigned char GroupType, SubType = 0;
-	static unsigned char ODAgroup;
-	static signed short AID;
 	signed int rds_cnt = 0;
 	signed int i = 0;
 	bool dirty = false;
@@ -2703,12 +1972,6 @@ signed int rds_parser(struct rds_t *rds_dst, struct rds_rx_t *rds_raw,
 				goto do_next;
 
 			break;
-		case 3:
-			ret = rds_retrieve_g3(&block_data[0], SubType, &AID, &ODAgroup, rds_dst);
-			if (ret)
-				goto do_next;
-
-			break;
 		case 4:
 			ret = rds_retrieve_g4(&block_data[0], SubType, rds_dst);
 			if (ret)
@@ -2720,40 +1983,6 @@ signed int rds_parser(struct rds_t *rds_dst, struct rds_rx_t *rds_raw,
 			if (ret)
 				goto do_next;
 
-			break;
-		case 5:
-		case 6:
-		case 7:
-		case 8:
-		case 9:
-		case 13:
-			if (AID == 0x0) {
-				WCN_DBG(FM_NTC | RDSC, "this group(%d) shold be used normally\n", GroupType);
-				/* DO normal parser */
-			} else if (GroupType != ODAgroup) {
-				WCN_DBG(FM_WAR | RDSC, "current group(%d) not match ODA group(%d) in 3A\n",
-					GroupType, ODAgroup);
-				/* ODA group check fail */
-			} else {
-				WCN_DBG(FM_NTC | RDSC, "do ODA parser, current group(%d)\n", GroupType);
-				ret = rds_retrieve_goda(&block_data[0], SubType, AID, rds_dst);
-				if (ret)
-					goto do_next;
-			}
-			break;
-		case 11:
-		case 12:
-		case 15:
-			if (GroupType != ODAgroup) {
-				WCN_DBG(FM_WAR | RDSC, "current group(%d) not match ODA group(%d) in 3A\n",
-					GroupType, ODAgroup);
-				/* ODA group check fail */
-			} else {
-				WCN_DBG(FM_NTC | RDSC, "do ODA parser, current group(%d)\n", GroupType);
-				ret = rds_retrieve_goda(&block_data[0], SubType, AID, rds_dst);
-				if (ret)
-					goto do_next;
-			}
 			break;
 		default:
 			break;

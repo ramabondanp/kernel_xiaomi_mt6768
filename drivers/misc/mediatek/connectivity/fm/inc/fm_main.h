@@ -259,6 +259,11 @@ struct fm_desense_check_t {
 	signed int rssi;
 };
 
+struct fm_set_desense_list_t {
+    signed int opid;
+    signed int freq;
+};
+
 struct fm_full_cqi_log_t {
 	uint16_t lower;		/* lower band, Eg, 7600 -> 76.0Mhz */
 	uint16_t upper;		/* upper band, Eg, 10800 -> 108.0Mhz */
@@ -395,6 +400,7 @@ extern signed int fm_get_i2s_info(struct fm *pfm, struct fm_i2s_info *req);
 extern signed int fm_tune(struct fm *fm, struct fm_tune_parm *parm);
 extern signed int fm_is_dese_chan(struct fm *pfm, unsigned short freq);
 extern signed int fm_desense_check(struct fm *pfm, unsigned short freq, signed int rssi);
+extern signed int fm_set_desense_list(struct fm *pfm, int opid, unsigned short freq);
 extern signed int fm_sys_state_get(struct fm *fmp);
 extern signed int fm_sys_state_set(struct fm *fmp, signed int sta);
 extern signed int fm_set_stat(struct fm *fmp, int which, bool stat);
@@ -404,7 +410,6 @@ extern signed int fm_cqi_log(void);
 extern signed int fm_soft_mute_tune(struct fm *fm, struct fm_softmute_tune_t *parm);
 extern signed int fm_pre_search(struct fm *fm);
 extern signed int fm_restore_search(struct fm *fm);
-extern signed int fm_atj_set(unsigned short value);
 
 extern signed int fm_dump_reg(void);
 extern signed int fm_get_gps_rtc_info(struct fm_gps_rtc_info *src);
