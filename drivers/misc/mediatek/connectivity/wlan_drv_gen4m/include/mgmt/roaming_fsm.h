@@ -78,7 +78,7 @@
  *******************************************************************************
  */
 /* Roaming Discovery interval, SCAN result need to be updated */
-#define ROAMING_DISCOVER_TIMEOUT_SEC                10	/* Seconds. */
+#define ROAMING_DISCOVER_TIMEOUT_SEC                0   /* Seconds. */
 #define ROAMING_INACTIVE_TIMEOUT_SEC                10	/* Seconds. */
 #if CFG_SUPPORT_ROAMING_SKIP_ONE_AP
 #define ROAMING_ONE_AP_SKIP_TIMES		3
@@ -107,11 +107,15 @@ enum ENUM_ROAMING_EVENT {
 };
 
 enum ENUM_ROAMING_REASON {
+	/* FW defined */
 	ROAMING_REASON_POOR_RCPI = 0,
 	ROAMING_REASON_TX_ERR, /*Lowest rate, high PER*/
 	ROAMING_REASON_RETRY,
 	ROAMING_REASON_IDLE,
+
+	/* driver defined */
 	ROAMING_REASON_BEACON_TIMEOUT,
+	ROAMING_REASON_BEACON_TIMEOUT_TX_ERR,
 	ROAMING_REASON_INACTIVE,
 	ROAMING_REASON_SAA_FAIL,
 	ROAMING_REASON_NUM

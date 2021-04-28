@@ -3635,4 +3635,52 @@ void cnmEventOpmodeChange(
 	}
 }
 
+/*----------------------------------------------------------------------------*/
+/*!
+ * @brief check if p2p is active
+ *
+ * @param prAdapter
+ *
+ * @return
+ */
+/*----------------------------------------------------------------------------*/
+u_int8_t cnmP2pIsActive(IN struct ADAPTER *prAdapter)
+{
+	uint8_t ret;
 
+	ret = (cnmGetP2pBssInfo(prAdapter) != NULL);
+	DBGLOG(CNM, INFO, "P2p is %s\n", ret ? "ACTIVE" : "INACTIVE");
+	return ret;
+}
+
+/*----------------------------------------------------------------------------*/
+/*!
+ * @brief get p2p bss info
+ *
+ * @param prAdapter
+ *
+ * @return
+ */
+/*----------------------------------------------------------------------------*/
+struct BSS_INFO *cnmGetP2pBssInfo(IN struct ADAPTER *prAdapter)
+{
+	struct BSS_INFO *prBssInfo;
+	uint8_t i;
+
+	if (!prAdapter)
+		return NULL;
+
+	for (i = 0; i < prAdapter->ucHwBssIdNum; i++) {
+		prBssInfo = prAdapter->aprBssInfo[i];
+
+		if (prBssInfo &&
+		    IS_BSS_P2P(prBssInfo) &&
+		    !p2pFuncIsAPMode(
+		    prAdapter->rWifiVar.prP2PConnSettings
+		    [prBssInfo->u4PrivateData]) &&
+		    IS_BSS_ALIVE(prAdapter, prBssInfo))
+			return prBssInfo;
+	}
+
+	return NULL;
+}

@@ -236,7 +236,9 @@ struct AIS_FSM_INFO {
 
 	struct TIMER rDeauthDoneTimer;
 
+#if CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE
 	struct TIMER rSecModeChangeTimer;
+#endif
 
 #if CFG_SUPPORT_DFS
 	struct TIMER rCSATimer;
@@ -479,8 +481,10 @@ void aisBssBeaconTimeout_impl(IN struct ADAPTER *prAdapter,
 void aisBssLinkDown(IN struct ADAPTER *prAdapter,
 	IN uint8_t ucBssIndex);
 
+#if CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE
 void aisBssSecurityChanged(IN struct ADAPTER *prAdapter,
 	IN uint8_t ucBssIndex);
+#endif
 
 uint32_t
 aisDeauthXmitComplete(IN struct ADAPTER *prAdapter,
@@ -528,8 +532,10 @@ void aisFsmRunEventChannelTimeout(IN struct ADAPTER
 void aisFsmRunEventDeauthTimeout(IN struct ADAPTER
 				 *prAdapter, unsigned long ulParamPtr);
 
+#if CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE
 void aisFsmRunEventSecModeChangeTimeout(IN struct ADAPTER
 					*prAdapter, unsigned long ulParamPtr);
+#endif
 
 #if CFG_SUPPORT_DFS
 void aisFsmRunEventCSACountTimeOut(IN struct ADAPTER *prAdapter,
@@ -668,9 +674,11 @@ uint8_t aisGetTargetBssDescChannel(
 	IN struct ADAPTER *prAdapter,
 	IN uint8_t ucBssIndex);
 
+#if CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE
 struct TIMER *aisGetSecModeChangeTimer(
 	IN struct ADAPTER *prAdapter,
 	IN uint8_t ucBssIndex);
+#endif
 
 struct TIMER *aisGetScanDoneTimer(
 	IN struct ADAPTER *prAdapter,

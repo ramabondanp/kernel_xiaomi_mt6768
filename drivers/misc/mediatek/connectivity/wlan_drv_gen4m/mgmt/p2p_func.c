@@ -3713,6 +3713,7 @@ void p2pFuncValidateRxActionFrame(IN struct ADAPTER *prAdapter,
 	struct WLAN_PUBLIC_VENDOR_ACTION_FRAME *prActPubVenFrame;
 	uint32_t u4OUI;
 	u_int8_t fgBufferFrame = FALSE;
+	struct P2P_DEV_FSM_INFO *prP2pDevFsmInfo = NULL;
 
 	DEBUGFUNC("p2pFuncValidateRxActionFrame");
 
@@ -3721,6 +3722,21 @@ void p2pFuncValidateRxActionFrame(IN struct ADAPTER *prAdapter,
 		return;
 	}
 	prActFrame = (struct WLAN_ACTION_FRAME *) prSwRfb->pvHeader;
+
+	prP2pDevFsmInfo = prAdapter->rWifiVar.prP2pDevFsmInfo;
+
+	/* In case channel is not granted yet, we should ignore action
+	  * frames which may come from unexpected channels.
+	  */
+	if (fgIsDevInterface && prP2pDevFsmInfo &&
+		prP2pDevFsmInfo->eCurrentState ==
+			P2P_DEV_STATE_REQING_CHANNEL) {
+		DBGLOG(P2P, INFO,
+			"ignore rx action frame %d on state:%d\n",
+			prActFrame->ucCategory,
+			prP2pDevFsmInfo->eCurrentState);
+		return;
+	}
 
 	switch (prActFrame->ucCategory) {
 	case CATEGORY_PUBLIC_ACTION:

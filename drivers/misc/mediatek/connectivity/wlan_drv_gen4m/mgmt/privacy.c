@@ -1386,3 +1386,34 @@ void secHandleNoWtbl(IN struct ADAPTER *prAdapter,
 		DBGLOG(RX, TRACE,
 			"not find station record base on TA\n");
 }
+
+void secCheckRxEapolPacketEncryption(IN struct ADAPTER *prAdapter,
+	IN struct SW_RFB *prRetSwRfb,
+	IN struct STA_RECORD *prStaRec)
+{
+	uint8_t *pucPkt = NULL;
+	uint16_t u2EtherType;
+
+	if (!prStaRec)
+		return;
+
+	if (prRetSwRfb->u2PacketLen <= ETHER_HEADER_LEN)
+		return;
+
+	pucPkt = prRetSwRfb->pvHeader;
+	if (!pucPkt)
+		return;
+
+	u2EtherType = (pucPkt[ETH_TYPE_LEN_OFFSET] << 8)
+		| (pucPkt[ETH_TYPE_LEN_OFFSET + 1]);
+	if (u2EtherType != ETH_P_1X)
+		return;
+
+	if (HAL_RX_STATUS_GET_FRAME_CTL_FIELD(
+			prRetSwRfb->prRxStatusGroup4) &
+			MASK_FC_PROTECTED_FRAME) {
+		prStaRec->fgIsEapEncrypt = TRUE;
+	} else {
+		prStaRec->fgIsEapEncrypt = FALSE;
+	}
+}

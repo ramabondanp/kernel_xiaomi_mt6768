@@ -3642,7 +3642,6 @@ error:
 			&prOffChnlTxReq->rLinkEntry);
 	cnmMgtPktFree(prAdapter, prOffChnlTxReq->prMgmtTxMsdu);
 	cnmMemFree(prAdapter, prOffChnlTxReq);
-	ASSERT(FALSE);
 }				/* p2pRoleHandleOffchnlTxReq */
 
 void p2pRoleFsmRunEventMgmtTx(IN struct ADAPTER *prAdapter,
@@ -3908,6 +3907,21 @@ void p2pRoleFsmRunEventAcs(IN struct ADAPTER *prAdapter,
 	p2pRoleFsmAbortCurrentAcsReq(prAdapter, prMsgAcsRequest);
 
 	initAcsParams(prAdapter, prMsgAcsRequest, prAcsReqInfo);
+
+#if CFG_HOTSPOT_SUPPORT_ADJUST_SCC
+
+	{
+		struct BSS_INFO *prAisBssInfo;
+
+		prAisBssInfo = aisGetConnectedBssInfo(prAdapter);
+		if (prAisBssInfo) {
+			/* Force SCC, indicate channel directly */
+			indicateAcsResultByAisCh(prAdapter, prAcsReqInfo,
+			prAisBssInfo);
+			goto exit;
+		}
+	}
+#endif
 
 	if (prAcsReqInfo->eHwMode == P2P_VENDOR_ACS_HW_MODE_11ANY) {
 		struct BSS_INFO *prAisBssInfo;

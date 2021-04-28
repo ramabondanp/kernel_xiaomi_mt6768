@@ -1077,7 +1077,8 @@ int mtk_cfg80211_vendor_get_version(struct wiphy *wiphy,
 	kalMemZero(aucVersionBuf, 256);
 	attrlist = (struct nlattr *)((uint8_t *) data);
 	if (attrlist->nla_type == LOGGER_ATTRIBUTE_DRIVER_VER) {
-		char aucDriverVersionStr[] = STR(NIC_DRIVER_MAJOR_VERSION) "_"
+		char aucDriverVersionStr[] = "MTK_"
+					     STR(NIC_DRIVER_MAJOR_VERSION) "_"
 					     STR(NIC_DRIVER_MINOR_VERSION) "_"
 					     STR(NIC_DRIVER_SERIAL_VERSION) "-"
 					     DRIVER_BUILD_DATE;

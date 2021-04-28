@@ -1930,6 +1930,12 @@ uint32_t nicPmIndicateBssConnected(IN struct ADAPTER
 	/* rCmdIndicatePmBssConnected.ucBmpDeliveryAC, */
 	/* rCmdIndicatePmBssConnected.ucBmpTriggerAC); */
 
+	log_dbg(NIC, INFO, "DTIMPeriod[%u] BCN_Interval[%u] BSSID["
+		MACSTR "]\n",
+	       prBssInfo->ucDTIMPeriod,
+	       prBssInfo->u2BeaconInterval,
+	       MAC2STR(prBssInfo->aucBSSID));
+
 	if ((GET_BSS_INFO_BY_INDEX(prAdapter,
 		ucBssIndex)->eNetworkType == NETWORK_TYPE_AIS)
 #if CFG_ENABLE_WIFI_DIRECT

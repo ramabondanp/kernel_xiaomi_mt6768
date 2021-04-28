@@ -56,6 +56,31 @@ p2pRoleStateInit_IDLE(IN struct ADAPTER *prAdapter,
 		IN struct P2P_ROLE_FSM_INFO *prP2pRoleFsmInfo,
 		IN struct BSS_INFO *prP2pBssInfo)
 {
+
+#if CFG_HOTSPOT_SUPPORT_ADJUST_SCC
+	if (p2pFuncIsAPMode(
+		prAdapter->rWifiVar.prP2PConnSettings
+		[prP2pRoleFsmInfo->ucRoleIndex])) {
+		struct GL_P2P_INFO *prP2PInfo =
+			prAdapter->prGlueInfo->prP2PInfo[
+			prP2pRoleFsmInfo->ucRoleIndex];
+		struct P2P_CHNL_REQ_INFO *prP2pChnlReqInfo =
+			&(prP2pRoleFsmInfo->rChnlReqInfo);
+
+		prP2PInfo->eChnlSwitchPolicy = CHNL_SWITCH_POLICY_NONE;
+		p2pFuncSwitchSapChannel(prAdapter);
+		if (prP2PInfo->eChnlSwitchPolicy !=
+			CHNL_SWITCH_POLICY_NONE) {
+			if (prP2pChnlReqInfo->fgIsChannelRequested) {
+				p2pFuncReleaseCh(prAdapter,
+					prP2pRoleFsmInfo->ucBssIndex,
+					prP2pChnlReqInfo);
+			}
+			return;
+		}
+	}
+#endif
+
 	cnmTimerStartTimer(prAdapter,
 		&(prP2pRoleFsmInfo->rP2pRoleFsmTimeoutTimer),
 		P2P_AP_CHNL_HOLD_TIME_MS);

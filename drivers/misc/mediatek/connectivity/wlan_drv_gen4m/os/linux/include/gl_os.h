@@ -510,7 +510,6 @@ struct GLUE_INFO {
 
 	/* Device Index(index of arWlanDevInfo[]) */
 	int32_t i4DevIdx;
-	struct napi_struct napi[MAX_BSSID_NUM];
 
 	/* Device statistics */
 	/* struct net_device_stats rNetDevStats; */
@@ -757,8 +756,6 @@ struct GLUE_INFO {
 	/* store the FW roaming enable state which FWK determines */
 	/* if it's = 0, ignore the black/whitelists settings from FWK */
 	uint32_t u4FWRoamingEnable;
-
-	spinlock_t napi_spinlock;
 };
 
 typedef irqreturn_t(*PFN_WLANISR) (int irq, void *dev_id,
@@ -870,6 +867,10 @@ struct NETDEV_PRIVATE_GLUE_INFO {
 #if CFG_ENABLE_UNIFY_WIPHY
 	u_int8_t ucIsP2p;
 #endif
+
+	struct napi_struct napi;
+	OS_SYSTIME tmGROFlushTimeout;
+	spinlock_t napi_spinlock;
 };
 
 struct PACKET_PRIVATE_DATA {

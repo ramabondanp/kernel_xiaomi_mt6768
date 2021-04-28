@@ -3927,6 +3927,39 @@ wlanoidQueryNchoEnable(IN struct ADAPTER *prAdapter,
 
 #endif /* CFG_SUPPORT_NCHO */
 
+#if CFG_SUPPORT_ASSURANCE
+uint32_t
+wlanoidSetDisconnectIes(IN struct ADAPTER *prAdapter,
+		     IN void *pvSetBuffer,
+		     IN uint32_t u4SetBufferLen,
+		     OUT uint32_t *pu4SetInfoLen);
+
+uint32_t
+wlanoidSetRoamingReasonEnable(IN struct ADAPTER *prAdapter,
+		     IN void *pvSetBuffer,
+		     IN uint32_t u4SetBufferLen,
+		     OUT uint32_t *pu4SetInfoLen);
+
+uint32_t
+wlanoidGetRoamingReasonEnable(IN struct ADAPTER *prAdapter,
+		       OUT void *pvQueryBuffer,
+		       IN uint32_t u4QueryBufferLen,
+		       OUT uint32_t *pu4QueryInfoLen);
+
+
+uint32_t
+wlanoidSetBrErrReasonEnable(IN struct ADAPTER *prAdapter,
+		     IN void *pvSetBuffer,
+		     IN uint32_t u4SetBufferLen,
+		     OUT uint32_t *pu4SetInfoLen);
+
+uint32_t
+wlanoidGetBrErrReasonEnable(IN struct ADAPTER *prAdapter,
+		       OUT void *pvQueryBuffer,
+		       IN uint32_t u4QueryBufferLen,
+		       OUT uint32_t *pu4QueryInfoLen);
+#endif
+
 uint32_t
 wlanoidAddRoamScnChnl(IN struct ADAPTER *prAdapter,
 		     IN void *pvSetBuffer,

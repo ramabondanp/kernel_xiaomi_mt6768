@@ -2670,6 +2670,7 @@ struct TX_PWR_CTRL_ELEMENT *txPwrCtrlStringToStruct(char *pcContent,
 	uint16_t u2countryCode = 0;
 	uint32_t u4MemSize = sizeof(struct TX_PWR_CTRL_ELEMENT);
 	uint32_t copySize = 0;
+	uint32_t copySize2 = 0;
 	uint8_t i, j, op, ucSettingCount = 0;
 	uint8_t value, value2, count = 0;
 	uint8_t ucAppliedWay, ucOperation = 0;
@@ -2742,8 +2743,8 @@ struct TX_PWR_CTRL_ELEMENT *txPwrCtrlStringToStruct(char *pcContent,
 	pcContOld = pcContCur;
 	pcContTmp = txPwrGetString(&pcContCur, ";");
 	if (pcContTmp) {
-		copySize = kalStrLen(pcContTmp);
-		if (copySize == 2) {
+		copySize2 = kalStrLen(pcContTmp);
+		if (copySize2 == 2) {
 			DBGLOG(RLM, TRACE, "%s\n", pcContTmp);
 			u2countryCode =
 				(((uint16_t) pcContTmp[0]) << 8) |
@@ -3588,15 +3589,18 @@ void rlmDomainSendPwrLimitCmd(struct ADAPTER *prAdapter)
 		 */
 		rlmDomainBuildCmdByConfigTable(prAdapter, prCmd);
 	}
-
-	DBGLOG(RLM, INFO,
-	       "Domain: PwrLimitChNum=%d, ValidCC=%c%c, PwrLimitCC=%c%c\n",
-	       prCmd->ucNum,
-	       (prAdapter->rWifiVar.u2CountryCode & 0xff00) >> 8,
-	       (prAdapter->rWifiVar.u2CountryCode & 0x00ff),
-	       ((prCmd->u2CountryCode & 0xff00) >> 8),
-	       (prCmd->u2CountryCode & 0x00ff)
-	);
+	if (prAdapter->rWifiVar.u2CountryCode != (uint16_t)NULL) {
+		DBGLOG(RLM, INFO,
+		       "Domain: PwrLimitChNum=%d, ValidCC=%c%c, PwrLimitCC=%c%c\n",
+		       prCmd->ucNum,
+		       (prAdapter->rWifiVar.u2CountryCode & 0xff00) >> 8,
+		       (prAdapter->rWifiVar.u2CountryCode & 0x00ff),
+		       ((prCmd->u2CountryCode & 0xff00) >> 8),
+		       (prCmd->u2CountryCode & 0x00ff)
+		);
+	} else {
+		DBGLOG(RLM, INFO, "Domain: CountryCode is NULL!!");
+	}
 
 	/* show the constructed power table and detect the band edge of 2.4G/5G
 	 * under this domain

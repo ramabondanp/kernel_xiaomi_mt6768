@@ -988,17 +988,19 @@ uint32_t kal_is_skb_gro(struct ADAPTER *prAdapter, uint8_t ucBssIdx)
  *
  */
 /*----------------------------------------------------------------------------*/
-void kal_gro_flush(struct ADAPTER *prAdapter, uint8_t ucBssIdx)
+void kal_gro_flush(struct ADAPTER *prAdapter, struct net_device *prDev)
 {
 	struct WIFI_VAR *prWifiVar = &prAdapter->rWifiVar;
+	struct NETDEV_PRIVATE_GLUE_INFO *prNetDevPrivate =
+			(struct NETDEV_PRIVATE_GLUE_INFO *) netdev_priv(prDev);
 
 	if (CHECK_FOR_TIMEOUT(kalGetTimeTick(),
-		prAdapter->tmGROFlushTimeout[ucBssIdx],
+		prNetDevPrivate->tmGROFlushTimeout,
 		prWifiVar->ucGROFlushTimeout)) {
-		napi_gro_flush(&prAdapter->prGlueInfo->napi[ucBssIdx], false);
-		DBGLOG_LIMITED(INIT, TRACE, "napi_gro_flush: %d\n", ucBssIdx);
+		napi_gro_flush(&prNetDevPrivate->napi, false);
+		DBGLOG_LIMITED(INIT, TRACE, "napi_gro_flush:%p\n", prDev);
 	}
-	GET_CURRENT_SYSTIME(&prAdapter->tmGROFlushTimeout[ucBssIdx]);
+	GET_CURRENT_SYSTIME(&prNetDevPrivate->tmGROFlushTimeout);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1020,6 +1022,7 @@ uint32_t kalRxIndicateOnePkt(IN struct GLUE_INFO
 	struct sk_buff *prSkb = NULL;
 	struct mt66xx_chip_info *prChipInfo;
 	uint8_t ucBssIdx;
+	struct NETDEV_PRIVATE_GLUE_INFO *prNetDevPrivate = NULL;
 
 	ASSERT(prGlueInfo);
 	ASSERT(pvPkt);
@@ -1172,18 +1175,20 @@ uint32_t kalRxIndicateOnePkt(IN struct GLUE_INFO
 		 * disable preempt and protect by spin lock
 		 */
 		preempt_disable();
-		spin_lock_bh(&prGlueInfo->napi_spinlock);
-		napi_gro_receive(&prGlueInfo->napi[ucBssIdx], prSkb);
-		kal_gro_flush(prGlueInfo->prAdapter, ucBssIdx);
-		spin_unlock_bh(&prGlueInfo->napi_spinlock);
+		prNetDevPrivate = (struct NETDEV_PRIVATE_GLUE_INFO *)
+			netdev_priv(prNetDev);
+		spin_lock_bh(&prNetDevPrivate->napi_spinlock);
+		napi_gro_receive(&prNetDevPrivate->napi, prSkb);
+		kal_gro_flush(prGlueInfo->prAdapter, prNetDev);
+		spin_unlock_bh(&prNetDevPrivate->napi_spinlock);
 		preempt_enable();
-		DBGLOG_LIMITED(INIT, INFO, "napi_gro_receive:%d\n", ucBssIdx);
-	} else {
-		if (!in_interrupt())
-			netif_rx_ni(prSkb);
-		else
-			netif_rx(prSkb);
+		DBGLOG_LIMITED(INIT, INFO, "napi_gro_receive:%p\n", prNetDev);
+		return WLAN_STATUS_SUCCESS;
 	}
+	if (!in_interrupt())
+		netif_rx_ni(prSkb);
+	else
+		netif_rx(prSkb);
 
 	return WLAN_STATUS_SUCCESS;
 }
@@ -1507,38 +1512,35 @@ kalIndicateStatusAndComplete(IN struct GLUE_INFO
 				aisGetAisBssInfo(prAdapter, ucBssIndex);
 			uint16_t u2DeauthReason = 0;
 #if CFG_WPS_DISCONNECT || (KERNEL_VERSION(4, 4, 0) <= CFG80211_VERSION_CODE)
+			uint8_t *pDeauthIe = NULL;
+			uint32_t u2DeauthLen = 0;
 
 			if (prBssInfo) {
 				u2DeauthReason = prBssInfo->u2DeauthReason;
 				glNotifyDrvStatus(DISCONNECT_AP,
 						  (void *)prBssInfo);
 			}
-			/* CFG80211 Indication */
-			DBGLOG(INIT, INFO,
-			    "[wifi]Indicate disconnection: Reason=%d Locally[%d]\n",
-			    u2DeauthReason,
-			    (eStatus ==
-				WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY));
-			if (eStatus != WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY
-				&& prBssInfo->u4DeauthIeLength != 0) {
+
+#if CFG_SUPPORT_ASSURANCE
+			if (eStatus != WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY &&
+			    prBssInfo->u4DeauthIeLength != 0) {
 				DBGLOG(INIT, INFO, "Dump: Deauth IE to upper");
 				DBGLOG_MEM8(INIT, INFO, prBssInfo->aucDeauthIe,
 					prBssInfo->u4DeauthIeLength);
 
-				cfg80211_disconnected(prDevHandler,
-				    u2DeauthReason,  prBssInfo->aucDeauthIe,
-				    prBssInfo->u4DeauthIeLength,
-				    eStatus
-				       == WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY,
-				    GFP_KERNEL);
-			} else {
-				cfg80211_disconnected(prDevHandler,
-				    u2DeauthReason, NULL, 0,
-				    eStatus
-				       == WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY,
-				    GFP_KERNEL);
+				pDeauthIe = prBssInfo->aucDeauthIe;
+				u2DeauthLen = prBssInfo->u4DeauthIeLength;
 			}
-
+#endif
+			/* CFG80211 Indication */
+			DBGLOG(INIT, INFO,
+			    "[wifi]Indicate disconnection: Reason=%d Locally[%d]\n",
+			    u2DeauthReason,
+			    (eStatus == WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY));
+			cfg80211_disconnected(prDevHandler,
+			    u2DeauthReason, pDeauthIe, u2DeauthLen,
+			    eStatus == WLAN_STATUS_MEDIA_DISCONNECT_LOCALLY,
+			    GFP_KERNEL);
 #else
 
 #ifdef CONFIG_ANDROID
@@ -1893,6 +1895,7 @@ void kalUpdateReAssocRspInfo(IN struct GLUE_INFO
 
 }				/* kalUpdateReAssocRspInfo */
 
+#if CFG_SUPPORT_ASSURANCE
 void kalUpdateDeauthInfo(IN struct GLUE_INFO
 			     *prGlueInfo, IN uint8_t *pucFrameBody,
 			     IN uint32_t u4FrameBodyLen,
@@ -1918,6 +1921,7 @@ void kalUpdateDeauthInfo(IN struct GLUE_INFO
 	}
 
 }                               /* kalUpdateDeauthInfo */
+#endif
 
 void kalResetPacket(IN struct GLUE_INFO *prGlueInfo,
 		    IN void *prPacket)
@@ -2549,21 +2553,33 @@ kalSecurityFrameClassifier(IN struct GLUE_INFO *prGlueInfo,
 	pucEapol = pucIpHdr;
 
 	if (u2EthType == ETH_P_1X) {
-
+		struct STA_RECORD *prStaRec;
 		ucEapolType = pucEapol[1];
 
-		/* Leave EAP to check */
-		ucEAPoLKey = aucLookAheadBuf[1 + ucEapOffset];
-		if (ucEAPoLKey != ETH_EAPOL_KEY)
-			prTxPktInfo->u2Flag |= BIT(ENUM_PKT_NON_PROTECTED_1X);
-		else {
-			WLAN_GET_FIELD_BE16(&aucLookAheadBuf[5 + ucEapOffset],
-					    &u2KeyInfo);
-			/* BIT3 is pairwise key bit */
-			DBGLOG(TX, INFO, "u2KeyInfo=%d\n", u2KeyInfo);
-			if (u2KeyInfo & BIT(3))
+		prStaRec = cnmGetStaRecByAddress(prGlueInfo->prAdapter,
+				GLUE_GET_PKT_BSS_IDX(prPacket),
+				aucLookAheadBuf);
+
+		if (prStaRec && prStaRec->fgTransmitKeyExist &&
+				prStaRec->fgIsEapEncrypt) {
+			/* Encrypt EAP frames if AIS connected and with a key */
+			DBGLOG(TX, INFO, "Encrypt EAP packets\n");
+		} else {
+			/* Leave EAP to check */
+			ucEAPoLKey = aucLookAheadBuf[1 + ucEapOffset];
+			if (ucEAPoLKey != ETH_EAPOL_KEY)
 				prTxPktInfo->u2Flag |=
 					BIT(ENUM_PKT_NON_PROTECTED_1X);
+			else {
+				WLAN_GET_FIELD_BE16(
+					&aucLookAheadBuf[5 + ucEapOffset],
+					&u2KeyInfo);
+				/* BIT3 is pairwise key bit */
+				DBGLOG(TX, INFO, "u2KeyInfo=%d\n", u2KeyInfo);
+				if (u2KeyInfo & BIT(3))
+					prTxPktInfo->u2Flag |=
+						BIT(ENUM_PKT_NON_PROTECTED_1X);
+			}
 		}
 
 

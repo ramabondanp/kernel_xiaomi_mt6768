@@ -829,12 +829,15 @@ void scnEventScanDone(IN struct ADAPTER *prAdapter,
 			= prScanDone->rSparseChannel.ucChannelNum;
 		num = prScanInfo->ucSparseChannelArrayValidNum
 			= prScanDone->ucSparseChannelArrayValidNum;
-		log_dbg(SCN, INFO, "Country Code = %c%c, Detected_Channel_Num = %d\n",
-			((prAdapter->rWifiVar.u2CountryCode
-				& 0xff00) >> 8),
-			(prAdapter->rWifiVar.u2CountryCode
-				& 0x00ff), num);
-
+		if (prAdapter->rWifiVar.u2CountryCode != (uint16_t)NULL) {
+			log_dbg(SCN, INFO, "Country Code = %c%c, Detected_Channel_Num = %d\n",
+				((prAdapter->rWifiVar.u2CountryCode
+					& 0xff00) >> 8),
+				(prAdapter->rWifiVar.u2CountryCode
+					& 0x00ff), num);
+		} else {
+			log_dbg(SCN, INFO, "Country Code is NULL!!");
+		}
 #define print_scan_info(_Mod, _Clz, _Fmt, var) \
 		do { \
 			int written = 0; \

@@ -435,8 +435,52 @@ void wlanOnPostInitHifInfo(IN struct ADAPTER *prAdapter)
 }
 
 #if CFG_SUPPORT_NCHO
-void wlanNchoInit(IN struct ADAPTER *prAdapter)
+
+uint32_t wlanNchoSetFWEnable(IN struct ADAPTER *prAdapter, IN uint8_t fgEnable)
 {
+	char cmd[NCHO_CMD_MAX_LENGTH] = { 0 };
+	uint32_t status = WLAN_STATUS_FAILURE;
+
+	kalSnprintf(cmd, sizeof(cmd), "%s %d",
+		FW_CFG_KEY_NCHO_ENABLE, fgEnable);
+	status = wlanFwCfgParse(prAdapter, cmd);
+	if (status != WLAN_STATUS_SUCCESS)
+		DBGLOG(INIT, WARN, "set disable fail %d\n", status);
+	return status;
+}
+
+uint32_t wlanNchoSetFWRssiTrigger(IN struct ADAPTER *prAdapter,
+	IN int32_t i4RoamTriggerRssi)
+{
+	char cmd[NCHO_CMD_MAX_LENGTH] = { 0 };
+	uint32_t status = WLAN_STATUS_FAILURE;
+
+	kalSnprintf(cmd, sizeof(cmd), "%s %d",
+		FW_CFG_KEY_NCHO_ROAM_RCPI, dBm_TO_RCPI(i4RoamTriggerRssi));
+	status =  wlanFwCfgParse(prAdapter, cmd);
+	if (status != WLAN_STATUS_SUCCESS)
+		DBGLOG(INIT, WARN, "set roam rcpi fail %d\n", status);
+	return status;
+}
+
+uint32_t wlanNchoSetFWScanPeriod(IN struct ADAPTER *prAdapter,
+	IN uint32_t u4RoamScanPeriod)
+{
+	char cmd[NCHO_CMD_MAX_LENGTH] = { 0 };
+	uint32_t status = WLAN_STATUS_FAILURE;
+
+	kalSnprintf(cmd, sizeof(cmd), "%s %d",
+		FW_CFG_KEY_NCHO_SCAN_PERIOD, u4RoamScanPeriod);
+	status = wlanFwCfgParse(prAdapter, cmd);
+	if (status != WLAN_STATUS_SUCCESS)
+		DBGLOG(INIT, WARN, "set scan period fail %d\n", status);
+	return status;
+}
+
+void wlanNchoInit(IN struct ADAPTER *prAdapter, IN uint8_t fgFwSync)
+{
+	uint8_t sync = fgFwSync && prAdapter->rNchoInfo.fgECHOEnabled;
+
 	/* NCHO Initialization */
 	prAdapter->rNchoInfo.fgECHOEnabled = 0;
 	prAdapter->rNchoInfo.eBand = NCHO_BAND_AUTO;
@@ -455,7 +499,12 @@ void wlanNchoInit(IN struct ADAPTER *prAdapter)
 	prAdapter->rNchoInfo.u4ScanNProbes = 2;
 	prAdapter->rNchoInfo.u4WesMode = 0;
 	prAdapter->rAddRoamScnChnl.ucChannelListNum = 0;
+
+	/* sync with FW to let FW reset params */
+	if (sync)
+		wlanNchoSetFWEnable(prAdapter, 0);
 }
+
 #endif
 
 void wlanOnPostFirmwareReady(IN struct ADAPTER *prAdapter,
@@ -541,7 +590,7 @@ void wlanOnPostFirmwareReady(IN struct ADAPTER *prAdapter,
 	nicInitMGMT(prAdapter, prRegInfo);
 
 #if CFG_SUPPORT_NCHO
-	wlanNchoInit(prAdapter);
+	wlanNchoInit(prAdapter, FALSE);
 #endif
 
 	/* Enable WZC Disassociation */
@@ -8986,13 +9035,18 @@ wlanNotifyFwSuspend(struct GLUE_INFO *prGlueInfo,
 	struct NETDEV_PRIVATE_GLUE_INFO *prNetDevPrivate =
 		(struct NETDEV_PRIVATE_GLUE_INFO *) NULL;
 	struct CMD_SUSPEND_MODE_SETTING rSuspendCmd;
+	struct ADAPTER *prAdapter = NULL;
+	struct BSS_INFO *prBssInfo = NULL;
 
 	prNetDevPrivate = (struct NETDEV_PRIVATE_GLUE_INFO *)
 			  netdev_priv(prDev);
 
 	if (prNetDevPrivate->prGlueInfo != prGlueInfo)
 		DBGLOG(REQ, WARN, "%s: unexpected prGlueInfo(0x%p)!\n",
-		       __func__, prNetDevPrivate->prGlueInfo);
+			__func__, prNetDevPrivate->prGlueInfo);
+
+	prAdapter = prNetDevPrivate->prGlueInfo->prAdapter;
+	prBssInfo = GET_BSS_INFO_BY_INDEX(prAdapter, prNetDevPrivate->ucBssIdx);
 
 	rSuspendCmd.ucBssIndex = prNetDevPrivate->ucBssIdx;
 	rSuspendCmd.ucEnableSuspendMode = fgSuspend;
@@ -9002,7 +9056,8 @@ wlanNotifyFwSuspend(struct GLUE_INFO *prGlueInfo,
 		/* cfg enable + wow enable => Wow On mdtim*/
 		rSuspendCmd.ucMdtim =
 			prGlueInfo->prAdapter->rWifiVar.ucWowOnMdtim;
-		DBGLOG(REQ, INFO, "mdtim [1]\n");
+		DBGLOG(REQ, INFO, "mdtim [1] BCN_interval[%d]\n",
+			prBssInfo->u2BeaconInterval);
 	} else if (prGlueInfo->prAdapter->rWifiVar.ucWow
 		   && !prGlueInfo->prAdapter->rWowCtrl.fgWowEnable) {
 		if (prGlueInfo->prAdapter->rWifiVar.ucAdvPws) {
@@ -9011,7 +9066,8 @@ wlanNotifyFwSuspend(struct GLUE_INFO *prGlueInfo,
 			 */
 			rSuspendCmd.ucMdtim =
 				prGlueInfo->prAdapter->rWifiVar.ucWowOffMdtim;
-			DBGLOG(REQ, INFO, "mdtim [2]\n");
+			DBGLOG(REQ, INFO, "mdtim [2] BCN_interval[%d]\n",
+				prBssInfo->u2BeaconInterval);
 		}
 	} else if (!prGlueInfo->prAdapter->rWifiVar.ucWow) {
 		if (prGlueInfo->prAdapter->rWifiVar.ucAdvPws) {
@@ -9020,7 +9076,8 @@ wlanNotifyFwSuspend(struct GLUE_INFO *prGlueInfo,
 			 */
 			rSuspendCmd.ucMdtim =
 				prGlueInfo->prAdapter->rWifiVar.ucWowOffMdtim;
-			DBGLOG(REQ, INFO, "mdtim [3]\n");
+			DBGLOG(REQ, INFO, "mdtim [3] BCN_interval[%d]\n",
+				prBssInfo->u2BeaconInterval);
 		}
 	}
 

@@ -686,6 +686,7 @@ struct STA_RECORD {
 	 * indicate disconnected status only when connected.
 	 */
 	u_int8_t fgIsConnected;
+	u_int8_t fgIsEapEncrypt;
 };
 
 #if 0

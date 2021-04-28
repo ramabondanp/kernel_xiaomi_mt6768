@@ -347,6 +347,10 @@ static u_int8_t roamingFsmIsNeedScan(
 		}
 	}
 #endif
+
+	if (cnmP2pIsActive(prAdapter))
+		fgIsNeedScan = FALSE;
+
 	return fgIsNeedScan;
 }
 
@@ -614,6 +618,17 @@ void roamingFsmRunEventDiscovery(IN struct ADAPTER *prAdapter,
 		} else {
 			prRoamingFsmInfo->ucPER = 0;
 		}
+
+#if CFG_SUPPORT_NCHO
+		if (prRoamingFsmInfo->eReason == ROAMING_REASON_RETRY)
+			DBGLOG(ROAMING, INFO,
+				"NCHO enable=%d,trigger=%d,delta=%d,period=%d\n",
+				prAdapter->rNchoInfo.fgECHOEnabled,
+				prAdapter->rNchoInfo.i4RoamTrigger,
+				prAdapter->rNchoInfo.i4RoamDelta,
+				prAdapter->rNchoInfo.u4RoamScanPeriod);
+#endif
+
 		roamingFsmSteps(prAdapter, eNextState, ucBssIndex);
 	}
 }				/* end of roamingFsmRunEventDiscovery() */

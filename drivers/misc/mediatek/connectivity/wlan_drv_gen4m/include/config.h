@@ -691,6 +691,12 @@
 #define CFG_HOTSPOT_OPTIMIZATION_DTIM           1
 #define CFG_AUTO_CHANNEL_SEL_SUPPORT            1
 
+#if CFG_TC10_FEATURE
+#define CFG_HOTSPOT_SUPPORT_ADJUST_SCC          1
+#else
+#define CFG_HOTSPOT_SUPPORT_ADJUST_SCC          0
+#endif
+
 #ifndef CFG_ENABLE_UNIFY_WIPHY
 #define CFG_ENABLE_UNIFY_WIPHY 1
 #endif
@@ -743,7 +749,7 @@
 #endif
 
 #define CFG_SUPPORT_AIS_5GHZ                    1
-#define CFG_SUPPORT_BEACON_CHANGE_DETECTION     0
+#define CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE 0
 
 /*------------------------------------------------------------------------------
  * Option for NVRAM and Version Checking
@@ -1180,6 +1186,12 @@
  */
 #define CFG_SUPPORT_NCHO		1
 #define CFG_SUPPORT_NCHO_AUTO_ENABLE	0
+
+/*------------------------------------------------------------------------------
+ * Flags of Assurance support
+ *------------------------------------------------------------------------------
+ */
+#define CFG_SUPPORT_ASSURANCE 1
 
 /*------------------------------------------------------------------------------
  * Flags of Key Word Exception Mechanism

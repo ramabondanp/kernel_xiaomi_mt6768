@@ -681,11 +681,6 @@ u_int8_t rsnIsSuitableBSS(IN struct ADAPTER *prAdapter,
 		}
 	}
 
-	if (aisGetAuthMode(prAdapter, ucBssIndex) == AUTH_MODE_WPA3_SAE) {
-		DBGLOG(RSN, WARN, "Don't check AuthKeyMgtSuite with SAE\n");
-		return TRUE;
-	}
-
 	/* check akm */
 	s = prConnSettings->rRsnInfo.au4AuthKeyMgtSuite[0];
 	if (prBss->ucIsAdaptive11r &&
@@ -1171,6 +1166,14 @@ u_int8_t rsnPerformPolicySelection(
 			       "[MFP] Skip RSN IE, No MFP Required Capability\n");
 			return FALSE;
 		}
+	}
+
+	if (GET_SELECTOR_TYPE(prBssRsnInfo->u4GroupKeyCipherSuite)
+		== CIPHER_SUITE_TKIP) {
+		DBGLOG(RSN, INFO,
+			"[MFP] Unset PMF flag due to unsupported TKIP\n");
+		aisGetAisSpecBssInfo(prAdapter, ucBssIndex)
+			->fgMgmtProtection = FALSE;
 	}
 
 	DBGLOG(RSN, TRACE,
@@ -1677,9 +1680,13 @@ void rsnGenerateRSNIE(IN struct ADAPTER *prAdapter,
  #if CFG_SUPPORT_802_11W
 		if (GET_BSS_INFO_BY_INDEX(prAdapter,
 			ucBssIndex)->eNetworkType == NETWORK_TYPE_AIS) {
-			if (kalGetRsnIeMfpCap(prAdapter->prGlueInfo,
+			if (GET_SELECTOR_TYPE(RSN_IE(pucBuffer)->
+			    u4GroupKeyCipherSuite) == CIPHER_SUITE_TKIP) {
+				DBGLOG(RSN, TRACE,
+				       "!RSN_AUTH_MFP - TKIP, no MFP\n");
+			} else if (kalGetRsnIeMfpCap(prAdapter->prGlueInfo,
 				ucBssIndex) ==
-			    RSN_AUTH_MFP_REQUIRED) {
+				   RSN_AUTH_MFP_REQUIRED) {
 				WLAN_SET_FIELD_16(cp,
 						  ELEM_WPA_CAP_MFPC |
 						  ELEM_WPA_CAP_MFPR);

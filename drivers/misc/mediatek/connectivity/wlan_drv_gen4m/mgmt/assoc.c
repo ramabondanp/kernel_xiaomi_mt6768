@@ -120,6 +120,10 @@ struct APPEND_VAR_IE_ENTRY txAssocReqIETable[] = {
 	{(ELEM_HDR_LEN + ELEM_MIN_LEN_MTK_OUI), NULL, rlmGenerateMTKOuiIE}
 	,			/* 221 */
 #endif
+#if CFG_SUPPORT_ASSURANCE
+	{0, assocCalculateRoamReasonLen, assocGenerateRoamReason}
+	,
+#endif
 	{(ELEM_HDR_LEN + ELEM_MAX_LEN_WPA), NULL,
 		rsnGenerateWPAIE}	/* 221 */
 };
@@ -831,6 +835,103 @@ void assocGenerateConnIE(struct ADAPTER *prAdapter,
 	prMsduInfo->u2FrameLength += cp - pucBuffer;
 	DBGLOG_MEM8(SAA, INFO, pucBuffer, cp - pucBuffer);
 }
+
+#if CFG_SUPPORT_ASSURANCE
+
+uint32_t assocCalculateRoamReasonLen(struct ADAPTER *prAdapter,
+		uint8_t ucBssIdx, struct STA_RECORD *prStaRec)
+{
+	struct AIS_SPECIFIC_BSS_INFO *prAisSpecificBssInfo;
+	uint8_t ucBssIndex = 0;
+
+	ucBssIndex = prStaRec->ucBssIndex;
+	prAisSpecificBssInfo = aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
+	if (IS_STA_IN_AIS(prStaRec) && prStaRec->fgIsReAssoc &&
+	    prAisSpecificBssInfo->fgRoamingReasonEnable)
+		return sizeof(struct IE_ASSURANCE_ROAMING_REASON);
+
+	return 0;
+}
+
+void assocGenerateRoamReason(struct ADAPTER *prAdapter,
+			   struct MSDU_INFO *prMsduInfo)
+{
+	struct AIS_SPECIFIC_BSS_INFO *prAisSpecificBssInfo;
+	struct ROAMING_INFO *prRoamingFsmInfo = NULL;
+	struct STA_RECORD *prStaRec;
+	uint8_t *pucBuffer;
+	uint8_t ucBssIndex;
+	struct BSS_INFO *prAisBssInfo;
+
+	prStaRec = cnmGetStaRecByIndex(prAdapter, prMsduInfo->ucStaRecIndex);
+	if (!prStaRec)
+		return;
+
+	pucBuffer = (uint8_t *) ((unsigned long)
+				 prMsduInfo->prPacket + (unsigned long)
+				 prMsduInfo->u2FrameLength);
+
+	ucBssIndex = prStaRec->ucBssIndex;
+	prAisSpecificBssInfo = aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
+	prRoamingFsmInfo = aisGetRoamingInfo(prAdapter, ucBssIndex);
+	prAisBssInfo = aisGetAisBssInfo(prAdapter, ucBssIndex);
+
+	if (IS_STA_IN_AIS(prStaRec) && prStaRec->fgIsReAssoc &&
+	    prAisSpecificBssInfo->fgRoamingReasonEnable) {
+		struct IE_ASSURANCE_ROAMING_REASON *ie =
+			(struct IE_ASSURANCE_ROAMING_REASON *) pucBuffer;
+
+		ie->ucId = ELEM_ID_VENDOR;
+		ie->ucLength =
+		      sizeof(struct IE_ASSURANCE_ROAMING_REASON) - ELEM_HDR_LEN;
+		WLAN_SET_FIELD_BE24(ie->aucOui, VENDOR_IE_SAMSUNG_OUI);
+		ie->ucOuiType = 0x22;
+		ie->ucSubType = 0x04;
+		ie->ucVersion = 0x01;
+		ie->ucSubTypeReason = 0x00;
+
+		/* 0. unspecified
+		 * 1. low rssi
+		 * 2. CU
+		 * 3. Beacon lost
+		 * 4. Deauth/Disassoc
+		 * 5. BTM
+		 * 6. idle roaming
+		 * 7. manual
+		 */
+		switch (prRoamingFsmInfo->eReason) {
+		case ROAMING_REASON_POOR_RCPI:
+			ie->ucReason = 0x01;
+			break;
+		case ROAMING_REASON_BEACON_TIMEOUT:
+		case ROAMING_REASON_BEACON_TIMEOUT_TX_ERR:
+			ie->ucReason = 0x03;
+			break;
+		case ROAMING_REASON_SAA_FAIL:
+			ie->ucReason = 0x04;
+			break;
+		case ROAMING_REASON_IDLE:
+			ie->ucReason = 0x06;
+			break;
+		case ROAMING_REASON_INACTIVE:
+		case ROAMING_REASON_TX_ERR:
+			ie->ucReason = 0x07;
+			break;
+		default:
+			ie->ucReason = 0x05;
+		}
+		ie->ucSubTypeRcpi = 0x01;
+		ie->ucRcpi = prRoamingFsmInfo->ucRcpi;
+		ie->ucSubTypeRcpiThreshold = 0x02;
+		ie->ucRcpiThreshold = prRoamingFsmInfo->ucThreshold;
+		ie->ucSubTypeCuThreshold = 0x03;
+		ie->ucCuThreshold = 0;
+		prMsduInfo->u2FrameLength += IE_SIZE(pucBuffer);
+		DBGLOG_MEM8(SAA, INFO, pucBuffer, IE_SIZE(pucBuffer));
+	}
+}
+
+#endif
 
 /*----------------------------------------------------------------------------*/
 /*!

@@ -192,7 +192,7 @@ static void glNotifyChipReset(void)
 	uint8_t ucBssIndex = 0;
 	uint32_t type = 0, reason = 0, en = 0;
 
-	char aucDriverVersionStr[] = STR(NIC_DRIVER_MAJOR_VERSION) "_"
+	char aucDriverVersionStr[] = "MTK_" STR(NIC_DRIVER_MAJOR_VERSION) "_"
 					     STR(NIC_DRIVER_MINOR_VERSION) "_"
 					     STR(NIC_DRIVER_SERIAL_VERSION) "-"
 					     DRIVER_BUILD_DATE;

@@ -1229,10 +1229,11 @@ uint32_t saaFsmRunEventRxDeauth(IN struct ADAPTER *prAdapter,
 	ucWlanIdx = (uint8_t) HAL_RX_STATUS_GET_WLAN_IDX(prSwRfb->prRxStatus);
 
 	DBGLOG(SAA, INFO, "Rx Deauth frame ,DA[" MACSTR "] SA[" MACSTR
-	       "] BSSID[" MACSTR "] ReasonCode[0x%x]\n",
+	       "] BSSID[" MACSTR "] ReasonCode[0x%x] len[%d]\n",
 	       MAC2STR(prDeauthFrame->aucDestAddr),
 	       MAC2STR(prDeauthFrame->aucSrcAddr),
-	       MAC2STR(prDeauthFrame->aucBSSID), prDeauthFrame->u2ReasonCode);
+	       MAC2STR(prDeauthFrame->aucBSSID), prDeauthFrame->u2ReasonCode,
+	       prSwRfb->u2PacketLen - prSwRfb->u2HeaderLen);
 
 	do {
 
@@ -1266,15 +1267,7 @@ uint32_t saaFsmRunEventRxDeauth(IN struct ADAPTER *prAdapter,
 				    &prStaRec->u2ReasonCode)
 				    == WLAN_STATUS_SUCCESS) {
 
-					/* Add for assurance 3.2 */
-					prDeauthFrame =
-					   (struct WLAN_DEAUTH_FRAME *)
-					   prSwRfb->pvHeader;
-					DBGLOG(RSN, INFO,
-					   "Deauth reason: %02x, frame body len: %d",
-					   prDeauthFrame->u2ReasonCode,
-					   prSwRfb->u2PacketLen -
-					   prSwRfb->u2HeaderLen);
+#if CFG_SUPPORT_ASSURANCE
 					kalUpdateDeauthInfo(
 						prAdapter->prGlueInfo,
 						(uint8_t *) &
@@ -1282,6 +1275,7 @@ uint32_t saaFsmRunEventRxDeauth(IN struct ADAPTER *prAdapter,
 						prSwRfb->u2PacketLen -
 						prSwRfb->u2HeaderLen,
 						ucBssIndex);
+#endif
 
 #if CFG_SUPPORT_802_11W
 
@@ -1423,7 +1417,8 @@ saaSendDisconnectMsgHandler(IN struct ADAPTER *prAdapter,
 			prAisAbortMsg->ucReasonOfDisconnect =
 				DISCONNECT_REASON_CODE_DEAUTHENTICATED;
 #if CFG_TC10_FEATURE
-			prAisAbortMsg->fgDelayIndication = TRUE;
+			prAisAbortMsg->fgDelayIndication =
+				!cnmP2pIsActive(prAdapter);
 #else
 			prAisAbortMsg->fgDelayIndication = FALSE;
 #endif
@@ -1500,11 +1495,12 @@ uint32_t saaFsmRunEventRxDisassoc(IN struct ADAPTER *prAdapter,
 
 	DBGLOG(SAA, INFO,
 	       "Rx Disassoc frame from SA[" MACSTR "] BSSID[" MACSTR
-	       "] DA[" MACSTR "] ReasonCode[0x%x]\n",
+	       "] DA[" MACSTR "] ReasonCode[0x%x] Len[%d]\n",
 	       MAC2STR(prDisassocFrame->aucSrcAddr),
 	       MAC2STR(prDisassocFrame->aucBSSID),
 	       MAC2STR(prDisassocFrame->aucDestAddr),
-	       prDisassocFrame->u2ReasonCode);
+	       prDisassocFrame->u2ReasonCode,
+	       prSwRfb->u2PacketLen - prSwRfb->u2HeaderLen);
 
 	do {
 
@@ -1537,12 +1533,7 @@ uint32_t saaFsmRunEventRxDisassoc(IN struct ADAPTER *prAdapter,
 				    prSwRfb, prStaRec->aucMacAddr, &prStaRec->
 				    u2ReasonCode) == WLAN_STATUS_SUCCESS) {
 
-					/* Add for assurance 3.2 */
-					DBGLOG(RSN, INFO,
-						"Disassoc reason: %02x, frame body len: %d",
-						prDisassocFrame->u2ReasonCode,
-						prSwRfb->u2PacketLen -
-						prSwRfb->u2HeaderLen);
+#if CFG_SUPPORT_ASSURANCE
 					kalUpdateDeauthInfo(
 						prAdapter->prGlueInfo,
 						(uint8_t *) &
@@ -1550,6 +1541,8 @@ uint32_t saaFsmRunEventRxDisassoc(IN struct ADAPTER *prAdapter,
 						prSwRfb->u2PacketLen -
 						prSwRfb->u2HeaderLen,
 						ucBssIndex);
+#endif
+
 #if CFG_SUPPORT_802_11W
 
 					prAisSpecBssInfo =

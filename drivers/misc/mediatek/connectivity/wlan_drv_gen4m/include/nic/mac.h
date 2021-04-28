@@ -1621,6 +1621,8 @@
 #define VENDOR_IE_CISCO_OUI                        0x004096
 #define VENDOR_IE_CISCO_TYPE                       0x2C
 
+/* Samsung Electronics IE*/
+#define VENDOR_IE_SAMSUNG_OUI                      0x0000F0
 
 #if CFG_SUPPORT_PASSPOINT
 #define VENDOR_OUI_TYPE_HS20                        16
@@ -3002,6 +3004,38 @@ struct IE_MTK_OUI {
 	uint8_t aucCapability[4];
 	uint8_t aucInfoElem[1];
 } __KAL_ATTRIB_PACKED__;
+
+#if CFG_SUPPORT_ASSURANCE
+struct IE_ASSURANCE_ROAMING_REASON {
+	uint8_t ucId;
+	uint8_t ucLength;
+	uint8_t aucOui[3];
+	uint8_t ucOuiType;
+	uint8_t ucSubType;
+	uint8_t ucVersion;
+	uint8_t ucSubTypeReason;
+	uint8_t ucReason;
+	uint8_t ucSubTypeRcpi;
+	uint8_t ucRcpi;
+	uint8_t ucSubTypeRcpiThreshold;
+	uint8_t ucRcpiThreshold;
+	uint8_t ucSubTypeCuThreshold;
+	uint8_t ucCuThreshold;
+} __KAL_ATTRIB_PACKED__;
+
+struct IE_ASSURANCE_BEACON_REPORT {
+	uint8_t ucId;
+	uint8_t ucLength;
+	uint8_t aucOui[3];
+	uint8_t ucOuiType;
+	uint8_t ucSubType;
+	uint8_t ucVersion;
+	uint8_t ucLen;
+	uint8_t ucReason;
+} __KAL_ATTRIB_PACKED__;
+
+#endif
+
 
 struct SUB_IE_BSS_TERM_DURATION {
 	uint8_t ucSubId;

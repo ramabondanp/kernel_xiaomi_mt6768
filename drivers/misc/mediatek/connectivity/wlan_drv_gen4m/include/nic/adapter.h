@@ -266,7 +266,9 @@ struct CONNECTION_SETTINGS {
 	/* for RSN info store, when upper layer set rsn info */
 	struct RSN_INFO rRsnInfo;
 
+#if CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE
 	u_int8_t fgSecModeChangeStartTimer;
+#endif
 
 	uint8_t *pucAssocIEs;
 	size_t assocIeLen;
@@ -552,9 +554,12 @@ struct BSS_INFO {
 	struct IPV4_NETWORK_ADDRESS_LIST *prIpV4NetAddrList;
 #endif
 	uint16_t u2DeauthReason;
+
+#if CFG_SUPPORT_ASSURANCE
 	uint32_t u4DeauthIeLength;
 	/* Assurance: Deauth IE from AP */
 	uint8_t aucDeauthIe[CFG_CFG80211_IE_BUF_LEN];
+#endif
 
 #if CFG_SUPPORT_TDLS
 	u_int8_t fgTdlsIsProhibited;
@@ -680,6 +685,11 @@ struct AIS_SPECIFIC_BSS_INFO {
 	struct LINK_MGMT  rNeighborApList;
 	OS_SYSTIME rNeiApRcvTime;
 	uint32_t u4NeiApValidInterval;
+
+#if CFG_SUPPORT_ASSURANCE
+	u_int8_t fgRoamingReasonEnable;
+	u_int8_t fgBcnReptErrReasonEnable;
+#endif
 };
 
 struct BOW_SPECIFIC_BSS_INFO {
@@ -1633,7 +1643,6 @@ struct ADAPTER {
 #if CFG_SUPPORT_DATA_STALL
 	OS_SYSTIME tmReportinterval;
 #endif
-	OS_SYSTIME tmGROFlushTimeout[MAX_BSSID_NUM];
 
 #ifdef CFG_SUPPORT_LINK_QUALITY_MONITOR
 	uint32_t u4LastLinkQuality;
@@ -1656,9 +1665,15 @@ struct ADAPTER {
 
 	u_int8_t fgEnDbgPowerMode;
 
-	/* Assurance: Deauth IE from wpa_supplicant */
+#if CFG_SUPPORT_ASSURANCE
+	/* Deauth IE from wpa_supplicant */
 	uint8_t aucDeauthIeFromUpper[NON_WFA_VENDOR_IE_MAX_LEN];
 	uint16_t u4DeauthIeFromUpperLength;
+
+	u_int8_t fgRoamReasonEnabled;
+	u_int8_t fgBrErrReasonEnabled;
+#endif
+
 };				/* end of _ADAPTER_T */
 
 /*******************************************************************************

@@ -304,9 +304,11 @@ u_int8_t rsnParseOsenIE(struct ADAPTER *prAdapter,
 			struct IE_WFA_OSEN *prInfoElem,
 			struct RSN_INFO *prOsenInfo);
 
+#if CFG_SUPPORT_DETECT_SECURITY_MODE_CHANGE
 u_int8_t rsnCheckSecurityModeChanged(struct ADAPTER
 				     *prAdapter, struct BSS_INFO *prBssInfo,
 				     struct BSS_DESC *prBssDesc);
+#endif
 
 uint32_t rsnCalculateFTIELen(struct ADAPTER *prAdapter, uint8_t ucBssIdx,
 			     struct STA_RECORD *prStaRec);

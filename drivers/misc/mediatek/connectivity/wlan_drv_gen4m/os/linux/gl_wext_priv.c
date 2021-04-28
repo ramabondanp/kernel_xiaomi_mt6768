@@ -11574,7 +11574,7 @@ static int priv_driver_get_version(IN struct net_device *prNetDev,
 
 	u4Offset += fwDlGetFwdlInfo(prAdapter, pcCommand, i4TotalLen);
 	u4Offset += snprintf(pcCommand + u4Offset, i4TotalLen - u4Offset,
-		"WiFi Driver Version %u.%u.%u\n",
+		"WiFi Driver Version MTK_%u.%u.%u\n",
 		NIC_DRIVER_MAJOR_VERSION,
 		NIC_DRIVER_MINOR_VERSION,
 		NIC_DRIVER_SERIAL_VERSION);

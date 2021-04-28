@@ -2063,6 +2063,9 @@ void nicRxProcessDataPacket(IN struct ADAPTER *prAdapter,
 					secHandleRxEapolPacket(
 						prAdapter, prRetSwRfb,
 						prStaRec);
+					secCheckRxEapolPacketEncryption(
+						prAdapter, prRetSwRfb,
+						prStaRec);
 					nicIndicateConnectionRxFrame(
 						prAdapter, prRetSwRfb);
 					nicRxProcessPktWithoutReorder(

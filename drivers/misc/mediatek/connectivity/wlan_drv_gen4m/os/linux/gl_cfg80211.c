@@ -5474,6 +5474,198 @@ int32_t mtk_cfg80211_process_str_cmd_reply(
 	return cfg80211_testmode_reply(skb);
 }
 
+
+#if CFG_SUPPORT_ASSURANCE
+
+int testmode_set_disconnect_ies(IN struct wiphy *wiphy, IN char *pcCommand,
+			 IN int i4TotalLen)
+{
+	uint32_t u4SetInfoLen = 0;
+	int32_t i4Argc = 0;
+	int8_t *apcArgv[WLAN_CFG_ARGV_MAX] = { 0 };
+	uint32_t rStatus = WLAN_STATUS_FAILURE;
+	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)wiphy_priv(wiphy);
+	uint16_t hexLength = (uint16_t)i4TotalLen - 20;
+	uint8_t *asciiArray = NULL;
+	uint8_t hexArray[CFG_CFG80211_IE_BUF_LEN];
+	uint8_t IEs[CFG_CFG80211_IE_BUF_LEN];
+	uint16_t ieLength = 0;
+	uint16_t i;
+
+	DBGLOG(INIT, TRACE, "command is %s\n", pcCommand);
+	rStatus = wlanCfgParseArgument(pcCommand, &i4Argc, apcArgv);
+
+	if (rStatus == WLAN_STATUS_SUCCESS && i4Argc >= 2) {
+		DBGLOG(REQ, TRACE, "argc %i, cmd [%s]\n", i4Argc, apcArgv[1]);
+		asciiArray = apcArgv[1];
+		for (i = 0; i < hexLength; i++)
+			hexArray[i] = (uint8_t)
+			    wlanHexToNum((int8_t)asciiArray[i]);
+		ieLength = hexLength/2;
+		for (i = 0; i < ieLength; i++)
+			IEs[i] = hexArray[i*2] << 4 | hexArray[i*2+1];
+		DBGLOG(REQ, INFO, "ielen:%d, hexlen:%d\n", ieLength, hexLength);
+
+		rStatus = kalIoctl(prGlueInfo, wlanoidSetDisconnectIes,
+			IEs, ieLength, FALSE, FALSE, TRUE, &u4SetInfoLen);
+
+		if (rStatus != WLAN_STATUS_SUCCESS)
+			DBGLOG(INIT, ERROR, "fail 0x%x\n", rStatus);
+	} else {
+		DBGLOG(REQ, ERROR, "fail invalid data\n");
+		rStatus = WLAN_STATUS_INVALID_DATA;
+	}
+	return rStatus;
+}
+
+int testmode_get_roaming_reason_enabled(IN struct wiphy *wiphy,
+	IN char *pcCommand, IN int i4TotalLen)
+{
+	int32_t i4BytesWritten = -1;
+	uint32_t u4Param = 0;
+	uint32_t u4BufLen = 0;
+	int32_t i4Argc = 0;
+	int8_t *apcArgv[WLAN_CFG_ARGV_MAX] = { 0 };
+	uint32_t rStatus = WLAN_STATUS_FAILURE;
+	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)wiphy_priv(wiphy);
+	char buf[512];
+
+	rStatus = wlanCfgParseArgument(pcCommand, &i4Argc, apcArgv);
+	if (rStatus != WLAN_STATUS_SUCCESS || i4Argc >= 2) {
+		DBGLOG(REQ, ERROR, "NCHO error input parameter %d\n", i4Argc);
+		return WLAN_STATUS_INVALID_DATA;
+	}
+
+	/*<2> Query NCHOEnable Satus*/
+	rStatus = kalIoctl(prGlueInfo, wlanoidGetRoamingReasonEnable,
+			   &u4Param, sizeof(u4Param),
+			   TRUE, TRUE, TRUE, &u4BufLen);
+	if (rStatus != WLAN_STATUS_SUCCESS) {
+		DBGLOG(INIT, ERROR, "fail 0x%x\n", rStatus);
+		return rStatus;
+	}
+
+	i4BytesWritten = snprintf(buf, 512, "%u", u4Param);
+	DBGLOG(REQ, INFO, "ret is %d\n", u4Param);
+
+	return mtk_cfg80211_process_str_cmd_reply(wiphy,
+		buf, i4BytesWritten + 1);
+}
+
+int testmode_set_roaming_reason_enabled(IN struct wiphy *wiphy,
+	IN char *pcCommand, IN int i4TotalLen)
+{
+	uint32_t u4Param = 0;
+	int32_t i4Argc = 0;
+	int8_t *apcArgv[WLAN_CFG_ARGV_MAX] = {0};
+	int32_t i4BytesWritten = -1;
+	uint32_t u4SetInfoLen = 0;
+	uint32_t rStatus = WLAN_STATUS_FAILURE;
+	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)wiphy_priv(wiphy);
+
+	DBGLOG(INIT, TRACE, "command is %s\n", pcCommand);
+	rStatus = wlanCfgParseArgument(pcCommand, &i4Argc, apcArgv);
+
+	if (rStatus == WLAN_STATUS_SUCCESS && i4Argc >= 2) {
+		DBGLOG(REQ, TRACE, "argc %i, %s\n", i4Argc, apcArgv[1]);
+		i4BytesWritten = kalkStrtou32(apcArgv[1], 0, &u4Param);
+		if (i4BytesWritten) {
+			DBGLOG(REQ, ERROR, "parse u4Param error %d\n",
+			       i4BytesWritten);
+			i4BytesWritten = -1;
+		} else {
+			DBGLOG(INIT, TRACE, "set enable cmd %d\n", u4Param);
+			rStatus = kalIoctl(prGlueInfo,
+				wlanoidSetRoamingReasonEnable,
+				&u4Param, sizeof(uint32_t),
+				FALSE, FALSE, TRUE, &u4SetInfoLen);
+
+			if (rStatus != WLAN_STATUS_SUCCESS)
+				DBGLOG(INIT, ERROR, "fail 0x%x\n", rStatus);
+		}
+	} else {
+		DBGLOG(REQ, ERROR, "set failed\n");
+		rStatus = WLAN_STATUS_INVALID_DATA;
+	}
+
+	return rStatus;
+}
+
+int testmode_get_br_err_reason_enabled(IN struct wiphy *wiphy,
+	IN char *pcCommand, IN int i4TotalLen)
+{
+	int32_t i4BytesWritten = -1;
+	uint32_t u4Param = 0;
+	uint32_t u4BufLen = 0;
+	int32_t i4Argc = 0;
+	int8_t *apcArgv[WLAN_CFG_ARGV_MAX] = { 0 };
+	uint32_t rStatus = WLAN_STATUS_FAILURE;
+	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)wiphy_priv(wiphy);
+	char buf[512];
+
+	rStatus = wlanCfgParseArgument(pcCommand, &i4Argc, apcArgv);
+	if (rStatus != WLAN_STATUS_SUCCESS || i4Argc >= 2) {
+		DBGLOG(REQ, ERROR, "NCHO error input parameter %d\n", i4Argc);
+		return WLAN_STATUS_INVALID_DATA;
+	}
+
+	/*<2> Query NCHOEnable Satus*/
+	rStatus = kalIoctl(prGlueInfo, wlanoidGetBrErrReasonEnable,
+			   &u4Param, sizeof(u4Param),
+			   TRUE, TRUE, TRUE, &u4BufLen);
+	if (rStatus != WLAN_STATUS_SUCCESS) {
+		DBGLOG(INIT, ERROR, "fail 0x%x\n", rStatus);
+		return rStatus;
+	}
+
+	i4BytesWritten = snprintf(buf, 512, "%u", u4Param);
+	DBGLOG(REQ, INFO, "ret is %d\n", u4Param);
+
+	return mtk_cfg80211_process_str_cmd_reply(wiphy,
+		buf, i4BytesWritten + 1);
+}
+
+int testmode_set_br_err_reason_enabled(IN struct wiphy *wiphy,
+	IN char *pcCommand, IN int i4TotalLen)
+{
+	uint32_t u4Param = 0;
+	int32_t i4Argc = 0;
+	int8_t *apcArgv[WLAN_CFG_ARGV_MAX] = {0};
+	int32_t i4BytesWritten = -1;
+	uint32_t u4SetInfoLen = 0;
+	uint32_t rStatus = WLAN_STATUS_FAILURE;
+	struct GLUE_INFO *prGlueInfo = (struct GLUE_INFO *)wiphy_priv(wiphy);
+
+	DBGLOG(INIT, TRACE, "command is %s\n", pcCommand);
+	rStatus = wlanCfgParseArgument(pcCommand, &i4Argc, apcArgv);
+
+	if (rStatus == WLAN_STATUS_SUCCESS && i4Argc >= 2) {
+		DBGLOG(REQ, TRACE, "argc %i, %s\n", i4Argc, apcArgv[1]);
+		i4BytesWritten = kalkStrtou32(apcArgv[1], 0, &u4Param);
+		if (i4BytesWritten) {
+			DBGLOG(REQ, ERROR, "parse u4Param error %d\n",
+			       i4BytesWritten);
+			i4BytesWritten = -1;
+		} else {
+			DBGLOG(INIT, TRACE, "set enable cmd %d\n", u4Param);
+			rStatus = kalIoctl(prGlueInfo,
+				wlanoidSetBrErrReasonEnable,
+				&u4Param, sizeof(uint32_t),
+				FALSE, FALSE, TRUE, &u4SetInfoLen);
+
+			if (rStatus != WLAN_STATUS_SUCCESS)
+				DBGLOG(INIT, ERROR, "fail 0x%x\n", rStatus);
+		}
+	} else {
+		DBGLOG(REQ, ERROR, "set failed\n");
+		rStatus = WLAN_STATUS_INVALID_DATA;
+	}
+
+	return rStatus;
+}
+
+#endif
+
 int32_t mtk_cfg80211_process_str_cmd(IN struct wiphy *wiphy,
 		struct wireless_dev *wdev,
 		uint8_t *data, int32_t len)
@@ -5603,41 +5795,19 @@ int32_t mtk_cfg80211_process_str_cmd(IN struct wiphy *wiphy,
 
 		return mtk_cfg80211_process_str_cmd_reply(
 			wiphy, tmp, sizeof(tmp));
-	} else if (strnicmp(cmd, "SET_DISCONNECT_IES ", 19) == 0) {
-		if (len > 19) {
-			uint16_t hexLength = (uint16_t)len - 20;
-			uint8_t *asciiArray = NULL;
-			uint8_t hexArray[CFG_CFG80211_IE_BUF_LEN];
-			uint8_t IEs[CFG_CFG80211_IE_BUF_LEN];
-			uint16_t ieLength = 0;
-			uint16_t i;
 
-			asciiArray = (uint8_t *) cmd + 19;
-			for (i = 0; i < hexLength; i++)
-				hexArray[i] = (uint8_t)
-				    wlanHexToNum((int8_t)asciiArray[i]);
-			ieLength = hexLength/2;
-			prGlueInfo->prAdapter->u4DeauthIeFromUpperLength =
-				ieLength;
-			DBGLOG(REQ, INFO,
-				"len:%d, hex len:%d\n", len, hexLength);
-			for (i = 0; i < ieLength; i++)
-				IEs[i] = hexArray[i*2] << 4 | hexArray[i*2+1];
-			if (ieLength <= CFG_CFG80211_IE_BUF_LEN) {
-				kalMemCopy(
-				    prGlueInfo->prAdapter
-				    ->aucDeauthIeFromUpper,
-				    IEs, ieLength);
-				DBGLOG(REQ, INFO, "aucDeauthIeFromUpper:\n");
-				DBGLOG_MEM8(REQ, INFO,
-				    (uint8_t *)
-				    prGlueInfo->prAdapter->aucDeauthIeFromUpper,
-				    ieLength);
-				rStatus = WLAN_STATUS_SUCCESS;
-			} else {
-				rStatus = WLAN_STATUS_FAILURE;
-			}
-		}
+#if CFG_SUPPORT_ASSURANCE
+	} else if (strnicmp(cmd, "SET_DISCONNECT_IES ", 19) == 0) {
+		rStatus = testmode_set_disconnect_ies(wiphy, cmd, len);
+	} else if (strnicmp(cmd, "GET_ROAMING_REASON_ENABLED", 26) == 0) {
+		return testmode_get_roaming_reason_enabled(wiphy, cmd, len);
+	} else if (strnicmp(cmd, "SET_ROAMING_REASON_ENABLED", 26) == 0) {
+		rStatus = testmode_set_roaming_reason_enabled(wiphy, cmd, len);
+	} else if (strnicmp(cmd, "GET_BR_ERR_REASON_ENABLED", 25) == 0) {
+		return testmode_get_br_err_reason_enabled(wiphy, cmd, len);
+	} else if (strnicmp(cmd, "SET_BR_ERR_REASON_ENABLED", 25) == 0) {
+		rStatus = testmode_set_br_err_reason_enabled(wiphy, cmd, len);
+#endif
 	} else if (strnicmp(cmd, "ADDROAMSCANCHANNELS_LEGACY", 26) == 0) {
 		rStatus = testmode_add_roam_scn_chnl(wiphy, cmd, len);
 #if CFG_SUPPORT_NCHO

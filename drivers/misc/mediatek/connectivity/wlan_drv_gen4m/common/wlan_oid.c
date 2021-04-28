@@ -13665,15 +13665,6 @@ wlanoidLinkDown(IN struct ADAPTER *prAdapter,
 }				/* wlanoidSetDisassociate */
 
 #if CFG_SUPPORT_NCHO
-#define FW_CFG_KEY_NCHO_ENABLE			"NCHOEnable"
-#define FW_CFG_KEY_NCHO_ROAM_RCPI		"RoamingRCPIValue"
-#define FW_CFG_KEY_NCHO_SCN_CHANNEL_TIME	"NCHOScnChannelTime"
-#define FW_CFG_KEY_NCHO_SCN_HOME_TIME		"NCHOScnHomeTime"
-#define FW_CFG_KEY_NCHO_SCN_HOME_AWAY_TIME	"NCHOScnHomeAwayTime"
-#define FW_CFG_KEY_NCHO_SCN_NPROBES		"NCHOScnNumProbs"
-#define FW_CFG_KEY_NCHO_WES_MODE		"NCHOWesMode"
-#define FW_CFG_KEY_NCHO_SCAN_DFS_MODE		"NCHOScnDfsMode"
-#define FW_CFG_KEY_NCHO_SCAN_PERIOD		"NCHOScnPeriod"
 
 uint32_t
 wlanoidSetNchoHeader(struct CMD_HEADER *prCmdHeader,
@@ -13701,7 +13692,6 @@ wlanoidSetNchoRoamTrigger(IN struct ADAPTER *prAdapter,
 			  OUT uint32_t *pu4SetInfoLen)
 {
 	int32_t *pi4Param = NULL;
-	char acCmd[NCHO_CMD_MAX_LENGTH] = {0};
 	uint32_t rStatus = WLAN_STATUS_FAILURE;
 
 	DEBUGFUNC("wlanoidSetNchoRoamTrigger");
@@ -13718,21 +13708,18 @@ wlanoidSetNchoRoamTrigger(IN struct ADAPTER *prAdapter,
 		return WLAN_STATUS_INVALID_DATA;
 
 	pi4Param = (int32_t *) pvSetBuffer;
-	*pi4Param = dBm_TO_RCPI(*pi4Param);		/* DB to RCPI */
 	if (*pi4Param < RCPI_LOW_BOUND || *pi4Param > RCPI_HIGH_BOUND) {
 		DBGLOG(INIT, ERROR, "NCHO roam trigger invalid %d\n",
 		       *pi4Param);
 		return WLAN_STATUS_INVALID_DATA;
 	}
 
-	kalSprintf(acCmd, "%s %d", FW_CFG_KEY_NCHO_ROAM_RCPI, *pi4Param);
-	rStatus =  wlanFwCfgParse(prAdapter, acCmd);
+	rStatus = wlanNchoSetFWRssiTrigger(prAdapter, *pi4Param);
 	if (rStatus == WLAN_STATUS_SUCCESS) {
-		prAdapter->rNchoInfo.i4RoamTrigger = RCPI_TO_dBm(*pi4Param);
+		prAdapter->rNchoInfo.i4RoamTrigger = *pi4Param;
 		DBGLOG(INIT, TRACE, "NCHO roam trigger is %d\n",
 		       prAdapter->rNchoInfo.i4RoamTrigger);
 	}
-
 
 	return rStatus;
 }
@@ -13854,7 +13841,6 @@ wlanoidSetNchoRoamScnPeriod(IN struct ADAPTER *prAdapter,
 {
 	uint32_t *pParam = NULL;
 	uint32_t rStatus = WLAN_STATUS_FAILURE;
-	char acCmd[NCHO_CMD_MAX_LENGTH] = {0};
 
 	DEBUGFUNC("wlanoidSetNchoRoamScnPeriod");
 	ASSERT(prAdapter);
@@ -13870,8 +13856,7 @@ wlanoidSetNchoRoamScnPeriod(IN struct ADAPTER *prAdapter,
 		return WLAN_STATUS_INVALID_DATA;
 
 	pParam = (uint32_t *) pvSetBuffer;
-	kalSprintf(acCmd, "%s %d", FW_CFG_KEY_NCHO_SCAN_PERIOD, *pParam);
-	rStatus =  wlanFwCfgParse(prAdapter, acCmd);
+	rStatus = wlanNchoSetFWScanPeriod(prAdapter, *pParam);
 	if (rStatus == WLAN_STATUS_SUCCESS) {
 		prAdapter->rNchoInfo.u4RoamScanPeriod = *pParam;
 		DBGLOG(INIT, TRACE, "NCHO roam scan period is %d\n", *pParam);
@@ -14751,7 +14736,6 @@ wlanoidSetNchoEnable(IN struct ADAPTER *prAdapter,
 		     OUT uint32_t *pu4SetInfoLen)
 {
 	uint32_t *pParam = NULL;
-	char acCmd[NCHO_CMD_MAX_LENGTH] = { 0 };
 	uint32_t rStatus = WLAN_STATUS_FAILURE;
 
 	DEBUGFUNC("wlanoidSetNchoEnable");
@@ -14772,10 +14756,9 @@ wlanoidSetNchoEnable(IN struct ADAPTER *prAdapter,
 		return WLAN_STATUS_INVALID_DATA;
 	}
 
-	kalSprintf(acCmd, "%s %d", FW_CFG_KEY_NCHO_ENABLE, *pParam);
-	rStatus = wlanFwCfgParse(prAdapter, acCmd);
+	rStatus = wlanNchoSetFWEnable(prAdapter, *pParam);
 	if (rStatus == WLAN_STATUS_SUCCESS) {
-		wlanNchoInit(prAdapter);
+		wlanNchoInit(prAdapter, FALSE);
 		prAdapter->rNchoInfo.fgECHOEnabled = *pParam;
 		DBGLOG(INIT, INFO, "NCHO enable is %d\n", *pParam);
 	}
@@ -14831,6 +14814,116 @@ wlanoidQueryNchoEnable(IN struct ADAPTER *prAdapter,
 }
 #endif /* CFG_SUPPORT_NCHO */
 
+#if CFG_SUPPORT_ASSURANCE
+uint32_t
+wlanoidSetDisconnectIes(IN struct ADAPTER *prAdapter,
+		     IN void *pvSetBuffer,
+		     IN uint32_t u4SetBufferLen,
+		     OUT uint32_t *pu4SetInfoLen)
+{
+	uint32_t rStatus = WLAN_STATUS_FAILURE;
+
+	if (u4SetBufferLen <= CFG_CFG80211_IE_BUF_LEN) {
+		prAdapter->u4DeauthIeFromUpperLength = u4SetBufferLen;
+		kalMemCopy(prAdapter->aucDeauthIeFromUpper,
+			pvSetBuffer, u4SetBufferLen);
+		DBGLOG_MEM8(REQ, INFO, (uint8_t *)
+		    prAdapter->aucDeauthIeFromUpper, u4SetBufferLen);
+		rStatus = WLAN_STATUS_SUCCESS;
+	}
+
+	return rStatus;
+}
+
+uint32_t
+wlanoidSetRoamingReasonEnable(IN struct ADAPTER *prAdapter,
+		     IN void *pvSetBuffer,
+		     IN uint32_t u4SetBufferLen,
+		     OUT uint32_t *pu4SetInfoLen)
+{
+	struct AIS_SPECIFIC_BSS_INFO *prAisSpecificBssInfo;
+	uint8_t ucBssIndex = 0;
+	uint32_t *pu4Param = NULL;
+
+	if (u4SetBufferLen < sizeof(uint32_t))
+		return WLAN_STATUS_INVALID_LENGTH;
+
+	pu4Param = (uint32_t *) pvSetBuffer;
+	ucBssIndex = GET_IOCTL_BSSIDX(prAdapter);
+	prAisSpecificBssInfo = aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
+	prAisSpecificBssInfo->fgRoamingReasonEnable = *pu4Param;
+
+	return WLAN_STATUS_SUCCESS;
+}
+
+uint32_t
+wlanoidGetRoamingReasonEnable(IN struct ADAPTER *prAdapter,
+		       OUT void *pvQueryBuffer,
+		       IN uint32_t u4QueryBufferLen,
+		       OUT uint32_t *pu4QueryInfoLen)
+{
+	struct AIS_SPECIFIC_BSS_INFO *prAisSpecificBssInfo;
+	uint8_t ucBssIndex = 0;
+	uint32_t *pu4Param = NULL;
+
+	*pu4QueryInfoLen = sizeof(uint32_t);
+	if (u4QueryBufferLen < sizeof(uint32_t))
+		return WLAN_STATUS_INVALID_LENGTH;
+
+	pu4Param = (uint32_t *) pvQueryBuffer;
+	ucBssIndex = GET_IOCTL_BSSIDX(prAdapter);
+	prAisSpecificBssInfo = aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
+	*pu4Param = prAisSpecificBssInfo->fgRoamingReasonEnable;
+
+	return WLAN_STATUS_SUCCESS;
+}
+
+uint32_t
+wlanoidSetBrErrReasonEnable(IN struct ADAPTER *prAdapter,
+		     IN void *pvSetBuffer,
+		     IN uint32_t u4SetBufferLen,
+		     OUT uint32_t *pu4SetInfoLen)
+{
+	struct AIS_SPECIFIC_BSS_INFO *prAisSpecificBssInfo;
+	uint8_t ucBssIndex = 0;
+	uint32_t *pu4Param = NULL;
+
+	if (u4SetBufferLen < sizeof(uint32_t))
+		return WLAN_STATUS_INVALID_LENGTH;
+
+	pu4Param = (uint32_t *) pvSetBuffer;
+	ucBssIndex = GET_IOCTL_BSSIDX(prAdapter);
+	prAisSpecificBssInfo = aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
+	prAisSpecificBssInfo->fgBcnReptErrReasonEnable = *pu4Param;
+
+	return WLAN_STATUS_SUCCESS;
+}
+
+uint32_t
+wlanoidGetBrErrReasonEnable(IN struct ADAPTER *prAdapter,
+		       OUT void *pvQueryBuffer,
+		       IN uint32_t u4QueryBufferLen,
+		       OUT uint32_t *pu4QueryInfoLen)
+{
+	struct AIS_SPECIFIC_BSS_INFO *prAisSpecificBssInfo;
+	uint8_t ucBssIndex = 0;
+	uint32_t *pu4Param = NULL;
+
+	*pu4QueryInfoLen = sizeof(uint32_t);
+	if (u4QueryBufferLen < sizeof(uint32_t))
+		return WLAN_STATUS_INVALID_LENGTH;
+
+	pu4Param = (uint32_t *) pvQueryBuffer;
+	ucBssIndex = GET_IOCTL_BSSIDX(prAdapter);
+	prAisSpecificBssInfo = aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
+	*pu4Param = prAisSpecificBssInfo->fgBcnReptErrReasonEnable;
+
+	return WLAN_STATUS_SUCCESS;
+}
+
+#endif
+
+
 uint32_t
 wlanoidAddRoamScnChnl(IN struct ADAPTER *prAdapter,
 			  IN void *pvSetBuffer, IN uint32_t u4SetBufferLen,
@@ -14851,6 +14944,8 @@ wlanoidAddRoamScnChnl(IN struct ADAPTER *prAdapter,
 
 	return WLAN_STATUS_SUCCESS;
 }
+
+
 
 
 #if CFG_SUPPORT_EASY_DEBUG

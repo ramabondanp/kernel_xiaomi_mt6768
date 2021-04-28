@@ -59,7 +59,7 @@
 static struct GLUE_INFO *g_prGlueInfo;
 static struct kobject *wifi_kobj;
 static uint8_t aucMacAddrOverride[] = "FF:FF:FF:FF:FF:FF";
-static uint8_t aucDefaultFWVersion[] = "t-neptune-mp-soc1_0e1-1950-tc10sp-TALBOT_SOC1_0_E1_ASIC-20200320183001";
+static uint8_t aucDefaultFWVersion[] = "t-neptune-mp-soc1_0e1-1950-tc10sp-TALBOT_SOC1_0_E1_ASIC-20200622183002";
 static u_int8_t fgIsMacAddrOverride = FALSE;
 static int32_t g_i4PM = -1;
 static char acVerInfo[MTK_INFO_MAX_SIZE];
@@ -306,7 +306,7 @@ void sysCreateWifiVer(void)
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-	char aucDriverVersionStr[] = STR(NIC_DRIVER_MAJOR_VERSION) "_"
+	char aucDriverVersionStr[] = "MTK_" STR(NIC_DRIVER_MAJOR_VERSION) "_"
 		STR(NIC_DRIVER_MINOR_VERSION) "_"
 		STR(NIC_DRIVER_SERIAL_VERSION) "-"
 		DRIVER_BUILD_DATE;

@@ -6184,12 +6184,16 @@ rlmAllMeasurementIssued(struct RADIO_MEASUREMENT_REQ_PARAMS *prReq)
 								      : TRUE;
 }
 
-void rlmComposeIncapableRmRep(struct RADIO_MEASUREMENT_REPORT_PARAMS *prRep,
-			      uint8_t ucToken, uint8_t ucMeasType)
+void rlmComposeIncapableRmRep(struct ADAPTER *prAdapter,
+	struct RADIO_MEASUREMENT_REPORT_PARAMS *prRep,
+	uint8_t ucToken, uint8_t ucMeasType, uint8_t ucBssIndex)
 {
 	struct IE_MEASUREMENT_REPORT *prRepIE =
 		(struct IE_MEASUREMENT_REPORT *)(prRep->pucReportFrameBuff +
 						 prRep->u2ReportFrameLen);
+#if CFG_SUPPORT_ASSURANCE
+	struct AIS_SPECIFIC_BSS_INFO *prAisSpecificBssInfo;
+#endif
 
 	prRepIE->ucId = ELEM_ID_MEASUREMENT_REPORT;
 	prRepIE->ucToken = ucToken;
@@ -6197,7 +6201,37 @@ void rlmComposeIncapableRmRep(struct RADIO_MEASUREMENT_REPORT_PARAMS *prRep,
 	prRepIE->ucLength = 3;
 	prRepIE->ucReportMode = RM_REP_MODE_INCAPABLE;
 	prRep->u2ReportFrameLen += 5;
+
+#if CFG_SUPPORT_ASSURANCE
+	prAisSpecificBssInfo = aisGetAisSpecBssInfo(prAdapter, ucBssIndex);
+	if (prAisSpecificBssInfo->fgBcnReptErrReasonEnable) {
+		struct IE_ASSURANCE_BEACON_REPORT *ie =
+			(struct IE_ASSURANCE_BEACON_REPORT *)
+			prRep->pucReportFrameBuff + prRep->u2ReportFrameLen;
+
+		ie->ucId = ELEM_ID_VENDOR;
+		ie->ucLength =
+		       sizeof(struct IE_ASSURANCE_BEACON_REPORT) - ELEM_HDR_LEN;
+		WLAN_SET_FIELD_BE24(ie->aucOui, VENDOR_IE_SAMSUNG_OUI);
+		ie->ucOuiType = 0x22;
+		ie->ucSubType = 0x05;
+		ie->ucVersion = 0x01;
+		ie->ucLen = 0x01;
+		/* 0. UNSPECIFIED
+		 * 1. RRM_FEATURE_DISABLED
+		 * 2. NOT_SUPPORTED_PARAMETERS
+		 * 3. TEMPORARILY_UNAVAILABLE
+		 * 4. VALIDATION_FAILED_IN_A_REQUEST_FRAME
+		 * 5. PREVIOUS_REQUEST_PROGRESS
+		 * 6. MAXIMUM_MEASUREMENT_DURATION_EXCEED
+		 * 7. NOT_SUPPORTED_REPORT_BITS
+		 */
+		ie->ucReason = 2;
+		prRep->u2ReportFrameLen += IE_SIZE(ie);
+	}
+#endif
 }
+
 /* Purpose: Interative processing Measurement Request Element. If it is not the
  ** first element,
  ** will copy all collected report element to the report frame buffer. and
@@ -6226,8 +6260,8 @@ schedule_next:
 		       "RRM: Parallel request, compose incapable report\n");
 		if (prRmRep->u2ReportFrameLen + 5 > RM_REPORT_FRAME_MAX_LENGTH)
 			rlmTxRadioMeasurementReport(prAdapter, ucBssIndex);
-		rlmComposeIncapableRmRep(prRmRep, prCurrReq->ucToken,
-					 prCurrReq->ucMeasurementType);
+		rlmComposeIncapableRmRep(prAdapter, prRmRep, prCurrReq->ucToken,
+			 prCurrReq->ucMeasurementType, ucBssIndex);
 		if (rlmAllMeasurementIssued(prRmReq)) {
 			if (prRmReq->rBcnRmParam.fgExistBcnReq &&
 			    RM_EXIST_REPORT(prRmRep))
@@ -6465,8 +6499,8 @@ schedule_next:
 		if (prRmRep->u2ReportFrameLen + 5 > RM_REPORT_FRAME_MAX_LENGTH)
 			rlmTxRadioMeasurementReport(prAdapter,
 				ucBssIndex);
-		rlmComposeIncapableRmRep(prRmRep, prCurrReq->ucToken,
-					 prCurrReq->ucMeasurementType);
+		rlmComposeIncapableRmRep(prAdapter, prRmRep, prCurrReq->ucToken,
+			 prCurrReq->ucMeasurementType, ucBssIndex);
 		fgNewStarted = FALSE;
 		DBGLOG(RLM, INFO,
 		       "RRM: RM type %d is not supported on this chip\n",
