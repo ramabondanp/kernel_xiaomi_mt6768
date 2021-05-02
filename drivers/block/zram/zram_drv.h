@@ -145,6 +145,9 @@ struct zram {
 #endif
 };
 
+/* mlog */
+unsigned long zram_mlog(void);
+
 static inline bool zram_dedup_enabled(struct zram *zram)
 {
 #ifdef CONFIG_ZRAM_DEDUP

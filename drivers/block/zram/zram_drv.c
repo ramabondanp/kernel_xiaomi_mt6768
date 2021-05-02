@@ -41,6 +41,7 @@ static DEFINE_IDR(zram_index_idr);
 static DEFINE_MUTEX(zram_index_mutex);
 
 static int zram_major;
+static struct zram *zram_devices;
 static const char *default_compressor = CONFIG_ZRAM_DEF_COMP;
 
 /* Module params (documentation at end) */
@@ -73,7 +74,7 @@ static void zram_slot_unlock(struct zram *zram, u32 index)
 
 static inline bool init_done(struct zram *zram)
 {
-	return zram->disksize;
+	return zram ? zram->disksize : 0;
 }
 
 static inline struct zram *dev_to_zram(struct device *dev)
@@ -1781,6 +1782,7 @@ static ssize_t disksize_store(struct device *dev,
 
 	zram->comp = comp;
 	zram->disksize = disksize;
+	barrier();
 	set_capacity(zram->disk, zram->disksize >> SECTOR_SHIFT);
 
 	revalidate_disk(zram->disk);
@@ -1928,6 +1930,9 @@ static int zram_add(void)
 	if (!zram)
 		return -ENOMEM;
 
+	if (!zram_devices)
+		zram_devices = zram;
+
 	ret = idr_alloc(&zram_index_idr, zram, 0, 0, GFP_KERNEL);
 	if (ret < 0)
 		goto out_free_dev;
@@ -2002,6 +2007,10 @@ static int zram_add(void)
 	strlcpy(zram->compressor, default_compressor, sizeof(zram->compressor));
 
 	zram_debugfs_register(zram);
+
+	if (!zram_devices)
+		zram_devices = zram;
+
 	pr_info("Added device: %s\n", zram->disk->disk_name);
 	return device_id;
 
@@ -2044,6 +2053,8 @@ static int zram_remove(struct zram *zram)
 	del_gendisk(zram->disk);
 	blk_cleanup_queue(zram->disk->queue);
 	put_disk(zram->disk);
+	if (zram_devices == zram)
+		zram_devices = NULL;
 	kfree(zram);
 	return 0;
 }
@@ -2131,6 +2142,16 @@ static void destroy_devices(void)
 	idr_destroy(&zram_index_idr);
 	unregister_blkdev(zram_major, "zram");
 	cpuhp_remove_multi_state(CPUHP_ZCOMP_PREPARE);
+}
+
+unsigned long zram_mlog(void)
+{
+#define P2K(x) (((unsigned long)x) << (PAGE_SHIFT - 10))
+	if (num_devices == 0 && init_done(zram_devices))
+		return P2K(zs_get_total_pages(zram_devices->mem_pool));
+#undef P2K
+
+	return 0;
 }
 
 static int __init zram_init(void)
