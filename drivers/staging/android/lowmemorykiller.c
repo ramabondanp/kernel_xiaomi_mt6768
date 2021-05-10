@@ -78,13 +78,15 @@ static short lowmem_adj[6] = {
 
 static int lowmem_adj_size = 4;
 static int lowmem_minfree[6] = {
-	3 * 512,	/* 6MB */
-	2 * 1024,	/* 8MB */
-	4 * 1024,	/* 16MB */
-	16 * 1024,	/* 64MB */
+	15360,
+	19200,
+	23040,
+	26880,
+	34415,
+	43737,
 };
 
-static int lowmem_minfree_size = 4;
+static int lowmem_minfree_size = 6;
 static int lmk_fast_run = 1;
 
 static unsigned long lowmem_deathpending_timeout;
@@ -119,8 +121,8 @@ enum {
 };
 
 /* User knob to enable/disable adaptive lmk feature */
-static int enable_adaptive_lmk = ADAPTIVE_LMK_DISABLED;
-module_param_named(enable_adaptive_lmk, enable_adaptive_lmk, int, 0644);
+static int enable_adaptive_lmk = 1;
+module_param_named(enable_adaptive_lmk, enable_adaptive_lmk, int, 0444);
 
 /*
  * This parameter controls the behaviour of LMK when vmpressure is in
@@ -129,8 +131,8 @@ module_param_named(enable_adaptive_lmk, enable_adaptive_lmk, int, 0644);
  * 90-94. Usually this is a pseudo minfree value, higher than the
  * highest configured value in minfree array.
  */
-static int vmpressure_file_min;
-module_param_named(vmpressure_file_min, vmpressure_file_min, int, 0644);
+static int vmpressure_file_min = 53059;
+module_param_named(vmpressure_file_min, vmpressure_file_min, int, 0444);
 
 /* User knob to enable/disable oom reaping feature */
 static int oom_reaper = 1;
@@ -815,7 +817,7 @@ __MODULE_PARM_TYPE(adj, "array of short");
 module_param_array_named(adj, lowmem_adj, short, &lowmem_adj_size, 0644);
 #endif
 module_param_array_named(minfree, lowmem_minfree, uint, &lowmem_minfree_size,
-			 S_IRUGO | S_IWUSR);
+			 0444);
 module_param_named(debug_level, lowmem_debug_level, uint, S_IRUGO | S_IWUSR);
 module_param_named(lmk_fast_run, lmk_fast_run, int, S_IRUGO | S_IWUSR);
 
