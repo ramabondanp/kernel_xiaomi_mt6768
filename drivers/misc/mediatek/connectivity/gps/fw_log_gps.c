@@ -28,7 +28,11 @@
 #include <linux/uaccess.h>
 #include <linux/printk.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+#include <asm/mmu.h>
+#else
 #include <asm/memblock.h>
+#endif
 #include <linux/wait.h>
 #include "gps.h"
 #include "connsys_debug_utility.h"
@@ -227,6 +231,7 @@ static void __exit gps_fw_log_exit(void)
 	device_destroy(logdevobj->cls, logdevobj->devno);
 	class_destroy(logdevobj->cls);
 	kfree(logdevobj);
+	logdevobj = NULL;
 	pr_info("Done\n");
 }
 

@@ -31,17 +31,97 @@
 #include <linux/device.h>
 #include <linux/printk.h>
 #include <linux/uio.h>
+#include <linux/workqueue.h>
 
 #include "wmt_exp.h"
 #include "stp_exp.h"
 
 
-#ifdef CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
-#include "connsys_debug_utility.h"
+#define TRUE   1
+#define FALSE  0
 
 /* Flags to control BT FW log flow */
 #define OFF 0x00
 #define ON  0xff
+
+#define PFX                     "[MTK-BT]"
+#define BT_LOG_DBG              4
+#define BT_LOG_INFO             3
+#define BT_LOG_WARN             2
+#define BT_LOG_ERR              1
+#define RAW_MAX_BYTES           30
+
+static uint8_t raw_buf[RAW_MAX_BYTES * 5 + 10];
+extern UINT32 gBtDbgLevel;
+
+#define BT_LOG_PRT_DBG(fmt, arg...)	\
+	do { if (gBtDbgLevel >= BT_LOG_DBG) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
+#define BT_LOG_PRT_INFO(fmt, arg...)	\
+	do { if (gBtDbgLevel >= BT_LOG_INFO) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
+#define BT_LOG_PRT_WARN(fmt, arg...)	\
+	do { if (gBtDbgLevel >= BT_LOG_WARN) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
+#define BT_LOG_PRT_ERR(fmt, arg...)	\
+	do { if (gBtDbgLevel >= BT_LOG_ERR) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
+#define BT_LOG_PRT_INFO_RATELIMITED(fmt, arg...)	\
+	do { if (gBtDbgLevel >= BT_LOG_ERR) pr_info_ratelimited(PFX "%s: " fmt, __func__, ##arg); } while (0)
+
+#define BT_LOG_PRT_DBG_RAW(p, l, fmt, ...)						\
+			do {	\
+				if (gBtDbgLevel >= BT_LOG_DBG) { \
+					int cnt_ = 0;	\
+					int len_ = (l <= RAW_MAX_BYTES ? l : RAW_MAX_BYTES);	\
+					const unsigned char *ptr = p;	\
+					for (cnt_ = 0; cnt_ < len_; ++cnt_) {	\
+						if (snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]) < 0) {	\
+							pr_info("snprintf error\n");	\
+							break;	\
+						}	\
+					}	\
+					raw_buf[5*cnt_] = '\0'; \
+					if (l <= RAW_MAX_BYTES) {	\
+						pr_info(PFX" "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
+					} else {	\
+						pr_info(PFX" "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf); \
+					}	\
+				}	\
+			} while (0)
+
+#define BT_LOG_PRT_INFO_RAW(p, l, fmt, ...)						\
+		do {	\
+			if (gBtDbgLevel >= BT_LOG_INFO) {	\
+				int cnt_ = 0;	\
+				int len_ = (l <= RAW_MAX_BYTES ? l : RAW_MAX_BYTES);	\
+				const unsigned char *ptr = p;	\
+				for (cnt_ = 0; cnt_ < len_; ++cnt_) {	\
+					if (snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]) < 0) {	\
+						pr_info("snprintf error\n");	\
+						break;	\
+					}	\
+				}	\
+				raw_buf[5*cnt_] = '\0'; \
+				if (l <= RAW_MAX_BYTES) {	\
+					pr_info(PFX" "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
+				} else {	\
+					pr_info(PFX" "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf); \
+				}	\
+			}	\
+		} while (0)
+
+struct bt_dbg_st {
+	bool trx_enable;
+	uint16_t trx_opcode;
+	struct completion trx_comp;
+	void(*trx_cb) (char *buf, int len);
+	int rx_len;
+	char rx_buf[64];
+};
+
+struct pm_qos_ctrl {
+	struct semaphore sem;
+	struct workqueue_struct *task;
+	struct delayed_work work;
+	u_int8_t is_hold;
+};
 
 /* *****************************************************************************************
  * BT Logger Tool will send 3 levels(Low, SQC and Debug)
@@ -55,4 +135,4 @@ extern void bt_state_notify(UINT32 on_off);
 extern ssize_t send_hci_frame(const PUINT8 buf, size_t count);
 
 #endif
-#endif
+

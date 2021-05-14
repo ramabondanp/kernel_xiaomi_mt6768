@@ -14,6 +14,7 @@
 
 #ifdef CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
 #include "bt.h"
+#include "connsys_debug_utility.h"
 
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -21,24 +22,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 *                                 M A C R O S
 ********************************************************************************
 */
-
-#define PFX                         "[BTFWLOG]"
-#define BT_LOG_DBG                  3
-#define BT_LOG_INFO                 2
-#define BT_LOG_WARN                 1
-#define BT_LOG_ERR                  0
-
-static UINT32 gDbgLevel = BT_LOG_INFO;
-
-#define BT_LOG_PRT_DBG(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_DBG) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-#define BT_LOG_PRT_INFO(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_INFO) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-#define BT_LOG_PRT_WARN(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_WARN) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-#define BT_LOG_PRT_ERR(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_ERR) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-
 #define BT_LOG_NODE_NAME "fw_log_bt"
 
 #define BT_FW_LOG_IOC_MAGIC          (0xfc)

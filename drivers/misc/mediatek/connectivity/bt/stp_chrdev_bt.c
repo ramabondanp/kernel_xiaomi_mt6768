@@ -14,6 +14,10 @@
 
 #include "bt.h"
 #include <linux/pm_wakeup.h>
+#include <linux/version.h>
+#include <linux/pm_qos.h>
+#include <linux/notifier.h>
+#include <linux/fb.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 
@@ -23,25 +27,6 @@ MODULE_LICENSE("Dual BSD/GPL");
 */
 #define BT_DRIVER_NAME "mtk_stp_bt_chrdev"
 #define BT_DEV_MAJOR 192
-
-#define PFX                         "[MTK-BT] "
-#define BT_LOG_DBG                  3
-#define BT_LOG_INFO                 2
-#define BT_LOG_WARN                 1
-#define BT_LOG_ERR                  0
-
-static UINT32 gDbgLevel = BT_LOG_INFO;
-
-#define BT_LOG_PRT_DBG(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_DBG) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-#define BT_LOG_PRT_INFO(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_INFO) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-#define BT_LOG_PRT_WARN(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_WARN) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-#define BT_LOG_PRT_ERR(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_ERR) pr_info(PFX "%s: " fmt, __func__, ##arg); } while (0)
-#define BT_LOG_PRT_INFO_RATELIMITED(fmt, arg...)	\
-	do { if (gDbgLevel >= BT_LOG_ERR) pr_info_ratelimited(PFX "%s: " fmt, __func__, ##arg); } while (0)
 
 #define VERSION "2.0"
 
@@ -53,6 +38,7 @@ static UINT32 gDbgLevel = BT_LOG_INFO;
 
 #define BT_BUFFER_SIZE              2048
 #define FTRACE_STR_LOG_SIZE         256
+#define REG_READL(addr) readl((volatile uint32_t *)(addr))
 
 /*******************************************************************************
 *                            P U B L I C   D A T A
@@ -76,13 +62,19 @@ static UINT8 i_buf[BT_BUFFER_SIZE]; /* Input buffer for read */
 static UINT8 o_buf[BT_BUFFER_SIZE]; /* Output buffer for write */
 
 static struct semaphore wr_mtx, rd_mtx;
-static struct wakeup_source bt_wakelock;
+static struct wakeup_source *bt_wakelock;
 /* Wait queue for poll and read */
 static wait_queue_head_t inq;
 static DECLARE_WAIT_QUEUE_HEAD(BT_wq);
 static INT32 flag;
 static INT32 bt_ftrace_flag;
 static bool btonflag = 0;
+UINT32 gBtDbgLevel = BT_LOG_INFO;
+struct bt_dbg_st g_bt_dbg_st;
+#if (PM_QOS_CONTROL == 1)
+static struct pm_qos_request qos_req;
+static struct pm_qos_ctrl qos_ctrl;
+#endif
 
 /*
  * Reset flag for whole chip reset scenario, to indicate reset status:
@@ -99,17 +91,25 @@ static loff_t rd_offset;
 *                              F U N C T I O N S
 ********************************************************************************
 */
+extern int bt_dev_dbg_init(void);
+extern int bt_dev_dbg_deinit(void);
+extern int bt_dev_dbg_set_state(bool turn_on);
 
 static INT32 ftrace_print(const PINT8 str, ...)
 {
 #ifdef CONFIG_TRACING
 	va_list args;
+	int ret = 0;
 	INT8 temp_string[FTRACE_STR_LOG_SIZE];
 
 	if (bt_ftrace_flag) {
 		va_start(args, str);
-		vsnprintf(temp_string, FTRACE_STR_LOG_SIZE, str, args);
+		ret = vsnprintf(temp_string, FTRACE_STR_LOG_SIZE, str, args);
 		va_end(args);
+		if (ret < 0) {
+			BT_LOG_PRT_ERR("error return value in vsnprintf ret = [%d]\n", ret);
+			return 0;
+		}
 		trace_printk("%s\n", temp_string);
 	}
 #endif
@@ -129,6 +129,67 @@ static size_t bt_report_hw_error(char *buf, size_t count, loff_t *f_pos)
 	*f_pos += bytes_read;
 
 	return bytes_read;
+}
+
+static uint32_t inline bt_read_cr(unsigned char *cr_name, uint32_t addr)
+{
+	uint32_t value = 0;
+	uint8_t *base = ioremap_nocache(addr, 0x10);
+
+	if (base == NULL) {
+		BT_LOG_PRT_WARN("remapping 0x%08x fail\n", addr);
+	} else {
+		value = REG_READL(base);
+		iounmap(base);
+		BT_LOG_PRT_INFO("%s[0x%08x], read[0x%08x]\n", cr_name, addr, value);
+	}
+	return value;
+}
+
+static struct notifier_block bt_fb_notifier;
+static int bt_fb_notifier_callback(struct notifier_block
+				*self, unsigned long event, void *data)
+{
+	struct fb_event *evdata = data;
+	int32_t blank = 0;
+
+	if ((event != FB_EVENT_BLANK))
+		return 0;
+
+	blank = *(int32_t *)evdata->data;
+	switch (blank) {
+	case FB_BLANK_UNBLANK:
+	case FB_BLANK_POWERDOWN:
+		if(btonflag == 1 && rstflag == 0) {
+			BT_LOG_PRT_INFO("blank state [%ld]", blank);
+			bt_read_cr("HOST_MAILBOX_BT_ADDR", 0x18007124);
+		}
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+static int bt_fb_notify_register(void)
+{
+	int32_t ret;
+
+	bt_fb_notifier.notifier_call = bt_fb_notifier_callback;
+
+	ret = fb_register_client(&bt_fb_notifier);
+	if (ret)
+		BT_LOG_PRT_WARN("Register bt_fb_notifier failed:%d\n", ret);
+	else
+		BT_LOG_PRT_DBG("Register bt_fb_notifier succeed\n");
+
+	return ret;
+}
+
+static void bt_fb_notify_unregister(void)
+{
+	fb_unregister_client(&bt_fb_notifier);
 }
 
 /*******************************************************************
@@ -194,7 +255,27 @@ static VOID BT_event_cb(VOID)
 	 *   handler is executed and meanwhile the event is received.
 	 *   This will false trigger FW assert and should never happen.
 	 */
-	__pm_wakeup_event(&bt_wakelock, 100);
+	__pm_wakeup_event(bt_wakelock, 100);
+
+#if (PM_QOS_CONTROL == 1)
+	/* pm qos control:
+	 *   Set pm_qos to higher level for mass data transfer.
+	 *   When rx packet reveived, schedule a work to restore pm_qos setting after 500ms.
+	 *   If next packet is receiving before 500ms, this work will be cancel & re-schedule.
+	 *   (500ms: better power performance after experiment)
+	 */
+	down(&qos_ctrl.sem);
+	if(qos_ctrl.task != NULL ) {
+		cancel_delayed_work(&qos_ctrl.work);
+		if(qos_ctrl.is_hold == FALSE) {
+			pm_qos_update_request(&qos_req, 1000);
+			qos_ctrl.is_hold = TRUE;
+			BT_LOG_PRT_INFO("[qos] is_hold[%d]\n", qos_ctrl.is_hold);
+		}
+		queue_delayed_work(qos_ctrl.task, &qos_ctrl.work, (500 * HZ) >> 10);
+	}
+	up(&qos_ctrl.sem);
+#endif
 
 	/*
 	 * Finally, wake up any reader blocked in poll or read
@@ -285,7 +366,7 @@ ssize_t BT_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	ftrace_print("%s get called, count %zu", __func__, count);
 	down(&wr_mtx);
 
-	BT_LOG_PRT_DBG("count %zd", count);
+	BT_LOG_PRT_DBG("count %zd\n", count);
 
 	if (rstflag) {
 		BT_LOG_PRT_ERR("whole chip reset occurs! rstflag=%d\n", rstflag);
@@ -305,6 +386,7 @@ ssize_t BT_write_iter(struct kiocb *iocb, struct iov_iter *from)
 			goto OUT;
 		}
 
+		BT_LOG_PRT_DBG_RAW(o_buf, count, "%s: len[%d], TX: ", __func__, count);
 		retval = __bt_write(o_buf, count);
 	}
 
@@ -340,6 +422,7 @@ ssize_t BT_write(struct file *filp, const char __user *buf, size_t count, loff_t
 			goto OUT;
 		}
 
+		BT_LOG_PRT_DBG_RAW(o_buf, count, "%s: len[%d], TX: ", __func__, count);
 		retval = __bt_write(o_buf, count);
 	}
 
@@ -416,7 +499,12 @@ ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos
 			wait_event(BT_wq, flag != 0);
 			flag = 0;
 		} else {	/* Got something from STP driver */
-			BT_LOG_PRT_DBG("Read bytes %d\n", retval);
+			// for bt_dbg user trx function
+			if (g_bt_dbg_st.trx_enable) {
+				g_bt_dbg_st.trx_cb(i_buf, retval);
+			}
+			//BT_LOG_PRT_DBG("Read bytes %d\n", retval);
+			BT_LOG_PRT_DBG_RAW(i_buf, retval, "%s: len[%d], RX: ", __func__, retval);
 			break;
 		}
 	} while (!mtk_wcn_stp_is_rxqueue_empty(BT_TASK_INDX) && rstflag == 0);
@@ -504,6 +592,15 @@ long BT_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	return BT_unlocked_ioctl(filp, cmd, arg);
 }
 
+#if (PM_QOS_CONTROL == 1)
+static void pm_qos_release(struct work_struct *pwork)
+{
+	pm_qos_update_request(&qos_req, PM_QOS_DEFAULT_VALUE);
+	qos_ctrl.is_hold = FALSE;
+	BT_LOG_PRT_INFO("[qos] is_hold[%d]\n", qos_ctrl.is_hold);
+}
+#endif
+
 static int BT_open(struct inode *inode, struct file *file)
 {
 	if(btonflag) {
@@ -548,6 +645,21 @@ static int BT_open(struct inode *inode, struct file *file)
 #ifdef CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
 	bt_state_notify(ON);
 #endif
+	bt_dev_dbg_set_state(TRUE);
+
+#if (PM_QOS_CONTROL == 1)
+	down(&qos_ctrl.sem);
+	pm_qos_update_request(&qos_req, PM_QOS_DEFAULT_VALUE);
+	qos_ctrl.is_hold = FALSE;
+	qos_ctrl.task = create_singlethread_workqueue("pm_qos_task");
+	if (!qos_ctrl.task){
+		BT_LOG_PRT_ERR("fail to create pm_qos_task");
+		return -EIO;
+	}
+	INIT_DELAYED_WORK(&qos_ctrl.work, pm_qos_release);
+	up(&qos_ctrl.sem);
+#endif
+	bt_fb_notify_register();
 
 	return 0;
 }
@@ -556,6 +668,8 @@ static int BT_close(struct inode *inode, struct file *file)
 {
 	BT_LOG_PRT_INFO("major %d minor %d (pid %d)\n", imajor(inode), iminor(inode), current->pid);
 
+	bt_fb_notify_unregister();
+	bt_dev_dbg_set_state(FALSE);
 #ifdef CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
 	bt_state_notify(OFF);
 #endif
@@ -566,6 +680,20 @@ static int BT_close(struct inode *inode, struct file *file)
 
 	mtk_wcn_wmt_msgcb_unreg(WMTDRV_TYPE_BT);
 	mtk_wcn_stp_register_event_cb(BT_TASK_INDX, NULL);
+
+#if (PM_QOS_CONTROL == 1)
+	down(&qos_ctrl.sem);
+	if(qos_ctrl.task != NULL) {
+		BT_LOG_PRT_INFO("[qos] cancel delayed work\n");
+		cancel_delayed_work(&qos_ctrl.work);
+		flush_workqueue(qos_ctrl.task);
+		destroy_workqueue(qos_ctrl.task);
+		qos_ctrl.task = NULL;
+	}
+	pm_qos_update_request(&qos_req, PM_QOS_DEFAULT_VALUE);
+	qos_ctrl.is_hold = FALSE;
+	up(&qos_ctrl.sem);
+#endif
 
 	if (mtk_wcn_wmt_func_off(WMTDRV_TYPE_BT) == MTK_WCN_BOOL_FALSE) {
 		BT_LOG_PRT_ERR("WMT turn off BT fail!\n");
@@ -598,7 +726,15 @@ static int BT_init(void)
 	/* Initialize wait queue */
 	init_waitqueue_head(&(inq));
 	/* Initialize wake lock */
-	wakeup_source_init(&bt_wakelock, "bt_drv");
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 14, 149)
+	BT_LOG_PRT_INFO("wakeup_source_register() with kernel-4.14.149\n");
+	bt_wakelock = wakeup_source_register(NULL, "bt_drv");
+#else
+	bt_wakelock = wakeup_source_register("bt_drv");
+#endif
+	if(!bt_wakelock) {
+		BT_LOG_PRT_ERR("%s: init bt_wakelock failed!\n", __func__);
+	}
 
 	/* Allocate char device */
 	alloc_ret = register_chrdev_region(dev, BT_devs, BT_DRIVER_NAME);
@@ -628,6 +764,12 @@ static int BT_init(void)
 #ifdef CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
 	fw_log_bt_init();
 #endif
+	bt_dev_dbg_init();
+
+#if (PM_QOS_CONTROL == 1)
+	pm_qos_add_request(&qos_req, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
+	sema_init(&qos_ctrl.sem, 1);
+#endif
 
 	return 0;
 
@@ -655,13 +797,18 @@ static void BT_exit(void)
 {
 	dev_t dev;
 
+#if (PM_QOS_CONTROL == 1)
+	pm_qos_remove_request(&qos_req);
+#endif
+
+	bt_dev_dbg_deinit();
 #ifdef CONFIG_MTK_CONNSYS_DEDICATED_LOG_PATH
 	fw_log_bt_exit();
 #endif
 
 	dev = MKDEV(BT_major, 0);
 	/* Destroy wake lock*/
-	wakeup_source_trash(&bt_wakelock);
+	wakeup_source_unregister(bt_wakelock);
 
 #if CREATE_NODE_DYNAMIC
 	if (stpbt_dev && !IS_ERR(stpbt_dev)) {
