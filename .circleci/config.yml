@@ -1,0 +1,9 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: rama982/dokar:latest
+    steps:
+      - run: git clone --depth 1 "https://github.com/rama982/android_kernel_xiaomi_lancelot" --branch "$CIRCLE_BRANCH" .
+      - run: curl -OsSL https://gist.github.com/rama982/ce23f44d9d92940d601aa7f33a2d2318/raw/a454629d3dd7a28ce606f33fe4d58c99c4613001/build_kernel.sh
+      - run: bash build_kernel.sh $TG_TOKEN
