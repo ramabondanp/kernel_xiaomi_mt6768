@@ -2589,7 +2589,6 @@ const struct sched_class rt_sched_class = {
 #endif
 };
 
-#ifdef CONFIG_RT_GROUP_SCHED
 /*
  * Ensure that the real time constraints are schedulable.
  */
@@ -2612,6 +2611,7 @@ bool is_rt_throttle(int cpu)
 }
 #endif
 
+#ifdef CONFIG_RT_GROUP_SCHED
 /* Must be called with tasklist_lock held */
 static inline int tg_has_rt_tasks(struct task_group *tg)
 {
