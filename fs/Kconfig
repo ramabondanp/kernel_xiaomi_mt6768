@@ -312,7 +312,7 @@ source "fs/dlm/Kconfig"
 
 config DYNAMIC_FSYNC
 	bool "dynamic file sync control"
-	default y
+	default n
 	help
 	  An experimental file sync control using new power_suspend driver 
 
