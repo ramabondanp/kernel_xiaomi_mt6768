@@ -551,6 +551,13 @@
 	};
 };
 
+&mt_charger {
+	interrupt-parent = <&pio>;
+	reverse-gpio = <&pio 91 0>;
+	pinctrl-names = "reverse_high", "reverse_low";
+	pinctrl-0 = <&reverse_high>;
+	pinctrl-1 = <&reverse_low>;
+};
 
 &i2c7 {
 	smb1351-charger@55 {
