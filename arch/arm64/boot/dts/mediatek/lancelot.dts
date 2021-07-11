@@ -360,7 +360,7 @@
 
 };
 &touch {
-	tpd-resolution = <1080 2160>;
+	tpd-resolution = <1080 2340>;
 	use-tpd-button = <0>;
 	tpd-key-num = <3>;
 	tpd-key-local= <139 172 158 0>;
