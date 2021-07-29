@@ -14,11 +14,6 @@ config ZRAM
 
 	  See Documentation/admin-guide/blockdev/zram.rst for more information.
 
-config ZRAM_SIZE_OVERRIDE
-        int "zram size to set from kernel"
-        range 1 8
-        default 2
-
 choice
 	prompt "Default zram compressor"
 	default ZRAM_DEF_COMP_LZORLE
