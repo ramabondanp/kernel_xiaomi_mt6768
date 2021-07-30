@@ -43,7 +43,6 @@ echo "This is your setup config"
 echo
 echo "Using defconfig: ""$CONFIG""_defconfig"
 echo "Clone dependencies: $([[ ! -z "$CLONE" ]] && echo "true" || echo "false")"
-echo "Disable LTO Clang: $([[ ! -z "$NOLTO" ]] && echo "true" || echo "false")"
 echo
 read -p "Are you sure? " -n 1 -r
 ! [[ $REPLY =~ ^[Yy]$ ]] && exit
@@ -101,12 +100,12 @@ then
   mkdir "$OUTDIR"/clang-llvm
   mkdir "$OUTDIR"/gcc64-aosp
   mkdir "$OUTDIR"/gcc32-aosp
-  wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android11-qpr3-release/clang-r383902b1.tar.gz
-  tar -C "$OUTDIR"/clang-llvm/ -zxvf clang-r383902b1.tar.gz
-  wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-11.0.0_r35.tar.gz
-  tar -C "$OUTDIR"/gcc64-aosp/ -zxvf android-11.0.0_r35.tar.gz
-  wget http://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-11.0.0_r34.tar.gz
-  tar -C "$OUTDIR"/gcc32-aosp/ -zxvf android-11.0.0_r34.tar.gz
+  ! [[ -f "$OUTDIR"/clang-r383902b1.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android11-qpr3-release/clang-r383902b1.tar.gz -P "$OUTDIR"
+  tar -C "$OUTDIR"/clang-llvm/ -zxvf "$OUTDIR"/clang-r383902b1.tar.gz
+  ! [[ -f "$OUTDIR"/android-11.0.0_r35.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-11.0.0_r35.tar.gz -P "$OUTDIR"
+  tar -C "$OUTDIR"/gcc64-aosp/ -zxvf "$OUTDIR"/android-11.0.0_r35.tar.gz
+  ! [[ -f "$OUTDIR"/android-11.0.0_r34.tar.gz ]] && wget http://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-11.0.0_r34.tar.gz -P "$OUTDIR"
+  tar -C "$OUTDIR"/gcc32-aosp/ -zxvf "$OUTDIR"/android-11.0.0_r34.tar.gz
   git clone https://github.com/rama982/AnyKernel3 --depth=1 "$OUTDIR"/AnyKernel
 fi
 
@@ -137,7 +136,6 @@ export KERVER=$(make kernelversion)
 tg_post_msg "
 Build is started
 <b>OS: </b>$DISTRO
-<b>Kernel Version : </b>$KERVER
 <b>Date : </b>$(date)
 <b>Device : </b>$CONFIG
 <b>Host : </b>$KBUILD_BUILD_HOST
@@ -160,6 +158,7 @@ then
   MD5CHECK=$(md5sum "$ZIPFILE" | cut -d' ' -f1)
   tg_post_build "$ZIPFILE" "
 <b>Build took : </b>$((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)
+<b>Kernel Version : </b>$KERVER
 <b>Compiler: </b>$(grep LINUX_COMPILER ${OUTDIR}/include/generated/compile.h  |  sed -e 's/.*LINUX_COMPILER "//' -e 's/"$//')
 <b>MD5 Checksum : </b><code>$MD5CHECK</code>
 "
