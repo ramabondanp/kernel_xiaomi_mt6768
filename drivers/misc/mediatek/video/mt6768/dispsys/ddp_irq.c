@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -366,6 +367,7 @@ irqreturn_t disp_irq_handler(int irq, void *dev_id)
 			rdma_start_time[index] = sched_clock();
 			DDPIRQ("IRQ: RDMA%d frame start!\n", index);
 			rdma_start_irq_cnt[index]++;
+			primary_display_wakeup_pf_thread();
 		}
 		if (reg_val & (1 << 3)) {
 			mmprofile_log_ex(

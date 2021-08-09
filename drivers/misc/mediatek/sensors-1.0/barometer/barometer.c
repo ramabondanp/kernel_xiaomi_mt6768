@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -407,7 +408,7 @@ static ssize_t baro_store_cali(struct device *dev,
 	mutex_lock(&baro_context_obj->baro_op_mutex);
 	cxt = baro_context_obj;
 	if (cxt->baro_ctl.set_cali != NULL)
-		err = cxt->baro_ctl.set_cali((int8_t *)cali_buf, count);
+		err = cxt->baro_ctl.set_cali((uint8_t *)cali_buf, sizeof(cali_buf));
 	else
 		pr_err("DON'T SUPPORT BARO COMMONVERSION CALI\n");
 	if (err < 0)

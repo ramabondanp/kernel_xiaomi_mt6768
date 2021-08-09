@@ -1,6 +1,7 @@
 /* SCP sensor hub driver
  *
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -18,6 +19,7 @@
 
 #include <linux/ioctl.h>
 #include <linux/atomic.h>
+#include <sensors_io.h>
 
 #if defined(CONFIG_MTK_SCP_SENSORHUB_V1)
 #error CONFIG_MTK_SCP_SENSORHUB_V1 should not configed
@@ -376,6 +378,8 @@ enum CUST_ACTION {
 	CUST_ACTION_SHOW_ALSVAL,
 	CUST_ACTION_SET_FACTORY,
 	CUST_ACTION_GET_SENSOR_INFO,
+	CUST_ACTION_LCM_INFO,
+	CUST_ACTION_SEC_PCAL,
 };
 
 struct SCP_SENSOR_HUB_CUST {
@@ -467,6 +471,21 @@ enum {
 	USE_IN_FACTORY_MODE
 };
 
+//new add for lcm info
+struct SCP_SENSOR_HUB_LCM_INFO {
+	enum CUST_ACTION action;
+	int lcm_info;
+};
+
+//new add for sec pcali
+struct SCP_SENSOR_HUB_SEC_PCAL {
+	enum CUST_ACTION action;
+	int sec_pcali;
+};
+
+
+
+
 struct SCP_SENSOR_HUB_SET_CUST_REQ {
 	uint8_t sensorType;
 	uint8_t action;
@@ -486,6 +505,8 @@ struct SCP_SENSOR_HUB_SET_CUST_REQ {
 		struct SCP_SENSOR_HUB_SHOW_ALSVAL showAlsval;
 		struct SCP_SENSOR_HUB_SET_FACTORY setFactory;
 		struct scp_sensor_hub_get_sensor_info getInfo;
+    struct SCP_SENSOR_HUB_LCM_INFO lcm_info;    // new add for lcm info
+      struct SCP_SENSOR_HUB_SEC_PCAL sec_pcali;    // new add for sec_pcal
 	};
 };
 

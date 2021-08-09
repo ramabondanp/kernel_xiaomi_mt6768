@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -110,8 +111,9 @@ static int _disp_get_cmdq_slots(cmdqBackupSlotHandle Slot,
 	unsigned int slot_index, unsigned int *value)
 {
 	int ret;
-
-	ret = cmdqBackupReadSlot(Slot, slot_index, value);
+	
+	pr_err("called from _disp_get_cmdq_slots\n");
+	ret = cmdqBackupReadSlotext(Slot, slot_index, value);
 
 	/* cmdq get slot fail */
 	if (ret)
