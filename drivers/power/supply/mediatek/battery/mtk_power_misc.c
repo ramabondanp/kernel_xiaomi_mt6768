@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -63,7 +64,6 @@ static int g_vbat_lt;
 static int g_vbat_lt_lv1;
 static int shutdown_cond_flag;
 static int fix_coverity;
-static bool b_power_misc_init;
 
 static void wake_up_power_misc(struct shutdown_controller *sdd)
 {
@@ -250,9 +250,11 @@ int set_shutdown_cond(int shutdown_cond)
 #endif
 	case DLPT_SHUTDOWN:
 		if (sdc.shutdown_status.is_dlpt_shutdown != true) {
+			mutex_lock(&sdc.lock);
 			sdc.shutdown_status.is_dlpt_shutdown = true;
 			get_monotonic_boottime(&sdc.pre_time[DLPT_SHUTDOWN]);
 			notify_fg_dlpt_sd();
+			mutex_unlock(&sdc.lock);
 		}
 		break;
 
@@ -260,10 +262,7 @@ int set_shutdown_cond(int shutdown_cond)
 		break;
 	}
 
-	if (b_power_misc_init == true)
-		wake_up_power_misc(&sdc);
-	else
-		bm_err("[%s]init:%d\n", __func__, b_power_misc_init);
+	wake_up_power_misc(&sdc);
 
 	return 0;
 }
@@ -563,7 +562,5 @@ void mtk_power_misc_init(struct platform_device *pdev)
 
 	sdc.psy_nb.notifier_call = mtk_power_misc_psy_event;
 	power_supply_reg_notifier(&sdc.psy_nb);
-	b_power_misc_init = true;
-	bm_err("%s INIT done, init:%d\n", __func__, b_power_misc_init);
 }
 

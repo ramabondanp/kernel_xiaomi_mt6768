@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -2530,7 +2531,8 @@ static void ddp_cmdq_cb(struct cmdq_cb_data data)
 	}
 	CRTC_MMP_MARK(id, frame_cfg, ovl_status, 0);
 
-	mtk_crtc_release_input_layer_fence(crtc, session_id);
+	if (session_id > 0)
+		mtk_crtc_release_input_layer_fence(crtc, session_id);
 
 #ifdef MTK_DRM_DELAY_PRESENT_FENCE
 	// release present fence
@@ -2544,7 +2546,7 @@ static void ddp_cmdq_cb(struct cmdq_cb_data data)
 #endif
 
 	DDP_MUTEX_LOCK(&mtk_crtc->lock, __func__, __LINE__);
-	if (!mtk_crtc_is_dc_mode(crtc))
+	if (!mtk_crtc_is_dc_mode(crtc) && session_id > 0)
 		mtk_crtc_release_output_buffer_fence(crtc, session_id);
 
 	mtk_crtc_update_hrt_qos(crtc, cb_data->misc);
@@ -6701,7 +6703,8 @@ void mtk_need_vds_path_switch(struct drm_crtc *crtc)
 			cmdq_pkt_flush(cmdq_handle);
 			cmdq_pkt_destroy(cmdq_handle);
 			/* unprepare ovl 2l */
-			mtk_ddp_comp_unprepare(comp_ovl0_2l);
+			if (atomic_read(&mtk_crtc->already_config))
+				mtk_ddp_comp_unprepare(comp_ovl0_2l);
 
 			CRTC_MMP_MARK(index, path_switch, 0xFFFF, 1);
 			DDPMSG("Switch vds: Switch ovl0_2l to vds\n");
@@ -6728,6 +6731,7 @@ void mtk_need_vds_path_switch(struct drm_crtc *crtc)
 			int width = crtc->state->adjusted_mode.hdisplay;
 			int height = crtc->state->adjusted_mode.vdisplay;
 			struct cmdq_pkt *cmdq_handle;
+			int keep_first_layer = false;
 
 			cmdq_handle =
 				cmdq_pkt_create(mtk_crtc->gce_obj.client[CLIENT_CFG]);
@@ -6757,6 +6761,12 @@ void mtk_need_vds_path_switch(struct drm_crtc *crtc)
 			/* Switch back need reprepare ovl0_2l */
 			mtk_ddp_comp_prepare(comp_ovl0_2l);
 			mtk_ddp_comp_start(comp_ovl0_2l, cmdq_handle);
+			/* ovl 2l should not have old config, so disable
+			 * all ovl 2l layer when flush first frame after
+			 * switch ovl 2l back to main disp
+			 */
+			mtk_ddp_comp_io_cmd(comp_ovl0_2l, cmdq_handle,
+				OVL_ALL_LAYER_OFF, &keep_first_layer);
 
 			cmdq_pkt_flush(cmdq_handle);
 			cmdq_pkt_destroy(cmdq_handle);

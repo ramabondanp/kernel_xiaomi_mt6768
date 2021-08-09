@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 //
 // Copyright (C) 2018 MediaTek Inc.
+// Copyright (C) 2021 XiaoMi, Inc.
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -314,13 +315,13 @@ int mtk_spk_update_dai_link(struct snd_soc_card *card,
 			__func__);
 		return -ENODEV;
 	}
-
+#ifdef CONFIG_TARGET_PRODUCT_MERLINCOMMON
 	if (mtk_spk_type == MTK_SPK_NOT_SMARTPA) {
 		dev_info(&pdev->dev, "%s(), no need to update dailink\n",
 			 __func__);
 		return 0;
 	}
-
+#endif
 	/* find dai link of i2s in and i2s out */
 	for (i = 0; i < card->num_links; i++) {
 		dai_link = &card->dai_link[i];
