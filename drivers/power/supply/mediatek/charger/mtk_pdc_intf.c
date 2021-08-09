@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -127,8 +128,7 @@ static bool mtk_is_pdc_ready(struct charger_manager *info)
 		return true;
 
 	if (info->pd_type == MTK_PD_CONNECT_PE_READY_SNK_APDO &&
-		info->enable_pe_4 == false &&
-		info->enable_pe_5 == false)
+		info->enable_pe_4 == false)
 		return true;
 
 	return false;
