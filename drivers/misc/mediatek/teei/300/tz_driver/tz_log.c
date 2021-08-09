@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015-2019, MICROTRUST Incorporated
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2015 Google, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
@@ -219,9 +220,9 @@ int teei_log_fn(void *work)
 		if (retVal != 0)
 			continue;
 #ifdef CONFIG_MICROTRUST_TZ_LOG
-		spin_lock_irqsave(&s->lock, flags);
+		//spin_lock_irqsave(&s->lock, flags);
 		tz_driver_dump_logs(s);
-		spin_unlock_irqrestore(&s->lock, flags);
+		//spin_unlock_irqrestore(&s->lock, flags);
 #endif
 	}
 

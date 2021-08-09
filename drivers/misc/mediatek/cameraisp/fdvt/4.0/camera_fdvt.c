@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -788,8 +789,8 @@ void FDVT_DUMPREG(void)
 
 	LOG_INF("FDVT REG:\n ********************\n");
 
-	/* for(u4Index = 0; u4Index < 0x180; u4Index += 4) { */
-	for (u4Index = 0x0; u4Index < FDVT_MAX_OFFSET; u4Index += 4) {
+	for (u4Index = 0; u4Index < 0x180; u4Index += 4) {
+	/* for (u4Index = 0x158; u4Index < 0x180; u4Index += 4) {*/
 		u4RegValue = ioread32((void *)(FDVT_ADDR + u4Index));
 		LOG_INF("+0x%x 0x%x\n", u4Index, u4RegValue);
 	}

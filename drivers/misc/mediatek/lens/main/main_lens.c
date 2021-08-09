@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -98,6 +99,14 @@ static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
 	 BU6429AF_Release, BU6429AF_GetFileName, NULL},
 	{1, AFDRV_BU64748AF, bu64748af_SetI2Cclient_Main, bu64748af_Ioctl_Main,
 	 bu64748af_Release_Main, bu64748af_GetFileName_Main, NULL},
+#ifdef CONFIG_MTK_LENS_DW9800WAF_SUPPORT
+	{1, AFDRV_DW9800WAF, DW9800WAF_SetI2Cclient_Main, DW9800WAF_Ioctl_Main,
+	 DW9800WAF_Release_Main, DW9800WAF_GetFileName_Main, NULL},
+#endif
+#ifdef CONFIG_MTK_LENS_CN3927AF_J19_SUPPORT
+	{1, AFDRV_CN3927AFJ19, CN3927AFJ19_SetI2Cclient, CN3927AFJ19_Ioctl,
+	 CN3927AFJ19_Release, CN3927AFJ19_GetFileName, NULL},
+#endif
 	{1, AFDRV_BU64253GWZAF, BU64253GWZAF_SetI2Cclient, BU64253GWZAF_Ioctl,
 	 BU64253GWZAF_Release, BU64253GWZAF_GetFileName, NULL},
 	{1,
@@ -119,8 +128,6 @@ static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
 	 DW9763AF_Release, DW9763AF_GetFileName, NULL},
 	{1, AFDRV_LC898212XDAF, LC898212XDAF_SetI2Cclient, LC898212XDAF_Ioctl,
 	 LC898212XDAF_Release, LC898212XDAF_GetFileName, NULL},
-	{1, AFDRV_DW9800WAF, DW9800WAF_SetI2Cclient, DW9800WAF_Ioctl,
-	DW9800WAF_Release, DW9800WAF_GetFileName, NULL},
 	{1, AFDRV_DW9814AF, DW9814AF_SetI2Cclient, DW9814AF_Ioctl,
 	 DW9814AF_Release, DW9814AF_GetFileName, NULL},
 	{1, AFDRV_DW9839AF, DW9839AF_SetI2Cclient, DW9839AF_Ioctl,
@@ -145,6 +152,8 @@ static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
 	 LC898217AFC_Release, LC898217AFC_GetFileName, NULL},
 	{1, AFDRV_LC898229AF, LC898229AF_SetI2Cclient, LC898229AF_Ioctl,
 	 LC898229AF_Release, LC898229AF_GetFileName, NULL},
+	 {1, AFDRV_OV5645AF, OV5645AF_SetI2Cclient,
+	OV5645AF_Ioctl, OV5645AF_Release, NULL},
 	{1, AFDRV_LC898122AF, LC898122AF_SetI2Cclient, LC898122AF_Ioctl,
 	 LC898122AF_Release, LC898122AF_GetFileName, NULL},
 	{1, AFDRV_WV511AAF, WV511AAF_SetI2Cclient, WV511AAF_Ioctl,
@@ -270,7 +279,7 @@ void AFRegulatorCtrl(int Stage)
 
 			/* check if customer camera node defined */
 			node = of_find_compatible_node(
-				NULL, NULL, "mediatek,CAMERA_MAIN_AF");
+				NULL, NULL, "mediatek,camera_hw");
 
 			if (node) {
 				kd_node = lens_device->of_node;
@@ -870,6 +879,20 @@ static int AF_i2c_probe(struct i2c_client *client,
 	}
 
 	spin_lock_init(&g_AF_SpinLock);
+
+#if !defined(CONFIG_MTK_LEGACY)
+	AFRegulatorCtrl(0);
+#endif
+#ifdef CONFIG_MTK_LENS_DW9800WAF_SUPPORT
+	DW9800WAF_SetI2Cclient_first(g_pstAF_I2Cclient, &g_AF_SpinLock);
+#endif
+
+#ifdef CONFIG_MTK_LENS_DW9714AF_SUPPORT
+	DW9714AF_SwitchToPowerDown(g_pstAF_I2Cclient, true); /* Power down mode */
+#endif
+#ifdef CONFIG_MTK_LENS_CN3927AF_J19_SUPPORT
+	CN3927AFJ19_SwitchToPowerDown(g_pstAF_I2Cclient, true); /* Power down mode */
+#endif
 
 	LOG_INF("Attached!!\n");
 

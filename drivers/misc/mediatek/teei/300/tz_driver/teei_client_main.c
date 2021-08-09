@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015-2019, MICROTRUST Incorporated
+ * Copyright (C) 2021 XiaoMi, Inc.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -811,9 +812,7 @@ static ssize_t teei_config_read(struct file *filp,
 static const struct file_operations teei_config_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = teei_config_ioctl,
-#ifdef CONFIG_COMPAT
 	.compat_ioctl   = teei_config_ioctl,
-#endif
 	.open = teei_config_open,
 	.read = teei_config_read,
 	.release = teei_config_release

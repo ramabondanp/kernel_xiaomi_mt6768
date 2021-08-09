@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -25,6 +26,7 @@ enum {
 	CPU_KIR_PERFTOUCH,
 	CPU_KIR_USB,
 	CPU_KIR_AMMS,
+	CPU_KIR_FINGERPRINT,
 	CPU_KIR_GBE,
 	CPU_KIR_CCCI,
 	CPU_KIR_SYSLIM,
@@ -40,6 +42,10 @@ enum {
 	CPU_ISO_MAX_KIR
 };
 
+
+extern unsigned int __attribute__((weak)) mt_ppm_userlimit_freq_limit_by_others(
+	unsigned int cluster);
+extern void __attribute__((weak)) ppm_game_mode_change_cb(int is_game_mode);
 extern unsigned int __attribute__((weak)) mt_ppm_userlimit_cpu_freq(unsigned int cluster_num,
 	struct ppm_limit_data *data);
 extern unsigned int mt_cpufreq_get_freq_by_idx(int id, int idx);

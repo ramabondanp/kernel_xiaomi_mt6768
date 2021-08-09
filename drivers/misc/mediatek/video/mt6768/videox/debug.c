@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -79,7 +80,7 @@ static struct proc_dir_entry *mtkfb_procfs;
 static struct proc_dir_entry *disp_lowpower_proc;
 #endif
 
-unsigned int g_mobilelog;
+unsigned int g_mobilelog = 1;
 int bypass_blank;
 int lcm_mode_status;
 int layer_layout_allow_non_continuous;
@@ -609,14 +610,15 @@ static int __maybe_unused compare_dsi_checksum(unsigned long unused)
 	if (!cksum_golden)
 		return 0;
 
-	ret = cmdqBackupReadSlot(cksum_slot, 0, &cksum);
+	pr_err("called from compare_dsi_checksum\n");
+	ret = cmdqBackupReadSlotext(cksum_slot, 0, &cksum);
 	if (ret) {
-		DISPWARN("Fail to read cksum from cmdq slot\n");
+		DISPERR("Fail to read cksum from cmdq slot\n");
 		return -1;
 	}
 
 	if (cksum_golden != cksum)
-		DISPWARN("%s fail, cksum=0x%08x, golden=0x%08x\n",
+		DISPERR("%s fail, cksum=0x%08x, golden=0x%08x\n",
 			__func__, cksum, cksum_golden);
 
 	return 0;
