@@ -1667,8 +1667,10 @@ static int phpb_calc_total(int prev_total_power, long curr_temp, long prev_temp)
 	g_delta_power = delta_power;
 #endif
 	if (delta_power == 0) {
+#if defined(THERMAL_VPU_SUPPORT) || defined(THERMAL_MDLA_SUPPORT)
 		trace_ATM__pid(curr_temp, prev_temp, g_tt, g_tp, g_theta, g_delta_power_tt,
 				g_delta_power_tp, g_delta_power, prev_total_power);
+#endif
 		return prev_total_power;
 	}
 
@@ -1709,8 +1711,10 @@ static int phpb_calc_total(int prev_total_power, long curr_temp, long prev_temp)
 	total_power = clamp(total_power, MINIMUM_TOTAL_POWER,
 						MAXIMUM_TOTAL_POWER);
 
+#if defined(THERMAL_VPU_SUPPORT) || defined(THERMAL_MDLA_SUPPORT)
 	trace_ATM__pid(curr_temp, prev_temp, g_tt, g_tp, g_theta, g_delta_power_tt,
 			g_delta_power_tp, g_delta_power, total_power);
+#endif
 
 	return total_power;
 }
