@@ -107,7 +107,7 @@ build_kernel() {
                   CROSS_COMPILE_ARM32=arm-linux-androideabi- \
                   LD=ld.lld \
                   NM=llvm-nm \
-                  OBJCOPY=llvm-objcopy
+                  OBJCOPY=llvm-objcopy 2> FIXME.txt
 }
 
 ##----------------------------------------------------------------##
