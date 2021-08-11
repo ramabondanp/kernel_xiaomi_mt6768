@@ -322,6 +322,7 @@ int charger_manager_enable_power_path(struct charger_consumer *consumer,
 	struct charger_manager *info = consumer->cm;
 	struct charger_device *chg_dev = NULL;
 
+
 	if (!info)
 		return -EINVAL;
 
@@ -336,58 +337,18 @@ int charger_manager_enable_power_path(struct charger_consumer *consumer,
 		return -EINVAL;
 	}
 
-	mutex_lock(&info->pp_lock[idx]);
-	info->enable_pp[idx] = en;
-
-	if (info->force_disable_pp[idx])
-		goto out;
-
 	ret = charger_dev_is_powerpath_enabled(chg_dev, &is_en);
 	if (ret < 0) {
 		chr_err("%s: get is power path enabled failed\n", __func__);
-		goto out;
+		return ret;
 	}
 	if (is_en == en) {
 		chr_err("%s: power path is already en = %d\n", __func__, is_en);
-		goto out;
+		return 0;
 	}
 
 	pr_info("%s: enable power path = %d\n", __func__, en);
-	ret = charger_dev_enable_powerpath(chg_dev, en);
-out:
-	mutex_unlock(&info->pp_lock[idx]);
-	return ret;
-}
-
-int charger_manager_force_disable_power_path(struct charger_consumer *consumer,
-	int idx, bool disable)
-{
-	struct charger_manager *info = consumer->cm;
-	struct charger_device *chg_dev = NULL;
-	int ret = 0;
-
-	switch (idx) {
-	case MAIN_CHARGER:
-		chg_dev = info->chg1_dev;
-		break;
-	case SLAVE_CHARGER:
-		chg_dev = info->chg2_dev;
-		break;
-	default:
-		ret = -EINVAL;
-	}
-
-	mutex_lock(&info->pp_lock[idx]);
-
-	if (disable == info->force_disable_pp[idx])
-		goto out;
-
-	info->force_disable_pp[idx] = disable;
-	ret = charger_dev_enable_powerpath(chg_dev,
-		info->force_disable_pp[idx] ? false : info->enable_pp[idx]);
-out:
-	mutex_unlock(&info->pp_lock[idx]);
-	return ret;
+	return charger_dev_enable_powerpath(chg_dev, en);
 }
 
 static int _charger_manager_enable_charging(struct charger_consumer *consumer,
@@ -1370,8 +1331,6 @@ static bool mtk_is_charger_on(struct charger_manager *info)
 			info->cable_out_cnt = 0;
 			mutex_unlock(&info->cable_out_lock);
 		}
-		charger_manager_force_disable_power_path(
-			info->chg1_consumer, MAIN_CHARGER, false);
 	} else {
 		if (info->chr_type == CHARGER_UNKNOWN)
 			mtk_charger_plug_in(info, chr_type);
@@ -3714,7 +3673,7 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	struct list_head *pos = NULL;
 	struct list_head *phead = &consumer_head;
 	struct charger_consumer *ptr = NULL;
-	int i, ret;
+	int ret;
 	int ret_device_file;
 	struct netlink_kernel_cfg cfg = {
 		.input = chg_nl_data_handler,
@@ -3735,11 +3694,6 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	mutex_init(&info->charger_lock);
 	mutex_init(&info->charger_pd_lock);
 	mutex_init(&info->cable_out_lock);
-	for (i = 0; i < TOTAL_CHARGER; i++) {
-		mutex_init(&info->pp_lock[i]);
-		info->force_disable_pp[i] = false;
-		info->enable_pp[i] = true;
-	}
 	atomic_set(&info->enable_kpoc_shdn, 1);
 	wakeup_source_init(&info->charger_wakelock, "charger suspend wakelock");
 	spin_lock_init(&info->slock);
