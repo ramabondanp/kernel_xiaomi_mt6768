@@ -1370,6 +1370,8 @@ static bool mtk_is_charger_on(struct charger_manager *info)
 			info->cable_out_cnt = 0;
 			mutex_unlock(&info->cable_out_lock);
 		}
+		charger_manager_force_disable_power_path(
+			info->chg1_consumer, MAIN_CHARGER, false);
 	} else {
 		if (info->chr_type == CHARGER_UNKNOWN)
 			mtk_charger_plug_in(info, chr_type);
@@ -3717,7 +3719,6 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	struct netlink_kernel_cfg cfg = {
 		.input = chg_nl_data_handler,
 	};
-	unsigned int boot_mode = get_boot_mode();
 
 	chr_err("%s: starts\n", __func__);
 
@@ -3842,12 +3843,6 @@ static int mtk_charger_probe(struct platform_device *pdev)
 
 	info->chg1_consumer =
 		charger_manager_get_by_name(&pdev->dev, "charger_port1");
-
-	if (boot_mode != KERNEL_POWER_OFF_CHARGING_BOOT &&
-	    boot_mode != LOW_POWER_OFF_CHARGING_BOOT)
-		charger_manager_force_disable_power_path(
-			info->chg1_consumer, MAIN_CHARGER, true);
-
 	info->init_done = true;
 	_wake_up_charger(info);
 
