@@ -1,18 +1,33 @@
-Linux kernel
-============
+# shas-dream-oc-mt6768
 
-This file was moved to Documentation/admin-guide/README.rst
+Hi build your own kernel from my source..
 
-Please notice that there are several guides for kernel developers and users.
-These guides can be rendered in a number of formats, like HTML and PDF.
+# what is needed:
 
-In order to build the documentation, use ``make htmldocs`` or
-``make pdfdocs``.
+1.pc with ubuntu install
 
-There are various text files in the Documentation/ subdirectory,
-several of them using the Restructured Text markup notation.
-See Documentation/00-INDEX for a list of what is contained in each file.
+2.some knowledge about build
 
-Please read the Documentation/process/changes.rst file, as it contains the
-requirements for building and running the kernel, and information about
-the problems which may result by upgrading your kernel.
+
+# How it workes:
+1.Clone or download my coad.
+
+2.Extract if you download.
+
+3.Make your pc envairnment to build kernel (Help from google).
+
+4.For build lancelot or merlin run .
+
+./lancelot.sh (for lancelot).
+
+or ./merlin.sh (for merlin).
+
+5. Go AnyKernel3-master to get your zip file.
+
+6.Flash it from recovery.
+
+7.Enjoy.
+
+# Download latest version and discuss join...
+
+https://t.me/ocmt6768
