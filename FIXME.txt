@@ -28,3 +28,47 @@ In file included from ../kernel/sched/fair.c:12696:
 ../kernel/sched/eas_plus.c:911:23: warning: unused variable 'sd' [-Wunused-variable]
         struct sched_domain *sd;
                              ^
+3 warnings generated.
+../kernel/time/timer_list_aee.c:44:5: warning: 'CONFIG_TIMER_AEE_FULL_DUMP' is not defined, evaluates to 0 [-Wundef]
+#if CONFIG_TIMER_AEE_FULL_DUMP
+    ^
+../kernel/time/timer_list_aee.c:60:5: warning: 'CONFIG_TIMER_AEE_FULL_DUMP' is not defined, evaluates to 0 [-Wundef]
+#if CONFIG_TIMER_AEE_FULL_DUMP
+    ^
+2 warnings generated.
+../kernel/sched/cpufreq_schedutil.c:327:13: warning: unused function 'sugov_cpu_is_busy' [-Wunused-function]
+static bool sugov_cpu_is_busy(struct sugov_cpu *sg_cpu)
+            ^
+1 warning generated.
+../fs/kernfs/file.c:273:16: warning: stack frame size of 4176 bytes in function 'kernfs_fop_write' [-Wframe-larger-than=]
+static ssize_t kernfs_fop_write(struct file *file, const char __user *user_buf,
+               ^
+1 warning generated.
+../drivers/clk/clk.c:48:27: warning: unused variable 'orphan_list' [-Wunused-variable]
+static struct hlist_head *orphan_list[] = {
+                          ^
+1 warning generated.
+../drivers/clk/mediatek/clkdbg.c:1065:12: warning: unused function 'clkdbg_reg_read' [-Wunused-function]
+static int clkdbg_reg_read(struct seq_file *s, void *v)
+           ^
+../drivers/clk/mediatek/clkdbg.c:1081:12: warning: unused function 'clkdbg_reg_write' [-Wunused-function]
+static int clkdbg_reg_write(struct seq_file *s, void *v)
+           ^
+../drivers/clk/mediatek/clkdbg.c:1098:12: warning: unused function 'clkdbg_reg_set' [-Wunused-function]
+static int clkdbg_reg_set(struct seq_file *s, void *v)
+           ^
+../drivers/clk/mediatek/clkdbg.c:1115:12: warning: unused function 'clkdbg_reg_clr' [-Wunused-function]
+static int clkdbg_reg_clr(struct seq_file *s, void *v)
+           ^
+4 warnings generated.
+../drivers/i2c/busses/i2c-mtk.c:801:3: warning: add explicit braces to avoid dangling else [-Wdangling-else]
+                else {
+                ^
+1 warning generated.
+../drivers/md/dm-bow.c:15:9: warning: 'SECTOR_SIZE' macro redefined [-Wmacro-redefined]
+#define SECTOR_SIZE 512
+        ^
+../include/linux/blkdev.h:1041:9: note: previous definition is here
+#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+        ^
+1 warning generated.
