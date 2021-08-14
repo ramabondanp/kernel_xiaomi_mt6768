@@ -7,7 +7,7 @@ export ARCH=arm64
 export SUBARCH=arm64
 export DTC_EXT=dtc
 make O=outL ARCH=arm64 lancelot_defconfig
-export PATH="${PWD}/clang-13/bin:${PWD}/clang-13/toolchain/bin:${PWD}/clang-13/toolchain32/bin:${PATH}"
+export PATH="${PWD}/clang-13/bin:${PWD}/toolchain/bin:${PWD}/toolchain32/bin:${PATH}"
 make -j$(nproc --all) O=outL \
                        ARCH=arm64 \
                   CC=clang \
