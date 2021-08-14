@@ -1,3 +1,0 @@
-13.0.1
-based on r428724
-for additional information on LLVM revision and cherry-picks, see clang_source_info.md
