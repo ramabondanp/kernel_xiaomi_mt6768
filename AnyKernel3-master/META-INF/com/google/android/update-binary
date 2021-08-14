@@ -491,6 +491,28 @@ do_modules;
 debugging;
 restore_env;
 
+# genom start
+
+ui_print " "
+ui_print "Removing file needed for this kernel"
+sleep 1
+ui_print " "
+ui_print "Mounting system and vendor"
+mount -o rw /system_root && ui_print "- mount system done"
+mount -o rw /vendor && ui_print "- mount vendor done"
+sleep 1
+ui_print " "
+ui_print "Removing file"
+rm /vendor/etc/fstab.enableswap
+rm /system_root/system/etc/mcd_default.conf
+sleep 1
+ui_print " "
+ui_print "Unmunting system and vendor"
+umount /system_root
+umount /vendor
+
+# genom end
+
 if [ "$(file_getprop anykernel.sh do.cleanup)" == 1 ]; then
   cleanup;
 fi;
