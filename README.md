@@ -16,17 +16,19 @@ Hi build your own kernel from my source..
 
 3.Make your pc envairnment to build kernel (Help from google).
 
-4.For build lancelot or merlin run .
+4.run ./clang-13.sh (one time only)
+
+5.For build lancelot or merlin run .
 
 ./lancelot.sh (for lancelot).
 
 or ./merlin.sh (for merlin).
 
-5. Go AnyKernel3-master to get your zip file.
+6. Go AnyKernel3-master to get your zip file.
 
-6.Flash it from recovery.
+7.Flash it from recovery.
 
-7.Enjoy.
+8.Enjoy.
 
 # Download latest version and discuss join...
 
