@@ -7,7 +7,7 @@ export ARCH=arm64
 export SUBARCH=arm64
 export DTC_EXT=dtc
 make O=outM ARCH=arm64 merlin_defconfig
-export PATH="${PWD}/clang-13/bin:${PWD}/toolchain/bin:${PWD}/toolchain32/bin:${PATH}"
+export PATH="${PWD}/clang-13/bin:${PWD}/toolchain64/bin:${PWD}/toolchain32/bin:${PATH}"
 make -j$(nproc --all) O=outM \
                        ARCH=arm64 \
                   CC=clang \

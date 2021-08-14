@@ -1,0 +1,30 @@
+drivers/misc/mediatek/usb20/Kconfig:41:warning: prompt redefined
+warning: (LM3697_SUPPORT && DRM_RADEON && DRM_AMDGPU && DRM_NOUVEAU && DRM_I915 && DRM_GMA500 && DRM_SHMOBILE && DRM_TILCDC && DRM_FSL_DCU && DRM_TINYDRM && DRM_PARADE_PS8622 && FB_BACKLIGHT && FB_ARMCLCD && FB_MX3 && USB_APPLEDISPLAY && FB_OLPC_DCON && ACPI_CMPC && SAMSUNG_Q10) selects BACKLIGHT_CLASS_DEVICE which has unmet direct dependencies (HAS_IOMEM && BACKLIGHT_LCD_SUPPORT)
+warning: (LM3697_SUPPORT && DRM_RADEON && DRM_AMDGPU && DRM_NOUVEAU && DRM_I915 && DRM_GMA500 && DRM_SHMOBILE && DRM_TILCDC && DRM_FSL_DCU && DRM_TINYDRM && DRM_PARADE_PS8622 && FB_BACKLIGHT && FB_ARMCLCD && FB_MX3 && USB_APPLEDISPLAY && FB_OLPC_DCON && ACPI_CMPC && SAMSUNG_Q10) selects BACKLIGHT_CLASS_DEVICE which has unmet direct dependencies (HAS_IOMEM && BACKLIGHT_LCD_SUPPORT)
+../drivers/misc/mediatek/ccu/src/Makefile:27: CCU_MAKE_FILE_CALLED
+../drivers/misc/mediatek/ccu/src/1.2/Makefile:24: CCU_INC=../drivers/misc/mediatek/ccu/src/mt6768/ccu_ext_interface
+../drivers/misc/mediatek/connectivity/common/Makefile:115: wmt_drv build-in boot.img
+../drivers/misc/mediatek/connectivity/wlan/adaptor/Makefile:52: wmt_chrdev_wifi build-in boot.img
+../drivers/misc/mediatek/connectivity/wlan/core/gen4m/Makefile:444: wlan_drv_gen4m build-in boot.img
+../arch/arm64/kernel/cpufeature.c:977:13: warning: unused function 'cpu_enable_ssbs' [-Wunused-function]
+static void cpu_enable_ssbs(const struct arm64_cpu_capabilities *__unused)
+            ^
+1 warning generated.
+../fs/seq_file.c:35:8: warning: ISO C90 forbids mixing declarations and code [-Wdeclaration-after-statement]
+        void *buf;
+              ^
+1 warning generated.
+../kernel/sched/core.c:4497:6: warning: unused variable 'i' [-Wunused-variable]
+        int i = 0;
+            ^
+1 warning generated.
+../kernel/sched/fair.c:11138:8: warning: ISO C90 forbids mixing declarations and code [-Wdeclaration-after-statement]
+                        int cpu = env.dst_cpu;
+                            ^
+In file included from ../kernel/sched/fair.c:12696:
+../kernel/sched/eas_plus.c:912:28: warning: unused variable 'sg' [-Wunused-variable]
+        const struct sched_group *sg;
+                                  ^
+../kernel/sched/eas_plus.c:911:23: warning: unused variable 'sd' [-Wunused-variable]
+        struct sched_domain *sd;
+                             ^
