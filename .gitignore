@@ -128,3 +128,5 @@ kernel/configs/android-*.cfg
 outL/
 clang-13/
 AnyKernel3-master/
+drivers/misc/mediatek/base/power/cpufreq_v1/src/mach/mt6768/b/
+drivers/misc/mediatek/base/power/mt6768/b/

@@ -72,3 +72,155 @@ static int clkdbg_reg_clr(struct seq_file *s, void *v)
 #define SECTOR_SIZE (1 << SECTOR_SHIFT)
         ^
 1 warning generated.
+../drivers/misc/hqsysfs/hqsysfs.c:447:6: warning: unused variable 'ret' [-Wunused-variable]
+        int ret = -1;
+            ^
+1 warning generated.
+../drivers/misc/hqsysfs/hqsys_pcba.c:30:13: warning: unused function 'read_pcba_config' [-Wunused-function]
+static bool read_pcba_config(void);
+            ^
+1 warning generated.
+In file included from ../drivers/mmc/core/queue.c:34:
+In file included from ../drivers/mmc/host/cqhci-crypto.h:9:
+../drivers/mmc/host/cmdq_hci.h:341:49: warning: declaration of 'struct platform_device' will not be visible outside of this function [-Wvisibility]
+extern struct cmdq_host *cmdq_pltfm_init(struct platform_device *pdev);
+                                                ^
+1 warning generated.
+../drivers/mmc/host/mediatek/ComboA/sd.c:4406:16: warning: unused variable 'flags' [-Wunused-variable]
+        unsigned long flags;
+                      ^
+1 warning generated.
+../drivers/mmc/host/mediatek/ComboA/dbg.c:430:13: warning: unused variable 'tag' [-Wunused-variable]
+        static int tag = -1;
+                   ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:673:15: warning: unused variable 'is_rel' [-Wunused-variable]
+        int is_read, is_rel, is_fprg;
+                     ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:676:16: warning: unused variable 'active_reqs' [-Wunused-variable]
+        unsigned long active_reqs;
+                      ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:673:6: warning: unused variable 'is_read' [-Wunused-variable]
+        int is_read, is_rel, is_fprg;
+            ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:672:6: warning: unused variable 'tag' [-Wunused-variable]
+        int tag = -1;
+            ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:675:33: warning: unused variable 'cpu' [-Wunused-variable]
+        int type, cmd, arg, skip, cnt, cpu;
+                                       ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:675:28: warning: unused variable 'cnt' [-Wunused-variable]
+        int type, cmd, arg, skip, cnt, cpu;
+                                  ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:673:23: warning: unused variable 'is_fprg' [-Wunused-variable]
+        int is_read, is_rel, is_fprg;
+                             ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:2619:4: warning: misleading indentation; statement is not part of the previous 'if' [-Wmisleading-indentation]
+                        host = mtk_msdc_host[id];
+                        ^
+../drivers/mmc/host/mediatek/ComboA/dbg.c:2616:3: note: previous statement is here
+                if (id >= HOST_MAX_NUM || id < 0)
+                ^
+9 warnings generated.
+../drivers/pinctrl/mediatek/mtk-eint.c:119:6: warning: ISO C90 forbids mixing declarations and code [-Wdeclaration-after-statement]
+        u32 mask = BIT(d->hwirq & 0x1f);
+            ^
+1 warning generated.
+../drivers/misc/mediatek/ccu/src/Makefile:27: CCU_MAKE_FILE_CALLED
+../drivers/misc/mediatek/ccu/src/1.2/Makefile:24: CCU_INC=../drivers/misc/mediatek/ccu/src/mt6768/ccu_ext_interface
+../drivers/misc/mediatek/connectivity/common/Makefile:115: wmt_drv build-in boot.img
+../drivers/misc/mediatek/connectivity/wlan/adaptor/Makefile:52: wmt_chrdev_wifi build-in boot.img
+../drivers/misc/mediatek/connectivity/wlan/core/gen4m/Makefile:444: wlan_drv_gen4m build-in boot.img
+../net/xfrm/xfrm_state.c:898:13: warning: unused function 'xfrm_state_print_back_trace' [-Wunused-function]
+static void xfrm_state_print_back_trace(struct xfrm_state *x)
+            ^
+1 warning generated.
+../drivers/soc/mediatek/mtk-pmic-wrap.c:3270:13: warning: unused function 'pwrap_irq_thread_init' [-Wunused-function]
+static void pwrap_irq_thread_init(void)
+            ^
+1 warning generated.
+../drivers/soc/mediatek/mtk-cmdq-helper.c:597:11: warning: incompatible integer to pointer conversion returning 'int' from a function with result type 'void *' [-Wint-conversion]
+                        return -ENOMEM;
+                               ^~~~~~~
+1 warning generated.
+../drivers/staging/android/ion/mtk/ion_drv.c:521:24: warning: cast to smaller integer type 'unsigned int' from 'void *' [-Wvoid-pointer-to-int-cast]
+                m4u_mva_unmap_kernel((unsigned int)param->va,
+                                     ^~~~~~~~~~~~~~~~~~~~~~~
+../drivers/staging/android/ion/mtk/ion_drv.c:410:19: warning: unused variable 'heap' [-Wunused-variable]
+        struct ion_heap *heap = NULL;
+                         ^
+2 warnings generated.
+../drivers/staging/android/ion/mtk/ion_mm_heap.c:2159:31: warning: unused variable 'buffer_info' [-Wunused-variable]
+                        struct ion_mm_buffer_info *buffer_info =
+                                                   ^
+../drivers/staging/android/ion/mtk/ion_mm_heap.c:297:12: warning: unused function 'ion_mm_heap_init_domain' [-Wunused-function]
+static int ion_mm_heap_init_domain(struct ion_mm_buffer_info *buffer_info,
+           ^
+2 warnings generated.
+../drivers/staging/android/ion/mtk/ion_fb_heap.c:242:28: warning: unused variable 'fb_heap_ops' [-Wunused-variable]
+static struct ion_heap_ops fb_heap_ops = {
+                           ^
+../drivers/staging/android/ion/mtk/ion_fb_heap.c:281:12: warning: unused function 'ion_fb_heap_debug_show' [-Wunused-function]
+static int ion_fb_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
+           ^
+2 warnings generated.
+../drivers/misc/mediatek/connectivity/wlan/core/gen4m/chips/common/fw_dl.c:2351:9: warning: ROM code supports SEM-CTRL for ROM patch download [-W#pragma-messages]
+#pragma message("ROM code supports SEM-CTRL for ROM patch download")
+        ^
+../drivers/thermal/thermal_core.c:1213:14: warning: 'snprintf' size argument is too large; destination buffer has size 128, but size argument is 4096 [-Wfortify-source]
+       ret = snprintf(boost_buf, PAGE_SIZE, buf);
+             ^
+../drivers/thermal/thermal_core.c:1329:8: warning: 'snprintf' size argument is too large; destination buffer has size 128, but size argument is 4096 [-Wfortify-source]
+       snprintf(board_sensor_temp, PAGE_SIZE, buf);
+       ^
+1 warning generated.
+2 warnings generated.
+../drivers/misc/mediatek/gpu/ged/src/ged_hal.c:222:9: warning: unused variable 'j' [-Wunused-variable]
+        int i, j;
+               ^
+1 warning generated.
+../drivers/misc/mediatek/gpu/ged/src/ged_dvfs.c:1023:8: warning: ISO C90 forbids mixing declarations and code [-Wdeclaration-after-statement]
+                        int i32NewFreqID =
+                            ^
+1 warning generated.
+../drivers/usb/gadget/configfs.c:1566:12: warning: unused function 'configfs_composite_setup' [-Wunused-function]
+static int configfs_composite_setup(struct usb_gadget *gadget,
+           ^
+../drivers/usb/gadget/configfs.c:1591:13: warning: unused function 'configfs_composite_disconnect' [-Wunused-function]
+static void configfs_composite_disconnect(struct usb_gadget *gadget)
+            ^
+2 warnings generated.
+../drivers/misc/mediatek/teei/300/tz_driver/teei_client_main.c:68:6: warning: 'CONFIG_MICROTRUST_TZ_DRIVER_MTK_BOOTPROF' is not defined, evaluates to 0 [-Wundef]
+#if (CONFIG_MICROTRUST_TZ_DRIVER_MTK_BOOTPROF && CONFIG_MTPROF)
+     ^
+../drivers/misc/mediatek/teei/300/tz_driver/teei_client_main.c:202:23: warning: unused variable 'mask' [-Wunused-variable]
+static struct cpumask mask = { CPU_BITS_NONE };
+                      ^
+2 warnings generated.
+../drivers/misc/mediatek/teei/300/tz_driver/teei_client_main.c:68:6: warning: 'CONFIG_MICROTRUST_TZ_DRIVER_MTK_BOOTPROF' is not defined, evaluates to 0 [-Wundef]
+#if (CONFIG_MICROTRUST_TZ_DRIVER_MTK_BOOTPROF && CONFIG_MTPROF)
+     ^
+1 warning generated.
+../drivers/misc/mediatek/teei/300/tz_driver/teei_smc_call.c:29:9: warning: 'IMSG_TAG' macro redefined [-Wmacro-redefined]
+#define IMSG_TAG "[tz_driver]"
+        ^
+../drivers/misc/mediatek/teei/300/common/include/imsg_log.h:19:9: note: previous definition is here
+#define IMSG_TAG "[ISEE DRV]"
+        ^
+1 warning generated.
+../drivers/misc/mediatek/teei/300/tz_driver/teei_smc_call.c:29:9: warning: 'IMSG_TAG' macro redefined [-Wmacro-redefined]
+#define IMSG_TAG "[tz_driver]"
+        ^
+../drivers/misc/mediatek/teei/300/common/include/imsg_log.h:19:9: note: previous definition is here
+#define IMSG_TAG "[ISEE DRV]"
+        ^
+1 warning generated.
+../drivers/misc/mediatek/teei/300/tz_driver/switch_queue.c:46:9: warning: 'IMSG_TAG' macro redefined [-Wmacro-redefined]
+#define IMSG_TAG "[tz_driver]"
+        ^
+../drivers/misc/mediatek/teei/300/common/include/imsg_log.h:19:9: note: previous definition is here
+#define IMSG_TAG "[ISEE DRV]"
+        ^
+../drivers/misc/mediatek/teei/300/tz_driver/switch_queue.c:162:26: warning: unused variable 's' [-Wunused-variable]
+        struct tz_driver_state *s = get_tz_drv_state();
+                                ^
+2 warnings generated.
