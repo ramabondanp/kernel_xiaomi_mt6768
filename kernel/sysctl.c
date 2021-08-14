@@ -129,7 +129,7 @@ static unsigned long zero_ul;
 static unsigned long one_ul = 1;
 static unsigned long long_max = LONG_MAX;
 static int one_hundred = 100;
-#ifdef CONFIG_MTK_GMO_RAM_OPTIMIZE
+#if defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) || defined(CONFIG_INCREASE_MAXIMUM_SWAPPINESS)
 static int two_hundred = 200;
 #endif
 static int one_thousand = 1000;
@@ -1445,11 +1445,19 @@ static struct ctl_table vm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero,
-#ifndef CONFIG_MTK_GMO_RAM_OPTIMIZE
-		.extra2		= &one_hundred,
-#else
+#if defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) || defined(CONFIG_INCREASE_MAXIMUM_SWAPPINESS)
 		.extra2		= &two_hundred,
+#else
+		.extra2		= &one_hundred,
 #endif
+	},
+	{
+		.procname	= "mmap_readaround_limit",
+		.data		= &mmap_readaround_limit,
+		.maxlen		= sizeof(mmap_readaround_limit),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= &zero,
 	},
 #ifdef CONFIG_HUGETLB_PAGE
 	{
