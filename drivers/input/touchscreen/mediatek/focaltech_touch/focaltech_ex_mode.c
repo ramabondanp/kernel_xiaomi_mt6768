@@ -43,7 +43,7 @@
 * 3.Private enumerations, structures and unions using typedef
 *****************************************************************************/
 enum _ex_mode {
-	MODE_GLOVE = 0,
+	MODE_GLOVE = 1,
 	MODE_COVER,
 	MODE_CHARGER,
 };
