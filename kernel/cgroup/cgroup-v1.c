@@ -13,11 +13,10 @@
 #include <linux/delayacct.h>
 #include <linux/pid_namespace.h>
 #include <linux/cgroupstats.h>
+#include <linux/binfmts.h>
+#include <linux/cpu_input_boost.h>
 
 #include <trace/events/cgroup.h>
-#ifdef CONFIG_MTK_TASK_TURBO
-#include <mt-plat/turbo_common.h>
-#endif
 
 /*
  * pidlists linger the following amount before being destroyed.  The goal
@@ -559,10 +558,12 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 		goto out_finish;
 
 	ret = cgroup_attach_task(cgrp, task, threadgroup);
-#ifdef CONFIG_MTK_TASK_TURBO
-	if (!ret)
-		cgroup_set_turbo_task(task);
-#endif
+	/* This covers boosting for app launches and app transitions */
+	if (!ret && !threadgroup &&
+		!memcmp(of->kn->parent->name, "top-app", sizeof("top-app")) &&
+		is_zygote_pid(task->parent->pid)) {
+		cpu_input_boost_kick_max(1000);
+	}
 
 out_finish:
 	cgroup_procs_write_finish(task);

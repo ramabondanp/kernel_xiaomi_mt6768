@@ -121,6 +121,63 @@ config MTK_QOS_SUPPORT
 	  This kernel config can be used to enable MTK QOS support.
 	  If unsure, say N.
 
+config ARM_RK3399_DMC_DEVFREQ
+	tristate "ARM RK3399 DMC DEVFREQ Driver"
+	depends on (ARCH_ROCKCHIP && HAVE_ARM_SMCCC) || \
+		(COMPILE_TEST && HAVE_ARM_SMCCC)
+	select DEVFREQ_EVENT_ROCKCHIP_DFI
+	select DEVFREQ_GOV_SIMPLE_ONDEMAND
+	select PM_DEVFREQ_EVENT
+	select PM_OPP
+	help
+          This adds the DEVFREQ driver for the RK3399 DMC(Dynamic Memory Controller).
+          It sets the frequency for the memory controller and reads the usage counts
+          from hardware.
+config MTK_QOS_SUPPORT
+	bool "MTK QOS SUPPORT"
+	default y
+	---help---
+	  This kernel config can be used to enable MTK QOS support.
+	  If unsure, say N.
+
+config DEVFREQ_BOOST
+	bool "Devfreq Boost"
+	help
+	  Boosts enumerated devfreq devices upon input, and allows for boosting
+	  specific devfreq devices on other custom events. The boost frequencies
+	  for this driver should be set so that frame drops are near-zero at the
+	  boosted frequencies and power consumption is minimized at said
+	  frequencies. The goal of this driver is to provide an interface to
+	  achieve optimal device performance by requesting boosts on key events,
+	  such as when a frame is ready to rendered to the display.
+
+if DEVFREQ_BOOST
+
+config DEVFREQ_INPUT_BOOST_DURATION_MS
+	int "Input boost duration"
+	default "100"
+	help
+	  Input boost duration in milliseconds for all boostable devices.
+
+config DEVFREQ_WAKE_BOOST_DURATION_MS
+	int "Wake boost duration"
+	default "1000"
+	help
+	  Wake boost duration in milliseconds for all boostable devices.
+
+config DEVFREQ_MSM_CPUBW_BOOST_FREQ
+	int "Boost freq for cpubw device"
+	default "0"
+	help
+	  CPUBW boost frequency for the MSM DDR bus.
+
+
+config DEVFREQ_MSM_LLCCBW_BOOST_FREQ
+	int "Boost freq for llccbw device"
+	default "0"
+	help
+	  LLCCBW boost frequency for the MSM DDR bus.
+endif
 config MTK_DVFSRC_MT6833_PRETEST
 	tristate "MTK_DVFSRC_MT6833_PRETEST"
 	help
