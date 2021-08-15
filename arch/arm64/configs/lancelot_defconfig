@@ -1,8 +1,5 @@
 CONFIG_CROSS_COMPILE="aarch64-linux-android-"
-<<<<<<< HEAD
 CONFIG_LOCALVERSION="-shas-dream-lancelot-a10-customrom-a11"
-=======
->>>>>>> aca76915e66e1acf60c9e1c0404daad0a08caa92
 # CONFIG_FHANDLE is not set
 CONFIG_IKHEADERS=y
 CONFIG_LOG_BUF_SHIFT=21
