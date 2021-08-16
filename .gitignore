@@ -133,3 +133,4 @@ drivers/misc/mediatek/base/power/mt6768/b/
 arch/arm64/configs/b/
 outM/
 drivers/cpufreq/b/
+lanp.sh
