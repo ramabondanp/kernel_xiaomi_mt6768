@@ -96,7 +96,7 @@ zipping() {
 ##----------------------------------------------------------------##
 
 build_kernel() {
-  [[ $LTO == true ]] && echo "CONFIG_LTO_CLANG=y" > arch/arm64/configs/"$DEFCONFIG"
+  [[ $LTO == true ]] && echo "CONFIG_LTO_CLANG=y" >> arch/arm64/configs/"$DEFCONFIG"
   echo "-GenomNEW-OSS-R-$CONFIG" > localversion
   make O="$OUTDIR" ARCH=arm64 "$DEFCONFIG"
   make -j"$PROCS" O="$OUTDIR" \
@@ -180,7 +180,7 @@ then
 <b>Build took : </b>$((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)
 <b>Kernel Version : </b>$KERVER
 <b>Compiler: </b>$(grep LINUX_COMPILER ${OUTDIR}/include/generated/compile.h  |  sed -e 's/.*LINUX_COMPILER "//' -e 's/"$//')
-<b>Disable LTO Clang: </b>$([[ ! -z "$NOLTO" ]] && echo "true" || echo "false")
+<b>Enable LTO Clang: </b>$([[ ! -z "$LTO" ]] && echo "true" || echo "false")
 <b>MD5 Checksum : </b><code>$MD5CHECK</code>
 "
 else
