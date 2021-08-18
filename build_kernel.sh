@@ -80,7 +80,7 @@ zipping() {
 ##----------------------------------------------------------------##
 
 build_kernel() {
-  echo "-Neutrino-mod-Genom-OSS-A10-$CONFIG" > localversion
+  echo "-Genom-OSS-A10-$CONFIG" > localversion
   make O="$OUTDIR" ARCH=arm64 "$DEFCONFIG"
   make -j"$PROCS" O="$OUTDIR" \
                   ARCH=arm64 \
