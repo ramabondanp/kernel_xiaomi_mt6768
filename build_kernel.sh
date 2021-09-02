@@ -120,8 +120,8 @@ then
   mkdir "$OUTDIR"/clang-llvm
   mkdir "$OUTDIR"/gcc64-aosp
   mkdir "$OUTDIR"/gcc32-aosp
-  ! [[ -f "$OUTDIR"/clang-r428724.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r428724.tar.gz -P "$OUTDIR"
-  tar -C "$OUTDIR"/clang-llvm/ -zxvf "$OUTDIR"/clang-r428724.tar.gz
+  ! [[ -f "$OUTDIR"/clang-r428724.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r433403.tar.gz -P "$OUTDIR"
+  tar -C "$OUTDIR"/clang-llvm/ -zxvf "$OUTDIR"/clang-r433403.tar.gz
   ! [[ -f "$OUTDIR"/android-11.0.0_r35.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-11.0.0_r35.tar.gz -P "$OUTDIR"
   tar -C "$OUTDIR"/gcc64-aosp/ -zxvf "$OUTDIR"/android-11.0.0_r35.tar.gz
   ! [[ -f "$OUTDIR"/android-11.0.0_r34.tar.gz ]] && wget http://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-11.0.0_r34.tar.gz -P "$OUTDIR"
