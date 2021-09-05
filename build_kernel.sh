@@ -11,10 +11,11 @@
 
 Help()
 {
-  echo "Usage: [--help|-h|-?] [--clone|-c] [--no-lto] [--dtbo]"
+  echo "Usage: [--help|-h|-?] [--clone|-c] [--lto] [--dtbo]"
   echo "$0 <defconfig> <token> [Other Args]"
   echo -e "\t--clone: Clone compiler"
   echo -e "\t--lto: Enable Clang LTO"
+  echo -e "\t--dtbo: Copy dtbo.img"
   echo -e "\t--help: To show this info"
 }
 
@@ -32,6 +33,10 @@ case $key in
   ;;
   --lto)
   LTO=true
+  shift
+  ;;
+  --dtbo)
+  DTBO=true
   shift
   ;;
   --help|-h|-?)
@@ -60,6 +65,7 @@ echo
 echo "Using defconfig: ""$CONFIG""_defconfig"
 echo "Clone dependencies: $([[ ! -z "$CLONE" ]] && echo "true" || echo "false")"
 echo "Enable LTO Clang: $([[ ! -z "$LTO" ]] && echo "true" || echo "false")"
+echo "Copy dtbo.img: $([[ ! -z "$DTBO" ]] && echo "true" || echo "false")"
 echo
 read -p "Are you sure? " -n 1 -r
 ! [[ $REPLY =~ ^[Yy]$ ]] && exit
@@ -88,6 +94,7 @@ tg_post_build() {
 zipping() {
   cd "$OUTDIR"/AnyKernel || exit 1
   rm *.zip *-dtb *dtbo.img
+  [[ $DTBO == true ]] && cp "$OUTDIR"/arch/arm64/boot/dtbo.img .
   cp "$OUTDIR"/arch/arm64/boot/Image.gz-dtb .
   zip -r9 "$ZIPNAME"-"${DATE}".zip *
   cd - || exit
@@ -96,6 +103,7 @@ zipping() {
 ##----------------------------------------------------------------##
 
 build_kernel() {
+  find "$OUTDIR" -name "*-dtb" -name "dtbo.img" -delete
   [[ $LTO == true ]] && echo "CONFIG_LTO_CLANG=y" >> arch/arm64/configs/"$DEFCONFIG"
   echo "-GenomNEW-OSS-R-$CONFIG" > localversion
   make O="$OUTDIR" ARCH=arm64 "$DEFCONFIG"
