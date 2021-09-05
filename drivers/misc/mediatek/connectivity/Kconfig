@@ -163,14 +163,6 @@ config MTK_COMBO_CHIP_CONSYS_6785
 	  is
 	  MT6785(BT/WIFI/GPS/FM combo chip)
 
-config MTK_COMBO_CHIP_CONSYS_6833
-	bool "MTK MT6833 combo chip support"
-	help
-	  this config is used to decided SOC consys version
-	  in current platform
-	  is
-	  MT6833(BT/WIFI/GPS/FM combo chip)
-
 config MTK_COMBO_CHIP_CONSYS_6853
 	bool "MTK MT6853 combo chip support"
 	help
@@ -224,7 +216,6 @@ config MTK_COMBO_CHIP
 	default "CONSYS_6739" if MTK_COMBO_CHIP_CONSYS_6739
 	default "CONSYS_6768" if MTK_COMBO_CHIP_CONSYS_6768
 	default "CONSYS_6785" if MTK_COMBO_CHIP_CONSYS_6785
-	default "CONSYS_6833" if MTK_COMBO_CHIP_CONSYS_6833
 	default "CONSYS_6853" if MTK_COMBO_CHIP_CONSYS_6853
 	default "CONSYS_6873" if MTK_COMBO_CHIP_CONSYS_6873
 	default "CONSYS_6885" if MTK_COMBO_CHIP_CONSYS_6885
@@ -345,8 +336,6 @@ config MTK_DHCPV6C_WIFI
 config MTK_CONN_LTE_IDC_SUPPORT
 	bool "MediaTek CONN LTE IDC support"
 	select MTK_CONN_MD
-	default n if MTK_COMBO_CHIP_CONSYS_6885
-	default n if MTK_COMBO_CHIP_CONSYS_6893
 	default y if MTK_ECCCI_DRIVER
 	help
 	  This option enables CONN LTE IDC support
