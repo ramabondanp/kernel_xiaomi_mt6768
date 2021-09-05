@@ -4975,7 +4975,7 @@ void rlmDomainSendPwrLimitCmd(struct ADAPTER *prAdapter)
 	rlmDomainBuildCmdByConfigTable(prAdapter,
 	prCmdHE);
 #endif
-	if (prAdapter->rWifiVar.u2CountryCode != (uint16_t)NULL) {
+	if (prAdapter->rWifiVar.u2CountryCode != (long)NULL) {
 		DBGLOG(RLM, INFO,
 		       "Domain: ValidCC=%c%c, PwrLimitCC=%c%c, PwrLimitChNum=%d\n",
 		       (prAdapter->rWifiVar.u2CountryCode & 0xff00) >> 8,

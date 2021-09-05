@@ -858,7 +858,7 @@ void scnEventScanDone(IN struct ADAPTER *prAdapter,
 			= prScanDone->rSparseChannel.ucChannelNum;
 		num = prScanInfo->ucSparseChannelArrayValidNum
 			= prScanDone->ucSparseChannelArrayValidNum;
-		if (prAdapter->rWifiVar.u2CountryCode != (uint16_t)NULL) {
+		if (prAdapter->rWifiVar.u2CountryCode != (long)NULL) {
 			log_dbg(SCN, INFO, "Country Code = %c%c, Detected_Channel_Num = %d\n",
 				((prAdapter->rWifiVar.u2CountryCode
 					& 0xff00) >> 8),
