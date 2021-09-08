@@ -21,7 +21,6 @@
 
 BACKEND += \
 	backend/gpu/mali_kbase_cache_policy_backend.c \
-	backend/gpu/mali_kbase_device_hw.c \
 	backend/gpu/mali_kbase_gpuprops_backend.c \
 	backend/gpu/mali_kbase_irq_linux.c \
 	backend/gpu/mali_kbase_instr_backend.c \

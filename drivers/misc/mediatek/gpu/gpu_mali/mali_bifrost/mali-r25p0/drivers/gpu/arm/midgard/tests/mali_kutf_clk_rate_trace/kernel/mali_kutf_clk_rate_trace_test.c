@@ -163,7 +163,9 @@ static void kutf_set_pm_ctx_active(struct kutf_context *context)
 
 	kbase_pm_context_active(data->kbdev);
 	kbase_pm_wait_for_desired_state(data->kbdev);
+#if !MALI_USE_CSF
 	kbase_pm_request_gpu_cycle_counter(data->kbdev);
+#endif
 }
 
 static void kutf_set_pm_ctx_idle(struct kutf_context *context)
@@ -174,7 +176,9 @@ static void kutf_set_pm_ctx_idle(struct kutf_context *context)
 		return;
 
 	kbase_pm_context_idle(data->kbdev);
+#if !MALI_USE_CSF
 	kbase_pm_release_gpu_cycle_counter(data->kbdev);
+#endif
 }
 
 static char const *kutf_clk_trace_do_change_pm_ctx(struct kutf_context *context,

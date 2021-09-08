@@ -195,7 +195,6 @@ static void kbase_gpuprops_calculate_props(
 {
 	int i;
 	u32 gpu_id;
-	u32 product_id;
 
 	/* Populate the base_gpu_props structure */
 	kbase_gpuprops_update_core_props_gpu_id(gpu_props);
@@ -251,9 +250,19 @@ static void kbase_gpuprops_calculate_props(
 	 * Workaround for the incorrectly applied THREAD_FEATURES to tDUx.
 	 */
 	gpu_id = kbdev->gpu_props.props.raw_props.gpu_id;
-	product_id = gpu_id & GPU_ID_VERSION_PRODUCT_ID;
-	product_id >>= GPU_ID_VERSION_PRODUCT_ID_SHIFT;
 
+#if MALI_USE_CSF
+	gpu_props->thread_props.max_registers =
+		KBASE_UBFX32(gpu_props->raw_props.thread_features,
+			     0U, 22);
+	gpu_props->thread_props.impl_tech =
+		KBASE_UBFX32(gpu_props->raw_props.thread_features,
+			     22U, 2);
+	gpu_props->thread_props.max_task_queue =
+		KBASE_UBFX32(gpu_props->raw_props.thread_features,
+			     24U, 8);
+	gpu_props->thread_props.max_thread_group_split = 0;
+#else
 	if ((gpu_id & GPU_ID2_PRODUCT_MODEL) == GPU_ID2_PRODUCT_TDUX) {
 		gpu_props->thread_props.max_registers =
 			KBASE_UBFX32(gpu_props->raw_props.thread_features,
@@ -279,6 +288,7 @@ static void kbase_gpuprops_calculate_props(
 			KBASE_UBFX32(gpu_props->raw_props.thread_features,
 				     30U, 2);
 	}
+#endif
 
 	/* If values are not specified, then use defaults */
 	if (gpu_props->thread_props.max_registers == 0) {

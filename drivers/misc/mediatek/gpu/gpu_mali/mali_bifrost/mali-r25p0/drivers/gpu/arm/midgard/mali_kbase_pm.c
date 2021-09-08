@@ -68,14 +68,14 @@ int kbase_pm_context_active_handle_suspend(struct kbase_device *kbdev,
 	kbase_pm_lock(kbdev);
 
 #ifdef CONFIG_MALI_ARBITER_SUPPORT
-	if (kbase_arbiter_pm_ctx_active_handle_suspend(kbdev, suspend_handler))
+	if (kbase_arbiter_pm_ctx_active_handle_suspend(kbdev,
+			suspend_handler)) {
+		kbase_pm_unlock(kbdev);
 		return 1;
-
-	if (kbase_pm_is_suspending(kbdev) ||
-		kbase_pm_is_gpu_lost(kbdev)) {
-#else
-	if (kbase_pm_is_suspending(kbdev)) {
+	}
 #endif /* CONFIG_MALI_ARBITER_SUPPORT */
+
+	if (kbase_pm_is_suspending(kbdev)) {
 		switch (suspend_handler) {
 		case KBASE_PM_SUSPEND_HANDLER_DONT_REACTIVATE:
 			if (kbdev->pm.active_count != 0)
@@ -175,6 +175,7 @@ void kbase_pm_driver_suspend(struct kbase_device *kbdev)
 		unsigned long flags;
 
 		spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+		kbdev->js_data.runpool_irq.submit_allowed = 0;
 		kbase_disjoint_state_up(kbdev);
 		for (i = 0; i < kbdev->gpu_props.num_job_slots; i++)
 			kbase_job_slot_softstop(kbdev, i, NULL);
@@ -188,9 +189,13 @@ void kbase_pm_driver_suspend(struct kbase_device *kbdev)
 	 * all pm references
 	 */
 
+#if !MALI_USE_CSF
 	/* Suspend job scheduler and associated components, so that it releases all
 	 * the PM active count references */
 	kbasep_js_suspend(kbdev);
+#else
+	kbase_csf_scheduler_pm_suspend(kbdev);
+#endif
 
 	/* Wait for the active count to reach zero. This is not the same as
 	 * waiting for a power down, since not all policies power down when this
@@ -225,14 +230,16 @@ void kbase_pm_driver_resume(struct kbase_device *kbdev, bool arb_gpu_start)
 
 	/* Initial active call, to power on the GPU/cores if needed */
 #ifdef CONFIG_MALI_ARBITER_SUPPORT
-	(void)kbase_pm_context_active_handle_suspend(kbdev,
-		(arb_gpu_start ?
-			KBASE_PM_SUSPEND_HANDLER_VM_GPU_GRANTED :
-			KBASE_PM_SUSPEND_HANDLER_NOT_POSSIBLE));
+	if (kbase_pm_context_active_handle_suspend(kbdev,
+			(arb_gpu_start ?
+				KBASE_PM_SUSPEND_HANDLER_VM_GPU_GRANTED :
+				KBASE_PM_SUSPEND_HANDLER_NOT_POSSIBLE)))
+		return;
 #else
 	kbase_pm_context_active(kbdev);
 #endif
 
+#if !MALI_USE_CSF
 	/* Resume any blocked atoms (which may cause contexts to be scheduled in
 	 * and dependent atoms to run)
 	 */
@@ -242,6 +249,9 @@ void kbase_pm_driver_resume(struct kbase_device *kbdev, bool arb_gpu_start)
 	 * atoms
 	 */
 	kbasep_js_resume(kbdev);
+#else
+	kbase_csf_scheduler_pm_resume(kbdev);
+#endif
 
 	/* Matching idle call, to power off the GPU/cores if we didn't actually
 	 * need it and the policy doesn't want it on

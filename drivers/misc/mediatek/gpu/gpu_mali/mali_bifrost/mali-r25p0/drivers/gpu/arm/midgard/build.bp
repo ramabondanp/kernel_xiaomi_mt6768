@@ -25,6 +25,9 @@ bob_defaults {
     mali_real_hw: {
         kbuild_options: ["CONFIG_MALI_REAL_HW=y"],
     },
+    mali_dma_fence: {
+        kbuild_options: ["CONFIG_MALI_DMA_FENCE=y"],
+    },
     mali_devfreq: {
         kbuild_options: ["CONFIG_MALI_DEVFREQ=y"],
     },
@@ -132,8 +135,11 @@ bob_kernel_module {
     cinstr_secondary_hwc: {
         kbuild_options: ["CONFIG_MALI_PRFCNT_SET_SECONDARY=y"],
     },
-    cinstr_secondary_hwc_via_debug_fs: {
-        kbuild_options: ["CONFIG_MALI_PRFCNT_SET_SECONDARY_VIA_DEBUG_FS=y"],
+    cinstr_tertiary_hwc: {
+        kbuild_options: ["CONFIG_MALI_PRFCNT_SET_TERTIARY=y"],
+    },
+    cinstr_hwc_set_select_via_debug_fs: {
+        kbuild_options: ["CONFIG_MALI_PRFCNT_SET_SELECT_VIA_DEBUG_FS=y"],
     },
     mali_2mb_alloc: {
         kbuild_options: ["CONFIG_MALI_2MB_ALLOC=y"],
@@ -155,6 +161,8 @@ bob_kernel_module {
             "jm/*.h",
             "tl/backend/*_jm.c",
             "mmu/backend/*_jm.c",
+            "ipa/backend/*_jm.c",
+            "ipa/backend/*_jm.h",
         ],
     },
     gpu_has_csf: {
@@ -163,6 +171,9 @@ bob_kernel_module {
             "csf/*.c",
             "csf/*.h",
             "csf/Kbuild",
+            "csf/ipa_control/*.c",
+            "csf/ipa_control/*.h",
+            "csf/ipa_control/Kbuild",
             "debug/backend/*_csf.c",
             "debug/backend/*_csf.h",
             "device/backend/*_csf.c",
@@ -170,6 +181,8 @@ bob_kernel_module {
             "gpu/backend/*_csf.h",
             "tl/backend/*_csf.c",
             "mmu/backend/*_csf.c",
+            "ipa/backend/*_csf.c",
+            "ipa/backend/*_csf.h",
         ],
     },
     mali_arbiter_support: {

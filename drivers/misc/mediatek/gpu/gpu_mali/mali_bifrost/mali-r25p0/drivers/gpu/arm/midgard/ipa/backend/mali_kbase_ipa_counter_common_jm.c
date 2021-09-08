@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2017-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -20,8 +20,8 @@
  *
  */
 
-#include "mali_kbase_ipa_vinstr_common.h"
-#include "mali_kbase_ipa_debugfs.h"
+#include "mali_kbase_ipa_counter_common_jm.h"
+#include "ipa/mali_kbase_ipa_debugfs.h"
 
 #define DEFAULT_SCALING_FACTOR 5
 
@@ -144,6 +144,9 @@ int kbase_ipa_attach_vinstr(struct kbase_ipa_model_vinstr_data *model_data)
 	}
 
 	kbase_hwcnt_enable_map_enable_all(&enable_map);
+
+	/* Disable cycle counter only. */
+	enable_map.clk_enable_map = 0;
 
 	errcode = kbase_hwcnt_virtualizer_client_create(
 		hvirt, &enable_map, &model_data->hvirt_cli);

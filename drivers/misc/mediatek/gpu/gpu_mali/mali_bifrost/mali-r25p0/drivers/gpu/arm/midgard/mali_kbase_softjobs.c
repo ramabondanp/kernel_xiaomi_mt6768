@@ -43,6 +43,7 @@
 #include <linux/kernel.h>
 #include <linux/cache.h>
 
+#if !MALI_USE_CSF
 /**
  * @file mali_kbase_softjobs.c
  *
@@ -720,6 +721,7 @@ out_cleanup:
 
 	return ret;
 }
+#endif /* !MALI_USE_CSF */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
 static void *dma_buf_kmap_page(struct kbase_mem_phy_alloc *gpu_alloc,
@@ -847,6 +849,7 @@ out_unlock:
 	return ret;
 }
 
+#if !MALI_USE_CSF
 static int kbase_debug_copy(struct kbase_jd_atom *katom)
 {
 	struct kbase_debug_copy_buffer *buffers = katom->softjob_data;
@@ -864,6 +867,7 @@ static int kbase_debug_copy(struct kbase_jd_atom *katom)
 
 	return 0;
 }
+#endif /* !MALI_USE_CSF */
 
 #define KBASEP_JIT_ALLOC_GPU_ADDR_ALIGNMENT ((u32)0x7)
 
@@ -908,16 +912,19 @@ int kbasep_jit_alloc_validate(struct kbase_context *kctx,
 		return -EINVAL;
 #endif
 
+#if !MALI_USE_CSF
 	/* If BASE_JIT_ALLOC_HEAP_INFO_IS_SIZE is set, heap_info_gpu_addr
 	 * cannot be 0
 	 */
 	if ((info->flags & BASE_JIT_ALLOC_HEAP_INFO_IS_SIZE) &&
 			!info->heap_info_gpu_addr)
 		return -EINVAL;
+#endif /* !MALI_USE_CSF */
 
 	return 0;
 }
 
+#if !MALI_USE_CSF
 
 #if (KERNEL_VERSION(3, 18, 63) > LINUX_VERSION_CODE)
 #define offsetofend(TYPE, MEMBER) \
@@ -999,10 +1006,10 @@ static int kbase_jit_allocate_prepare(struct kbase_jd_atom *katom)
 		ret = kbasep_jit_alloc_validate(kctx, info);
 		if (ret)
 			goto free_info;
-		KBASE_TLSTREAM_TL_ATTRIB_ATOM_JITALLOCINFO(kbdev, katom,
-			info->va_pages, info->commit_pages, info->extent,
-			info->id, info->bin_id, info->max_allocations,
-			info->flags, info->usage_id);
+		KBASE_TLSTREAM_TL_ATTRIB_ATOM_JITALLOCINFO(
+			kbdev, katom, info->va_pages, info->commit_pages,
+			info->extension, info->id, info->bin_id,
+			info->max_allocations, info->flags, info->usage_id);
 	}
 
 	katom->jit_blocked = false;
@@ -1017,7 +1024,7 @@ static int kbase_jit_allocate_prepare(struct kbase_jd_atom *katom)
 	 * though the region is valid it doesn't represent the
 	 * same thing it used to.
 	 *
-	 * Complete validation of va_pages, commit_pages and extent
+	 * Complete validation of va_pages, commit_pages and extension
 	 * isn't done here as it will be done during the call to
 	 * kbase_mem_alloc.
 	 */
@@ -1221,10 +1228,10 @@ static int kbase_jit_allocate_process(struct kbase_jd_atom *katom)
 			 MIDGARD_MMU_BOTTOMLEVEL, kctx->jit_group_id);
 #endif
 
-		KBASE_TLSTREAM_TL_ATTRIB_ATOM_JIT(kbdev, katom,
-			info->gpu_alloc_addr, new_addr, info->flags,
-			entry_mmu_flags, info->id, info->commit_pages,
-			info->extent, info->va_pages);
+		KBASE_TLSTREAM_TL_ATTRIB_ATOM_JIT(
+			kbdev, katom, info->gpu_alloc_addr, new_addr,
+			info->flags, entry_mmu_flags, info->id,
+			info->commit_pages, info->extension, info->va_pages);
 		kbase_vunmap(kctx, &mapping);
 
 		kbase_trace_jit_report_gpu_mem(kctx, reg,
@@ -1795,3 +1802,4 @@ void kbase_resume_suspended_soft_jobs(struct kbase_device *kbdev)
 	if (resched)
 		kbase_js_sched_all(kbdev);
 }
+#endif /* !MALI_USE_CSF */

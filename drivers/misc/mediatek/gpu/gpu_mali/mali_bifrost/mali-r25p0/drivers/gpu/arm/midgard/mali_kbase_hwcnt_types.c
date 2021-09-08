@@ -283,7 +283,7 @@ int kbase_hwcnt_dump_buffer_array_alloc(
 	 * large.
 	 */
 	order = get_order((dump_buf_bytes + clk_cnt_buf_bytes) * n);
-	addr = __get_free_pages(GFP_KERNEL, order);
+	addr = __get_free_pages(GFP_KERNEL | __GFP_ZERO, order);
 
 	if (!addr) {
 		kfree(buffers);

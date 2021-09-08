@@ -35,9 +35,10 @@
 #include <mali_kbase_ctx_sched.h>
 #include <mali_kbase_kinstr_jm.h>
 #include <mali_kbase_hwcnt_context.h>
-#include <backend/gpu/mali_kbase_device_internal.h>
+#include <device/mali_kbase_device.h>
 #include <backend/gpu/mali_kbase_irq_internal.h>
 #include <backend/gpu/mali_kbase_jm_internal.h>
+#include <mali_kbase_regs_history_debugfs.h>
 
 static void kbasep_try_reset_gpu_early_locked(struct kbase_device *kbdev);
 
@@ -1307,6 +1308,15 @@ bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev)
 	int i;
 
 	KBASE_DEBUG_ASSERT(kbdev);
+
+#ifdef CONFIG_MALI_ARBITER_SUPPORT
+	if (kbase_pm_is_gpu_lost(kbdev)) {
+		/* GPU access has been removed, reset will be done by
+		 * Arbiter instead
+		 */
+		return false;
+	}
+#endif
 
 	if (atomic_cmpxchg(&kbdev->hwaccess.backend.reset_gpu,
 						KBASE_RESET_GPU_NOT_PENDING,

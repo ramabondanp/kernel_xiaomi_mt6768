@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2012-2013, 2017-2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2012-2014, 2017-2018, 2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -317,10 +317,16 @@ dma_buf_lock_fence_add_callback(dma_buf_lock_resource *resource,
 	return err;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 static int
 dma_buf_lock_add_fence_reservation_callback(dma_buf_lock_resource *resource,
 					    struct reservation_object *resv,
 					    bool exclusive)
+#else
+dma_buf_lock_add_fence_reservation_callback(dma_buf_lock_resource *resource,
+					    struct dma_resv *resv,
+					    bool exclusive)
+#endif
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0))
 	struct fence *excl_fence = NULL;
@@ -393,7 +399,11 @@ static int
 dma_buf_lock_acquire_fence_reservation(dma_buf_lock_resource *resource,
 				       struct ww_acquire_ctx *ctx)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	struct reservation_object *content_resv = NULL;
+#else
+	struct dma_resv *content_resv = NULL;
+#endif
 	unsigned int content_resv_idx = 0;
 	unsigned int r;
 	int err = 0;
@@ -483,7 +493,7 @@ static unsigned int dma_buf_lock_handle_poll(struct file *file,
 	}
 	else
 	{
-		if (!poll_does_not_wait(wait)) 
+		if (!poll_does_not_wait(wait))
 		{
 			poll_wait(file, &resource->wait, wait);
 		}
@@ -680,8 +690,11 @@ static int dma_buf_lock_dolock(dma_buf_lock_k_request *request)
 		kref_get(&resource->refcount);
 
 	for (i = 0; i < request->count; i++) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 		struct reservation_object *resv = resource->dma_bufs[i]->resv;
-
+#else
+		struct dma_resv *resv = resource->dma_bufs[i]->resv;
+#endif
 		if (!test_bit(i, &resource->exclusive)) {
 			ret = reservation_object_reserve_shared(resv);
 			if (ret) {
@@ -836,7 +849,7 @@ static void __exit dma_buf_lock_exit(void)
 		}
 		else
 		{
-			dma_buf_lock_resource *resource = list_entry(dma_buf_lock_resource_list.next, 
+			dma_buf_lock_resource *resource = list_entry(dma_buf_lock_resource_list.next,
 			                                             dma_buf_lock_resource, link);
 			kref_put(&resource->refcount, dma_buf_lock_dounlock);
 			mutex_unlock(&dma_buf_lock_mutex);

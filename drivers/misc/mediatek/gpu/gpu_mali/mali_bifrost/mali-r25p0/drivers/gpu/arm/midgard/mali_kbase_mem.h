@@ -263,7 +263,7 @@ static inline struct kbase_mem_phy_alloc *kbase_mem_phy_alloc_put(struct kbase_m
  * @threshold_pages: If non-zero and the amount of memory committed to a region
  *                   that can grow on page fault exceeds this number of pages
  *                   then the driver switches to incremental rendering.
- * @extent:    Number of pages allocated on page fault.
+ * @extension:    Number of pages allocated on page fault.
  * @cpu_alloc: The physical memory we mmap to the CPU when mapping this region.
  * @gpu_alloc: The physical memory we mmap to the GPU when mapping this region.
  * @jit_node:     Links to neighboring regions in the just-in-time memory pool.
@@ -329,15 +329,28 @@ struct kbase_va_region {
 /* Imported buffer is padded? */
 #define KBASE_REG_IMPORT_PAD        (1ul << 21)
 
+#if MALI_USE_CSF
+/* CSF event memory */
+#define KBASE_REG_CSF_EVENT         (1ul << 22)
+#else
 /* Bit 22 is reserved.
  *
  * Do not remove, use the next unreserved bit for new flags
  */
 #define KBASE_REG_RESERVED_BIT_22   (1ul << 22)
+#endif
 
-/* The top of the initial commit is aligned to extent pages.
+#if !MALI_USE_CSF
+/* The top of the initial commit is aligned to extension pages.
  * Extent must be a power of 2 */
 #define KBASE_REG_TILER_ALIGN_TOP   (1ul << 23)
+#else
+/* Bit 23 is reserved.
+ *
+ * Do not remove, use the next unreserved bit for new flags
+ */
+#define KBASE_REG_RESERVED_BIT_23   (1ul << 23)
+#endif /* !MALI_USE_CSF */
 
 /* Whilst this flag is set the GPU allocation is not supposed to be freed by
  * user space. The flag will remain set for the lifetime of JIT allocations.
@@ -395,9 +408,15 @@ struct kbase_va_region {
 #define KBASE_REG_ZONE_EXEC_VA           KBASE_REG_ZONE(2)
 #define KBASE_REG_ZONE_EXEC_VA_MAX_PAGES ((1ULL << 32) >> PAGE_SHIFT) /* 4 GB */
 
+#if MALI_USE_CSF
+#define KBASE_REG_ZONE_MCU_SHARED      KBASE_REG_ZONE(3)
+#define KBASE_REG_ZONE_MCU_SHARED_BASE (0x04000000ULL >> PAGE_SHIFT)
+#define KBASE_REG_ZONE_MCU_SHARED_SIZE (((0x08000000ULL) >> PAGE_SHIFT) - \
+		KBASE_REG_ZONE_MCU_SHARED_BASE)
+#endif
 
 	unsigned long flags;
-	size_t extent;
+	size_t extension;
 	struct kbase_mem_phy_alloc *cpu_alloc;
 	struct kbase_mem_phy_alloc *gpu_alloc;
 	struct list_head jit_node;
@@ -1053,7 +1072,7 @@ bool kbase_check_import_flags(unsigned long flags);
  * @flags:        The flags passed from user space
  * @va_pages:     The size of the requested region, in pages.
  * @commit_pages: Number of pages to commit initially.
- * @extent:       Number of pages to grow by on GPU page fault and/or alignment
+ * @extension:       Number of pages to grow by on GPU page fault and/or alignment
  *                (depending on flags)
  *
  * Makes checks on the size parameters passed in from user space for a memory
@@ -1062,7 +1081,7 @@ bool kbase_check_import_flags(unsigned long flags);
  * Return: 0 if sizes are valid for these flags, negative error code otherwise
  */
 int kbase_check_alloc_sizes(struct kbase_context *kctx, unsigned long flags,
-		u64 va_pages, u64 commit_pages, u64 extent);
+			    u64 va_pages, u64 commit_pages, u64 extension);
 
 /**
  * kbase_update_region_flags - Convert user space flags to kernel region flags
@@ -1141,20 +1160,23 @@ void kbase_mmu_disable_as(struct kbase_device *kbdev, int as_nr);
 
 void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat);
 
-/** Dump the MMU tables to a buffer
+/**
+ * kbase_mmu_dump() - Dump the MMU tables to a buffer.
  *
- * This function allocates a buffer (of @c nr_pages pages) to hold a dump of the MMU tables and fills it. If the
- * buffer is too small then the return value will be NULL.
+ * This function allocates a buffer (of @c nr_pages pages) to hold a dump
+ * of the MMU tables and fills it. If the buffer is too small
+ * then the return value will be NULL.
  *
  * The GPU vm lock must be held when calling this function.
  *
- * The buffer returned should be freed with @ref vfree when it is no longer required.
+ * The buffer returned should be freed with @ref vfree when it is no longer
+ * required.
  *
- * @param[in]   kctx        The kbase context to dump
- * @param[in]   nr_pages    The number of pages to allocate for the buffer.
+ * @kctx:        The kbase context to dump
+ * @nr_pages:    The number of pages to allocate for the buffer.
  *
- * @return The address of the buffer containing the MMU dump or NULL on error (including if the @c nr_pages is too
- * small)
+ * Return: The address of the buffer containing the MMU dump or NULL on error
+ * (including if the @c nr_pages is too small)
  */
 void *kbase_mmu_dump(struct kbase_context *kctx, int nr_pages);
 
@@ -1179,25 +1201,27 @@ void kbase_os_mem_map_lock(struct kbase_context *kctx);
 void kbase_os_mem_map_unlock(struct kbase_context *kctx);
 
 /**
- * @brief Update the memory allocation counters for the current process
+ * kbasep_os_process_page_usage_update() - Update the memory allocation
+ *                                         counters for the current process.
  *
- * OS specific call to updates the current memory allocation counters for the current process with
- * the supplied delta.
+ * OS specific call to updates the current memory allocation counters
+ * for the current process with the supplied delta.
  *
- * @param[in] kctx  The kbase context
- * @param[in] pages The desired delta to apply to the memory usage counters.
+ * @kctx:  The kbase context
+ * @pages: The desired delta to apply to the memory usage counters.
  */
 
 void kbasep_os_process_page_usage_update(struct kbase_context *kctx, int pages);
 
 /**
- * @brief Add to the memory allocation counters for the current process
+ * kbase_process_page_usage_inc() - Add to the memory allocation counters for
+ *                                  the current process
  *
- * OS specific call to add to the current memory allocation counters for the current process by
- * the supplied amount.
+ * OS specific call to add to the current memory allocation counters for
+ * the current process by the supplied amount.
  *
- * @param[in] kctx  The kernel base context used for the allocation.
- * @param[in] pages The desired delta to apply to the memory usage counters.
+ * @kctx:  The kernel base context used for the allocation.
+ * @pages: The desired delta to apply to the memory usage counters.
  */
 
 static inline void kbase_process_page_usage_inc(struct kbase_context *kctx, int pages)
@@ -1206,13 +1230,14 @@ static inline void kbase_process_page_usage_inc(struct kbase_context *kctx, int 
 }
 
 /**
- * @brief Subtract from the memory allocation counters for the current process
+ * kbase_process_page_usage_dec() - Subtract from the memory allocation
+ *                                  counters for the current process.
  *
- * OS specific call to subtract from the current memory allocation counters for the current process by
- * the supplied amount.
+ * OS specific call to subtract from the current memory allocation counters
+ * for the current process by the supplied amount.
  *
- * @param[in] kctx  The kernel base context used for the allocation.
- * @param[in] pages The desired delta to apply to the memory usage counters.
+ * @kctx:  The kernel base context used for the allocation.
+ * @pages: The desired delta to apply to the memory usage counters.
  */
 
 static inline void kbase_process_page_usage_dec(struct kbase_context *kctx, int pages)
@@ -1337,15 +1362,15 @@ struct tagged_addr *kbase_alloc_phy_pages_helper_locked(
 		struct kbase_sub_alloc **prealloc_sa);
 
 /**
-* @brief Free physical pages.
-*
-* Frees \a nr_pages and updates the alloc object.
-*
-* @param[in] alloc allocation object to free pages from
-* @param[in] nr_pages_to_free number of physical pages to free
-*
-* Return: 0 on success, otherwise a negative error code
-*/
+ * kbase_free_phy_pages_helper() - Free physical pages.
+ *
+ * Frees \a nr_pages and updates the alloc object.
+ *
+ * @alloc:            allocation object to free pages from
+ * @nr_pages_to_free: number of physical pages to free
+ *
+ * Return: 0 on success, otherwise a negative error code
+ */
 int kbase_free_phy_pages_helper(struct kbase_mem_phy_alloc *alloc, size_t nr_pages_to_free);
 
 /**
@@ -1397,26 +1422,11 @@ static inline void kbase_clear_dma_addr(struct page *p)
 }
 
 /**
- * @brief Process a page fault.
- *
- * @param[in] data  work_struct passed by queue_work()
- */
-void page_fault_worker(struct work_struct *data);
-
-/**
- * @brief Process a bus fault.
- *
- * @param[in] data  work_struct passed by queue_work()
- */
-void bus_fault_worker(struct work_struct *data);
-
-/**
- * @brief Flush MMU workqueues.
+ * kbase_flush_mmu_wqs() - Flush MMU workqueues.
+ * @kbdev:   Device pointer.
  *
  * This function will cause any outstanding page or bus faults to be processed.
  * It should be called prior to powering off the GPU.
- *
- * @param[in] kbdev   Device pointer
  */
 void kbase_flush_mmu_wqs(struct kbase_device *kbdev);
 
@@ -1605,7 +1615,9 @@ static inline void
 kbase_jit_request_phys_increase_locked(struct kbase_context *kctx,
 				       size_t needed_pages)
 {
+#if !MALI_USE_CSF
 	lockdep_assert_held(&kctx->jctx.lock);
+#endif /* !MALI_USE_CSF */
 	lockdep_assert_held(&kctx->reg_lock);
 	lockdep_assert_held(&kctx->jit_evict_lock);
 
@@ -1643,7 +1655,9 @@ kbase_jit_request_phys_increase_locked(struct kbase_context *kctx,
 static inline void kbase_jit_request_phys_increase(struct kbase_context *kctx,
 						   size_t needed_pages)
 {
+#if !MALI_USE_CSF
 	lockdep_assert_held(&kctx->jctx.lock);
+#endif /* !MALI_USE_CSF */
 	lockdep_assert_held(&kctx->reg_lock);
 
 	mutex_lock(&kctx->jit_evict_lock);
@@ -1814,6 +1828,63 @@ static inline void kbase_mem_pool_unlock(struct kbase_mem_pool *pool)
  */
 void kbase_mem_evictable_mark_reclaim(struct kbase_mem_phy_alloc *alloc);
 
+#if MALI_USE_CSF
+/**
+ * kbase_link_event_mem_page - Add the new event memory region to the per
+ *                             context list of event pages.
+ * @kctx: Pointer to kbase context
+ * @reg: Pointer to the region allocated for event memory.
+ *
+ * The region being linked shouldn't have been marked as free and should
+ * have KBASE_REG_CSF_EVENT flag set for it.
+ */
+static inline void kbase_link_event_mem_page(struct kbase_context *kctx,
+		struct kbase_va_region *reg)
+{
+	lockdep_assert_held(&kctx->reg_lock);
+
+	WARN_ON(reg->flags & KBASE_REG_FREE);
+	WARN_ON(!(reg->flags & KBASE_REG_CSF_EVENT));
+
+	list_add(&reg->link, &kctx->csf.event_pages_head);
+}
+
+/**
+ * kbase_unlink_event_mem_page - Remove the event memory region from the per
+ *                               context list of event pages.
+ * @kctx: Pointer to kbase context
+ * @reg: Pointer to the region allocated for event memory.
+ *
+ * The region being un-linked shouldn't have been marked as free and should
+ * have KBASE_REG_CSF_EVENT flag set for it.
+ */
+static inline void kbase_unlink_event_mem_page(struct kbase_context *kctx,
+		struct kbase_va_region *reg)
+{
+	lockdep_assert_held(&kctx->reg_lock);
+
+	WARN_ON(reg->flags & KBASE_REG_FREE);
+	WARN_ON(!(reg->flags & KBASE_REG_CSF_EVENT));
+
+	list_del(&reg->link);
+}
+
+/**
+ * kbase_mcu_shared_interface_region_tracker_init - Initialize the rb tree to
+ *         manage the shared interface segment of MCU firmware address space.
+ * @kbdev: Pointer to the kbase device
+ *
+ * Returns zero on success or negative error number on failure.
+ */
+int kbase_mcu_shared_interface_region_tracker_init(struct kbase_device *kbdev);
+
+/**
+ * kbase_mcu_shared_interface_region_tracker_term - Teardown the rb tree
+ *         managing the shared interface segment of MCU firmware address space.
+ * @kbdev: Pointer to the kbase device
+ */
+void kbase_mcu_shared_interface_region_tracker_term(struct kbase_device *kbdev);
+#endif
 
 /**
  * kbase_mem_umm_map - Map dma-buf

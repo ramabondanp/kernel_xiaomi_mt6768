@@ -80,7 +80,8 @@
  */
 #define BASE_MEM_COHERENT_LOCAL ((base_mem_alloc_flags)1 << 11)
 
-/* Should be cached on the CPU
+/* IN/OUT */
+/* Should be cached on the CPU, returned if actually cached
  */
 #define BASE_MEM_CACHED_CPU ((base_mem_alloc_flags)1 << 12)
 
@@ -120,9 +121,9 @@
 #define BASE_MEM_RESERVED_BIT_19 ((base_mem_alloc_flags)1 << 19)
 
 /**
- * Memory starting from the end of the initial commit is aligned to 'extent'
- * pages, where 'extent' must be a power of 2 and no more than
- * BASE_MEM_TILER_ALIGN_TOP_EXTENT_MAX_PAGES
+ * Memory starting from the end of the initial commit is aligned to 'extension'
+ * pages, where 'extension' must be a power of 2 and no more than
+ * BASE_MEM_TILER_ALIGN_TOP_EXTENSION_MAX_PAGES
  */
 #define BASE_MEM_TILER_ALIGN_TOP ((base_mem_alloc_flags)1 << 20)
 
@@ -155,7 +156,9 @@
 /* Use the GPU VA chosen by the kernel client */
 #define BASE_MEM_FLAG_MAP_FIXED ((base_mem_alloc_flags)1 << 27)
 
-/* Bit 28 reserved for Kernel side cache sync ops flag */
+/* OUT */
+/* Kernel side cache sync ops required */
+#define BASE_MEM_KERNEL_SYNC ((base_mem_alloc_flags)1 << 28)
 
 /* Force trimming of JIT allocations when creating a new allocation */
 #define BASEP_MEM_PERFORM_JIT_TRIM ((base_mem_alloc_flags)1 << 29)
@@ -198,8 +201,8 @@
 						BASE_MEM_COOKIE_BASE)
 
 /* Similar to BASE_MEM_TILER_ALIGN_TOP, memory starting from the end of the
- * initial commit is aligned to 'extent' pages, where 'extent' must be a power
- * of 2 and no more than BASE_MEM_TILER_ALIGN_TOP_EXTENT_MAX_PAGES
+ * initial commit is aligned to 'extension' pages, where 'extension' must be a power
+ * of 2 and no more than BASE_MEM_TILER_ALIGN_TOP_EXTENSION_MAX_PAGES
  */
 #define BASE_JIT_ALLOC_MEM_TILER_ALIGN_TOP  (1 << 0)
 

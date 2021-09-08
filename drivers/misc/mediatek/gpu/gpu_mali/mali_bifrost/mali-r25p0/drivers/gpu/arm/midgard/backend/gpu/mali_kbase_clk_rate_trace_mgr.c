@@ -280,3 +280,40 @@ void kbase_clk_rate_trace_manager_gpu_idle(struct kbase_device *kbdev)
 	spin_unlock_irqrestore(&clk_rtm->lock, flags);
 }
 
+void kbase_clk_rate_trace_manager_notify_all(
+	struct kbase_clk_rate_trace_manager *clk_rtm,
+	u32 clk_index,
+	unsigned long new_rate)
+{
+	struct kbase_clk_rate_listener *pos;
+	struct kbase_device *kbdev;
+
+	lockdep_assert_held(&clk_rtm->lock);
+
+	kbdev = container_of(clk_rtm, struct kbase_device, pm.clk_rtm);
+
+	dev_dbg(kbdev->dev, "GPU clock %u rate changed to %lu",
+		clk_index, new_rate);
+
+	/* Raise standard `power/gpu_frequency` ftrace event */
+	{
+		unsigned long new_rate_khz = new_rate;
+
+#if BITS_PER_LONG == 64
+		do_div(new_rate_khz, 1000);
+#elif BITS_PER_LONG == 32
+		new_rate_khz /= 1000;
+#else
+#error "unsigned long division is not supported for this architecture"
+#endif
+
+		trace_gpu_frequency(new_rate_khz, clk_index);
+	}
+
+	/* Notify the listeners. */
+	list_for_each_entry(pos, &clk_rtm->listeners, node) {
+		pos->notify(pos, clk_index, new_rate);
+	}
+}
+KBASE_EXPORT_TEST_API(kbase_clk_rate_trace_manager_notify_all);
+

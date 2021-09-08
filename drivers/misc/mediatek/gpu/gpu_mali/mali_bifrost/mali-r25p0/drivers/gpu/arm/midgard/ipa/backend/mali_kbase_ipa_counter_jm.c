@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2016-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2016-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -21,7 +21,7 @@
  */
 #include <linux/thermal.h>
 
-#include "mali_kbase_ipa_vinstr_common.h"
+#include "mali_kbase_ipa_counter_common_jm.h"
 #include "mali_kbase.h"
 
 
@@ -415,6 +415,39 @@ static const struct kbase_ipa_group ipa_groups_def_tbex[] = {
 	},
 };
 
+static const struct kbase_ipa_group ipa_groups_def_tbax[] = {
+	{
+		.name = "l2_access",
+		.default_value = 599800,
+		.op = kbase_g7x_sum_all_memsys_blocks,
+		.counter_block_offset = MEMSYS_L2_ANY_LOOKUP,
+	},
+	{
+		.name = "exec_instr_msg",
+		.default_value = 1830200,
+		.op = kbase_g7x_sum_all_shader_cores,
+		.counter_block_offset = SC_EXEC_INSTR_MSG,
+	},
+	{
+		.name = "exec_instr_fma",
+		.default_value = 407300,
+		.op = kbase_g7x_sum_all_shader_cores,
+		.counter_block_offset = SC_EXEC_INSTR_FMA,
+	},
+	{
+		.name = "tex_filt_num_operations",
+		.default_value = 224500,
+		.op = kbase_g7x_sum_all_shader_cores,
+		.counter_block_offset = SC_TEX_FILT_NUM_OPERATIONS,
+	},
+	{
+		.name = "gpu_active",
+		.default_value = 153800,
+		.op = kbase_g7x_jm_single_counter,
+		.counter_block_offset = JM_GPU_ACTIVE,
+	},
+};
+
 
 #define IPA_POWER_MODEL_OPS(gpu, init_token) \
 	const struct kbase_ipa_model_ops kbase_ ## gpu ## _ipa_model_ops = { \
@@ -449,8 +482,74 @@ STANDARD_POWER_MODEL(g52_r1, 1000);
 STANDARD_POWER_MODEL(g51, 1000);
 STANDARD_POWER_MODEL(g77, 1000);
 STANDARD_POWER_MODEL(tbex, 1000);
+STANDARD_POWER_MODEL(tbax, 1000);
 
 /* g52 is an alias of g76 (TNOX) for IPA */
 ALIAS_POWER_MODEL(g52, g76);
 /* tnax is an alias of g77 (TTRX) for IPA */
 ALIAS_POWER_MODEL(tnax, g77);
+
+static const struct kbase_ipa_model_ops *ipa_counter_model_ops[] = {
+	&kbase_g71_ipa_model_ops,
+	&kbase_g72_ipa_model_ops,
+	&kbase_g76_ipa_model_ops,
+	&kbase_g52_ipa_model_ops,
+	&kbase_g52_r1_ipa_model_ops,
+	&kbase_g51_ipa_model_ops,
+	&kbase_g77_ipa_model_ops,
+	&kbase_tnax_ipa_model_ops,
+	&kbase_tbex_ipa_model_ops,
+	&kbase_tbax_ipa_model_ops
+};
+
+const struct kbase_ipa_model_ops *kbase_ipa_counter_model_ops_find(
+		struct kbase_device *kbdev, const char *name)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(ipa_counter_model_ops); ++i) {
+		const struct kbase_ipa_model_ops *ops =
+			ipa_counter_model_ops[i];
+
+		if (!strcmp(ops->name, name))
+			return ops;
+	}
+
+	dev_err(kbdev->dev, "power model \'%s\' not found\n", name);
+
+	return NULL;
+}
+
+const char *kbase_ipa_counter_model_name_from_id(u32 gpu_id)
+{
+	const u32 prod_id = (gpu_id & GPU_ID_VERSION_PRODUCT_ID) >>
+			GPU_ID_VERSION_PRODUCT_ID_SHIFT;
+
+	switch (GPU_ID2_MODEL_MATCH_VALUE(prod_id)) {
+	case GPU_ID2_PRODUCT_TMIX:
+		return "mali-g71-power-model";
+	case GPU_ID2_PRODUCT_THEX:
+		return "mali-g72-power-model";
+	case GPU_ID2_PRODUCT_TNOX:
+		return "mali-g76-power-model";
+	case GPU_ID2_PRODUCT_TSIX:
+		return "mali-g51-power-model";
+	case GPU_ID2_PRODUCT_TGOX:
+		if ((gpu_id & GPU_ID2_VERSION_MAJOR) ==
+				(0 << GPU_ID2_VERSION_MAJOR_SHIFT))
+			/* g52 aliased to g76 power-model's ops */
+			return "mali-g52-power-model";
+		else
+			return "mali-g52_r1-power-model";
+	case GPU_ID2_PRODUCT_TNAX:
+		return "mali-tnax-power-model";
+	case GPU_ID2_PRODUCT_TTRX:
+		return "mali-g77-power-model";
+	case GPU_ID2_PRODUCT_TBEX:
+		return "mali-tbex-power-model";
+	case GPU_ID2_PRODUCT_TBAX:
+		return "mali-tbax-power-model";
+	default:
+		return NULL;
+	}
+}

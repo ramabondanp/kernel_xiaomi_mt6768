@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2017-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -28,7 +28,7 @@
 #include "mali_kbase_ipa.h"
 #include "mali_kbase_ipa_debugfs.h"
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 7, 0))
 #define DEFINE_DEBUGFS_ATTRIBUTE DEFINE_SIMPLE_ATTRIBUTE
 #endif
 

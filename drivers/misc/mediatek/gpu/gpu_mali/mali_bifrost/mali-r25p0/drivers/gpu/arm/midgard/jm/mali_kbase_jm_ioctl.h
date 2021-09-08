@@ -110,9 +110,31 @@
  * - Added kinstr_jm API
  * 11.27
  * - Backwards compatible extension to HWC ioctl.
+ * 11.28:
+ * - Added kernel side cache ops needed hint
+ * 11.29:
+ * - Reserve ioctl 52
  */
 #define BASE_UK_VERSION_MAJOR 11
-#define BASE_UK_VERSION_MINOR 27
+#define BASE_UK_VERSION_MINOR 29
+
+/**
+ * struct kbase_ioctl_version_check - Check version compatibility between
+ * kernel and userspace
+ *
+ * @major: Major version number
+ * @minor: Minor version number
+ */
+struct kbase_ioctl_version_check {
+	__u16 major;
+	__u16 minor;
+};
+
+#define KBASE_IOCTL_VERSION_CHECK \
+	_IOWR(KBASE_IOCTL_TYPE, 0, struct kbase_ioctl_version_check)
+
+#define KBASE_IOCTL_VERSION_CHECK_RESERVED \
+	_IOWR(KBASE_IOCTL_TYPE, 52, struct kbase_ioctl_version_check)
 
 /**
  * struct kbase_ioctl_job_submit - Submit jobs/atoms to the kernel

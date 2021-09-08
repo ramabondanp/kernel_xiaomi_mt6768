@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2016-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2016-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -39,19 +39,6 @@
 
 #define KBASE_IPA_FALLBACK_MODEL_NAME "mali-simple-power-model"
 
-static const struct kbase_ipa_model_ops *kbase_ipa_all_model_ops[] = {
-	&kbase_simple_ipa_model_ops,
-	&kbase_g71_ipa_model_ops,
-	&kbase_g72_ipa_model_ops,
-	&kbase_g76_ipa_model_ops,
-	&kbase_g52_ipa_model_ops,
-	&kbase_g52_r1_ipa_model_ops,
-	&kbase_g51_ipa_model_ops,
-	&kbase_g77_ipa_model_ops,
-	&kbase_tnax_ipa_model_ops,
-	&kbase_tbex_ipa_model_ops
-};
-
 int kbase_ipa_model_recalculate(struct kbase_ipa_model *model)
 {
 	int err = 0;
@@ -71,53 +58,24 @@ int kbase_ipa_model_recalculate(struct kbase_ipa_model *model)
 }
 
 const struct kbase_ipa_model_ops *kbase_ipa_model_ops_find(struct kbase_device *kbdev,
-							    const char *name)
+							   const char *name)
 {
-	int i;
+	if (!strcmp(name, kbase_simple_ipa_model_ops.name))
+		return &kbase_simple_ipa_model_ops;
 
-	for (i = 0; i < ARRAY_SIZE(kbase_ipa_all_model_ops); ++i) {
-		const struct kbase_ipa_model_ops *ops = kbase_ipa_all_model_ops[i];
-
-		if (!strcmp(ops->name, name))
-			return ops;
-	}
-
-	dev_err(kbdev->dev, "power model \'%s\' not found\n", name);
-
-	return NULL;
+	return kbase_ipa_counter_model_ops_find(kbdev, name);
 }
 KBASE_EXPORT_TEST_API(kbase_ipa_model_ops_find);
 
 const char *kbase_ipa_model_name_from_id(u32 gpu_id)
 {
-	const u32 prod_id = (gpu_id & GPU_ID_VERSION_PRODUCT_ID) >>
-			GPU_ID_VERSION_PRODUCT_ID_SHIFT;
+	const char* model_name =
+		kbase_ipa_counter_model_name_from_id(gpu_id);
 
-	switch (GPU_ID2_MODEL_MATCH_VALUE(prod_id)) {
-	case GPU_ID2_PRODUCT_TMIX:
-		return "mali-g71-power-model";
-	case GPU_ID2_PRODUCT_THEX:
-		return "mali-g72-power-model";
-	case GPU_ID2_PRODUCT_TNOX:
-		return "mali-g76-power-model";
-	case GPU_ID2_PRODUCT_TSIX:
-		return "mali-g51-power-model";
-	case GPU_ID2_PRODUCT_TGOX:
-		if ((gpu_id & GPU_ID2_VERSION_MAJOR) ==
-				(0 << GPU_ID2_VERSION_MAJOR_SHIFT))
-			/* g52 aliased to g76 power-model's ops */
-			return "mali-g52-power-model";
-		else
-			return "mali-g52_r1-power-model";
-	case GPU_ID2_PRODUCT_TNAX:
-		return "mali-tnax-power-model";
-	case GPU_ID2_PRODUCT_TTRX:
-		return "mali-g77-power-model";
-	case GPU_ID2_PRODUCT_TBEX:
-		return "mali-tbex-power-model";
-	default:
+	if (!model_name)
 		return KBASE_IPA_FALLBACK_MODEL_NAME;
-	}
+	else
+		return model_name;
 }
 KBASE_EXPORT_TEST_API(kbase_ipa_model_name_from_id);
 

@@ -25,7 +25,7 @@
 
 #ifdef CONFIG_TRACE_GPU_MEM
 #include <trace/events/gpu_mem.h>
-#else
+#elif !MALI_CUSTOMER_RELEASE
 #include "mali_gpu_mem_trace.h"
 #endif
 
@@ -36,12 +36,14 @@ static void kbase_trace_gpu_mem_usage(struct kbase_device *kbdev,
 {
 	lockdep_assert_held(&kbdev->gpu_mem_usage_lock);
 
+#if defined(CONFIG_TRACE_GPU_MEM) || !MALI_CUSTOMER_RELEASE
 	trace_gpu_mem_total(kbdev->id, DEVICE_TGID,
 			    kbdev->total_gpu_pages << PAGE_SHIFT);
 
 	if (likely(kctx))
 		trace_gpu_mem_total(kbdev->id, kctx->kprcs->tgid,
 				kctx->kprcs->total_gpu_pages << PAGE_SHIFT);
+#endif
 }
 
 static inline void kbase_trace_gpu_mem_usage_dec(struct kbase_device *kbdev,

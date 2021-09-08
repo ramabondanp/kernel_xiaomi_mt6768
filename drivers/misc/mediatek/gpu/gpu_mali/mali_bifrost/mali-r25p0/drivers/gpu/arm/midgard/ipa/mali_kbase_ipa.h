@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2016-2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2016-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -164,6 +164,17 @@ const struct kbase_ipa_model_ops *kbase_ipa_model_ops_find(struct kbase_device *
 							   const char *name);
 
 /**
+ * kbase_ipa_counter_model_ops_find - Lookup an IPA counter model using its name
+ * @kbdev:      pointer to kbase device
+ * @name:       name of counter model to lookup
+ *
+ * Return: Pointer to counter model's 'ops' structure, or NULL if the lookup
+ *         failed.
+ */
+const struct kbase_ipa_model_ops *kbase_ipa_counter_model_ops_find(
+	struct kbase_device *kbdev, const char *name);
+
+/**
  * kbase_ipa_model_name_from_id - Find the best model for a given GPU ID
  * @gpu_id:     GPU ID of GPU the model will be used for
  *
@@ -171,6 +182,16 @@ const struct kbase_ipa_model_ops *kbase_ipa_model_ops_find(struct kbase_device *
  *         fallback model if no counter model exists.
  */
 const char *kbase_ipa_model_name_from_id(u32 gpu_id);
+
+/**
+ * kbase_ipa_counter_model_name_from_id - Find the best counter model for a
+ *                                        given GPU ID
+ * @gpu_id:     GPU ID of GPU the counter model will be used for
+ *
+ * Return: The name of the appropriate counter-based model, or NULL if the
+ *         no counter model exists.
+ */
+const char *kbase_ipa_counter_model_name_from_id(u32 gpu_id);
 
 /**
  * kbase_ipa_init_model - Initilaize the particular IPA model
@@ -183,7 +204,7 @@ const char *kbase_ipa_model_name_from_id(u32 gpu_id);
  * Return: pointer to kbase_ipa_model on success, NULL on error
  */
 struct kbase_ipa_model *kbase_ipa_init_model(struct kbase_device *kbdev,
-					     const struct kbase_ipa_model_ops *ops);
+					const struct kbase_ipa_model_ops *ops);
 /**
  * kbase_ipa_term_model - Terminate the particular IPA model
  * @model:      pointer to the IPA model object, already initialized
@@ -201,16 +222,6 @@ void kbase_ipa_term_model(struct kbase_ipa_model *model);
  * Makes IPA aware of the GPU switching to protected mode.
  */
 void kbase_ipa_protection_mode_switch_event(struct kbase_device *kbdev);
-
-extern const struct kbase_ipa_model_ops kbase_g71_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_g72_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_g76_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_g52_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_g52_r1_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_g51_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_g77_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_tnax_ipa_model_ops;
-extern const struct kbase_ipa_model_ops kbase_tbex_ipa_model_ops;
 
 /**
  * kbase_get_real_power() - get the real power consumption of the GPU

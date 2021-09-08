@@ -155,7 +155,6 @@ struct kbase_context;
 struct kbase_device;
 struct kbase_as;
 struct kbase_mmu_setup;
-struct kbase_ipa_model_vinstr_data;
 struct kbase_kinstr_jm;
 
 /**
@@ -245,29 +244,6 @@ struct kbase_fault {
 };
 
 /**
- * struct kbase_as   - object representing an address space of GPU.
- * @number:            Index at which this address space structure is present
- *                     in an array of address space structures embedded inside the
- *                     struct kbase_device.
- * @pf_wq:             Workqueue for processing work items related to Bus fault
- *                     and Page fault handling.
- * @work_pagefault:    Work item for the Page fault handling.
- * @work_busfault:     Work item for the Bus fault handling.
- * @pf_data:           Data relating to page fault.
- * @bf_data:           Data relating to bus fault.
- * @current_setup:     Stores the MMU configuration for this address space.
- */
-struct kbase_as {
-	int number;
-	struct workqueue_struct *pf_wq;
-	struct work_struct work_pagefault;
-	struct work_struct work_busfault;
-	struct kbase_fault pf_data;
-	struct kbase_fault bf_data;
-	struct kbase_mmu_setup current_setup;
-};
-
-/**
  * struct kbase_mmu_table  - object representing a set of GPU page tables
  * @mmu_teardown_pages:   Buffer of 4 Pages in size, used to cache the entries
  *                        of top & intermediate level page tables to avoid
@@ -293,7 +269,11 @@ struct kbase_mmu_table {
 	struct kbase_context *kctx;
 };
 
+#if MALI_USE_CSF
+#include "csf/mali_kbase_csf_defs.h"
+#else
 #include "jm/mali_kbase_jm_defs.h"
+#endif
 
 static inline int kbase_as_has_bus_fault(struct kbase_as *as,
 	struct kbase_fault *fault)
@@ -400,17 +380,29 @@ struct kbase_pm_device_data {
 	bool suspending;
 #ifdef CONFIG_MALI_ARBITER_SUPPORT
 	/* Flag indicating gpu lost */
-	bool gpu_lost;
+	atomic_t gpu_lost;
 #endif /* CONFIG_MALI_ARBITER_SUPPORT */
 	/* Wait queue set when active_count == 0 */
 	wait_queue_head_t zero_active_count_wait;
+	/* Wait queue to block the termination of a Kbase context until the
+	 * system resume of GPU device.
+	 */
+	wait_queue_head_t resume_wait;
 
+#if MALI_USE_CSF
+	/**
+	 * Bit masks identifying the available shader cores that are specified
+	 * via sysfs.
+	 */
+	u64 debug_core_mask;
+#else
 	/**
 	 * Bit masks identifying the available shader cores that are specified
 	 * via sysfs. One mask per job slot.
 	 */
 	u64 debug_core_mask[BASE_JM_MAX_NR_SLOTS];
 	u64 debug_core_mask_all;
+#endif /* MALI_USE_CSF */
 
 	/**
 	 * Callback for initializing the runtime power management.
@@ -1054,8 +1046,6 @@ struct kbase_device {
 		 * the difference between last_metrics and the current values.
 		 */
 		struct kbasep_pm_metrics last_metrics;
-		/* Model data to pass to ipa_gpu_active/idle() */
-		struct kbase_ipa_model_vinstr_data *model_data;
 
 		/* true if use of fallback model has been forced by the User */
 		bool force_fallback_model;
@@ -1069,6 +1059,7 @@ struct kbase_device {
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *mali_debugfs_directory;
 	struct dentry *debugfs_ctx_directory;
+	struct dentry *debugfs_instr_directory;
 
 #ifdef CONFIG_MALI_DEBUG
 	u64 debugfs_as_read_bitmap;
@@ -1144,6 +1135,10 @@ struct kbase_device {
 	u8 l2_size_override;
 	u8 l2_hash_override;
 
+#if MALI_USE_CSF
+	/* CSF object for the GPU device. */
+	struct kbase_csf_device csf;
+#else
 	struct kbasep_js_device_data js_data;
 
 	/* See KBASE_JS_*_PRIORITY_MODE for details. */
@@ -1156,6 +1151,7 @@ struct kbase_device {
 	u8 backup_serialize_jobs;
 #endif /* CONFIG_MALI_CINSTR_GWT */
 
+#endif /* MALI_USE_CSF */
 
 	struct rb_root process_root;
 	struct rb_root dma_buf_root;
@@ -1444,7 +1440,8 @@ struct kbase_sub_alloc {
  *                        at any point.
  *                        Generally the reference count is incremented when the context
  *                        is scheduled in and an atom is pulled from the context's per
- *                        slot runnable tree.
+ *                        slot runnable tree in JM GPU or GPU command queue
+ *                        group is programmed on CSG slot in CSF GPU.
  * @mm_update_lock:       lock used for handling of special tracking page.
  * @process_mm:           Pointer to the memory descriptor of the process which
  *                        created the context. Used for accounting the physical
@@ -1597,7 +1594,9 @@ struct kbase_context {
 	struct list_head event_list;
 	struct list_head event_coalesce_list;
 	struct mutex event_mutex;
+#if !MALI_USE_CSF
 	atomic_t event_closed;
+#endif
 	struct workqueue_struct *event_workq;
 	atomic_t event_count;
 	int event_coalesce_count;
@@ -1615,6 +1614,9 @@ struct kbase_context {
 	struct rb_root reg_rbtree_custom;
 	struct rb_root reg_rbtree_exec;
 
+#if MALI_USE_CSF
+	struct kbase_csf_context csf;
+#else
 	struct kbase_jd_context jctx;
 	struct jsctx_queue jsctx_queue
 		[KBASE_JS_ATOM_SCHED_PRIO_COUNT][BASE_JM_MAX_NR_SLOTS];
@@ -1632,6 +1634,7 @@ struct kbase_context {
 	s16 atoms_count[KBASE_JS_ATOM_SCHED_PRIO_COUNT];
 	u32 slots_pullable;
 	u32 age_count;
+#endif /* MALI_USE_CSF */
 
 	DECLARE_BITMAP(cookies, BITS_PER_LONG);
 	struct kbase_va_region *pending_regions[BITS_PER_LONG];
@@ -1716,7 +1719,9 @@ struct kbase_context {
 
 	base_context_create_flags create_flags;
 
+#if !MALI_USE_CSF
 	struct kbase_kinstr_jm *kinstr_jm;
+#endif
 };
 
 #ifdef CONFIG_MALI_CINSTR_GWT
@@ -1802,30 +1807,5 @@ static inline bool kbase_device_is_cpu_coherent(struct kbase_device *kbdev)
 #define KBASE_CLEAN_CACHE_MAX_LOOPS     100000
 /* Maximum number of loops polling the GPU for an AS command to complete before we assume the GPU has hung */
 #define KBASE_AS_INACTIVE_MAX_LOOPS     100000000
-
-/* JobDescriptorHeader - taken from the architecture specifications, the layout
- * is currently identical for all GPU archs. */
-struct job_descriptor_header {
-	u32 exception_status;
-	u32 first_incomplete_task;
-	u64 fault_pointer;
-	u8 job_descriptor_size : 1;
-	u8 job_type : 7;
-	u8 job_barrier : 1;
-	u8 _reserved_01 : 1;
-	u8 _reserved_1 : 1;
-	u8 _reserved_02 : 1;
-	u8 _reserved_03 : 1;
-	u8 _reserved_2 : 1;
-	u8 _reserved_04 : 1;
-	u8 _reserved_05 : 1;
-	u16 job_index;
-	u16 job_dependency_index_1;
-	u16 job_dependency_index_2;
-	union {
-		u64 _64;
-		u32 _32;
-	} next_job;
-};
 
 #endif				/* _KBASE_DEFS_H_ */

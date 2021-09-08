@@ -33,6 +33,7 @@
 #include <linux/fcntl.h>
 #include <linux/fs.h>
 #include <linux/hrtimer.h>
+#include <linux/log2.h>
 #include <linux/mm.h>
 #include <linux/mutex.h>
 #include <linux/poll.h>
@@ -83,6 +84,7 @@ struct kbase_vinstr_context {
  * @next_dump_time_ns: Time in ns when this client's next periodic dump must
  *                     occur. If 0, not a periodic client.
  * @enable_map:        Counters enable map.
+ * @tmp_buf:           Temporary buffer to use before handing dump to client.
  * @dump_bufs:         Array of dump buffers allocated by this client.
  * @dump_bufs_meta:    Metadata of dump buffers.
  * @meta_idx:          Index of metadata being accessed by userspace.
@@ -97,6 +99,7 @@ struct kbase_vinstr_client {
 	u64 next_dump_time_ns;
 	u32 dump_interval_ns;
 	struct kbase_hwcnt_enable_map enable_map;
+	struct kbase_hwcnt_dump_buffer tmp_buf;
 	struct kbase_hwcnt_dump_buffer_array dump_bufs;
 	struct kbase_hwcnt_reader_metadata *dump_bufs_meta;
 	atomic_t meta_idx;
@@ -182,6 +185,7 @@ static int kbasep_vinstr_client_dump(
 	u64 ts_end_ns;
 	unsigned int write_idx;
 	unsigned int read_idx;
+	struct kbase_hwcnt_dump_buffer *tmp_buf;
 	struct kbase_hwcnt_dump_buffer *dump_buf;
 	struct kbase_hwcnt_reader_metadata *meta;
 	u8 clk_cnt;
@@ -199,19 +203,24 @@ static int kbasep_vinstr_client_dump(
 
 	dump_buf = &vcli->dump_bufs.bufs[write_idx];
 	meta = &vcli->dump_bufs_meta[write_idx];
+	tmp_buf = &vcli->tmp_buf;
 
 	errcode = kbase_hwcnt_virtualizer_client_dump(
-		vcli->hvcli, &ts_start_ns, &ts_end_ns, dump_buf);
+		vcli->hvcli, &ts_start_ns, &ts_end_ns, tmp_buf);
 	if (errcode)
 		return errcode;
 
 	/* Patch the dump buf headers, to hide the counters that other hwcnt
 	 * clients are using.
 	 */
-	kbase_hwcnt_gpu_patch_dump_headers(dump_buf, &vcli->enable_map);
+	kbase_hwcnt_gpu_patch_dump_headers(tmp_buf, &vcli->enable_map);
 
-	/* Zero all non-enabled counters (current values are undefined) */
-	kbase_hwcnt_dump_buffer_zero_non_enabled(dump_buf, &vcli->enable_map);
+	/* Copy the temp buffer to the userspace visible buffer. The strict
+	 * variant will explicitly zero any non-enabled counters to ensure
+	 * nothing except exactly what the user asked for is made visible.
+	 */
+	kbase_hwcnt_dump_buffer_copy_strict(
+		dump_buf, tmp_buf, &vcli->enable_map);
 
 	clk_cnt = vcli->vctx->metadata->clk_cnt;
 
@@ -371,6 +380,7 @@ static void kbasep_vinstr_client_destroy(struct kbase_vinstr_client *vcli)
 	kbase_hwcnt_virtualizer_client_destroy(vcli->hvcli);
 	kfree(vcli->dump_bufs_meta);
 	kbase_hwcnt_dump_buffer_array_free(&vcli->dump_bufs);
+	kbase_hwcnt_dump_buffer_free(&vcli->tmp_buf);
 	kbase_hwcnt_enable_map_free(&vcli->enable_map);
 	kfree(vcli);
 }
@@ -380,7 +390,7 @@ static void kbasep_vinstr_client_destroy(struct kbase_vinstr_client *vcli)
  *                                 the vinstr context.
  * @vctx:     Non-NULL pointer to vinstr context.
  * @setup:    Non-NULL pointer to hardware counter ioctl setup structure.
- *            setup->buffer_count must not be 0.
+ *            setup->buffer_count must not be 0 and must be a power of 2.
  * @out_vcli: Non-NULL pointer to where created client will be stored on
  *            success.
  *
@@ -398,6 +408,7 @@ static int kbasep_vinstr_client_create(
 	WARN_ON(!vctx);
 	WARN_ON(!setup);
 	WARN_ON(setup->buffer_count == 0);
+	WARN_ON(!is_power_of_2(setup->buffer_count));
 
 	vcli = kzalloc(sizeof(*vcli), GFP_KERNEL);
 	if (!vcli)
@@ -415,6 +426,10 @@ static int kbasep_vinstr_client_create(
 	phys_em.tiler_bm = setup->tiler_bm;
 	phys_em.mmu_l2_bm = setup->mmu_l2_bm;
 	kbase_hwcnt_gpu_enable_map_from_physical(&vcli->enable_map, &phys_em);
+
+	errcode = kbase_hwcnt_dump_buffer_alloc(vctx->metadata, &vcli->tmp_buf);
+	if (errcode)
+		goto error;
 
 	/* Enable all the available clk_enable_map. */
 	vcli->enable_map.clk_enable_map = (1ull << vctx->metadata->clk_cnt) - 1;
@@ -573,7 +588,8 @@ int kbase_vinstr_hwcnt_reader_setup(
 
 	if (!vctx || !setup ||
 	    (setup->buffer_count == 0) ||
-	    (setup->buffer_count > MAX_BUFFER_COUNT))
+	    (setup->buffer_count > MAX_BUFFER_COUNT) ||
+	    !is_power_of_2(setup->buffer_count))
 		return -EINVAL;
 
 	errcode = kbasep_vinstr_client_create(vctx, setup, &vcli);
@@ -706,7 +722,9 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_get_buffer(
 	if (unlikely(copy_to_user(buffer, meta, min_size)))
 		return -EFAULT;
 
-	atomic_inc(&cli->meta_idx);
+	/* Compare exchange meta idx to protect against concurrent getters */
+	if (meta_idx != atomic_cmpxchg(&cli->meta_idx, meta_idx, meta_idx + 1))
+		return -EBUSY;
 
 	return 0;
 }
@@ -778,7 +796,13 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_put_buffer(
 		goto out;
 	}
 
-	atomic_inc(&cli->read_idx);
+	/* Compare exchange read idx to protect against concurrent putters */
+	if (read_idx !=
+	    atomic_cmpxchg(&cli->read_idx, read_idx, read_idx + 1)) {
+		ret = -EPERM;
+		goto out;
+	}
+
 out:
 	if (unlikely(kbuf != stack_kbuf))
 		kfree(kbuf);
@@ -863,26 +887,14 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_get_hwver(
 	struct kbase_vinstr_client *cli,
 	u32 __user *hwver)
 {
-	u32 ver = 0;
+	u32 ver = 5;
 	const enum kbase_hwcnt_gpu_group_type type =
 		kbase_hwcnt_metadata_group_type(cli->vctx->metadata, 0);
 
-	switch (type) {
-	case KBASE_HWCNT_GPU_GROUP_TYPE_V4:
-		ver = 4;
-		break;
-	case KBASE_HWCNT_GPU_GROUP_TYPE_V5:
-		ver = 5;
-		break;
-	default:
-		WARN_ON(true);
-	}
-
-	if (ver != 0) {
-		return put_user(ver, hwver);
-	} else {
+	if (WARN_ON(type != KBASE_HWCNT_GPU_GROUP_TYPE_V5))
 		return -EINVAL;
-	}
+
+	return put_user(ver, hwver);
 }
 
 /**
@@ -914,9 +926,8 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_get_api_version(
 			api_version.features |=
 			    KBASE_HWCNT_READER_API_VERSION_FEATURE_CYCLES_SHADER_CORES;
 
-		ret = put_user(api_version,
-			       (struct kbase_hwcnt_reader_api_version __user *)
-			       arg);
+		ret = copy_to_user(
+			(void __user *)arg, &api_version, sizeof(api_version));
 	}
 	return ret;
 }

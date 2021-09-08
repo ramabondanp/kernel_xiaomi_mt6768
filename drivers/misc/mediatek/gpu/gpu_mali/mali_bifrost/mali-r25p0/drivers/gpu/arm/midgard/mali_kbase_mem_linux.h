@@ -43,7 +43,7 @@ struct kbase_hwc_dma_mapping {
  * @kctx:         The kernel context
  * @va_pages:     The number of pages of virtual address space to reserve
  * @commit_pages: The number of physical pages to allocate upfront
- * @extent:       The number of extra pages to allocate on each GPU fault which
+ * @extension:       The number of extra pages to allocate on each GPU fault which
  *                grows the region.
  * @flags:        bitmask of BASE_MEM_* flags to convey special requirements &
  *                properties for the new allocation.
@@ -53,8 +53,8 @@ struct kbase_hwc_dma_mapping {
  * Return: 0 on success or error code
  */
 struct kbase_va_region *kbase_mem_alloc(struct kbase_context *kctx,
-		u64 va_pages, u64 commit_pages, u64 extent, u64 *flags,
-		u64 *gpu_va);
+					u64 va_pages, u64 commit_pages,
+					u64 extension, u64 *flags, u64 *gpu_va);
 
 /**
  * kbase_mem_query - Query properties of a GPU memory region
@@ -194,8 +194,8 @@ int kbase_mem_grow_gpu_mapping(struct kbase_context *kctx,
  * Take the provided region and make all the physical pages within it
  * reclaimable by the kernel, updating the per-process VM stats as well.
  * Remove any CPU mappings (as these can't be removed in the shrinker callback
- * as mmap_sem might already be taken) but leave the GPU mapping intact as
- * and until the shrinker reclaims the allocation.
+ * as mmap_sem/mmap_lock might already be taken) but leave the GPU mapping
+ * intact as and until the shrinker reclaims the allocation.
  *
  * Note: Must be called with the region lock of the containing context.
  */
@@ -460,5 +460,19 @@ static inline vm_fault_t vmf_insert_pfn_prot(struct vm_area_struct *vma,
 	return VM_FAULT_NOPAGE;
 }
 #endif
+
+/**
+ * kbase_mem_get_process_mmap_lock - Return the mmap lock for the current process
+ *
+ * Return: the mmap lock for the current process
+ */
+static inline struct rw_semaphore *kbase_mem_get_process_mmap_lock(void)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0)
+	return &current->mm->mmap_sem;
+#else /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0) */
+	return &current->mm->mmap_lock;
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 8, 0) */
+}
 
 #endif				/* _KBASE_MEM_LINUX_H_ */

@@ -277,10 +277,20 @@ config MALI_JOB_DUMP
 	  minimal overhead when not in use. Enable only if you know what
 	  you are doing.
 
-config MALI_PRFCNT_SET_SECONDARY
-	bool "Use secondary set of performance counters"
+choice
+	prompt "Performance counters set"
+	default MALI_PRFCNT_SET_PRIMARY
 	depends on MALI_MIDGARD && MALI_EXPERT
-	default n
+
+config MALI_PRFCNT_SET_PRIMARY
+	bool "Primary"
+	depends on MALI_MIDGARD && MALI_EXPERT
+	help
+	  Select this option to use primary set of performance counters.
+
+config MALI_PRFCNT_SET_SECONDARY
+	bool "Secondary"
+	depends on MALI_MIDGARD && MALI_EXPERT
 	help
 	  Select this option to use secondary set of performance counters. Kernel
 	  features that depend on an access to the primary set of counters may
@@ -288,20 +298,42 @@ config MALI_PRFCNT_SET_SECONDARY
 	  from working optimally and may cause instrumentation tools to return
 	  bogus results.
 
-	  If unsure, say N.
+	  If unsure, use MALI_PRFCNT_SET_PRIMARY.
 
-config MALI_PRFCNT_SET_SECONDARY_VIA_DEBUG_FS
-	bool "Use secondary set of performance counters"
-	depends on MALI_MIDGARD && MALI_EXPERT && !MALI_PRFCNT_SET_SECONDARY && DEBUG_FS
+config MALI_PRFCNT_SET_TERTIARY
+	bool "Tertiary"
+	depends on MALI_MIDGARD && MALI_EXPERT
+	help
+	  Select this option to use tertiary set of performance counters. Kernel
+	  features that depend on an access to the primary set of counters may
+	  become unavailable. Enabling this option will prevent power management
+	  from working optimally and may cause instrumentation tools to return
+	  bogus results.
+
+	  If unsure, use MALI_PRFCNT_SET_PRIMARY.
+
+endchoice
+
+config MALI_PRFCNT_SET_SELECT_VIA_DEBUG_FS
+	bool "Allow runtime selection of performance counters set via debugfs"
+	depends on MALI_MIDGARD && MALI_EXPERT && DEBUG_FS
 	default n
 	help
 	  Select this option to make the secondary set of performance counters
 	  available at runtime via debugfs. Kernel features that depend on an
 	  access to the primary set of counters may become unavailable.
 
+	  If no runtime debugfs option is set, the build time counter set
+	  choice will be used.
+
 	  This feature is unsupported and unstable, and may break at any time.
 	  Enabling this option will prevent power management from working
 	  optimally and may cause instrumentation tools to return bogus results.
+
+	  No validation is done on the debugfs input. Invalid input could cause
+	  performance counter errors. Valid inputs are the values accepted by
+	  the SET_SELECT bits of the PRFCNT_CONFIG register as defined in the
+	  architecture specification.
 
 	  If unsure, say N.
 

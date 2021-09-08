@@ -29,21 +29,29 @@
 #include <mali_kbase.h>
 #include <mali_kbase_pm.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
+
+#if MALI_USE_CSF
+#include "mali_kbase_clk_rate_trace_mgr.h"
+#include <csf/ipa_control/mali_kbase_csf_ipa_control.h>
+#else
 #include <backend/gpu/mali_kbase_jm_rb.h>
+#endif /* !MALI_USE_CSF */
+
 #include <backend/gpu/mali_kbase_pm_defs.h>
 #include <mali_linux_trace.h>
-
-/* When VSync is being hit aim for utilisation between 70-90% */
-#define KBASE_PM_VSYNC_MIN_UTILISATION          70
-#define KBASE_PM_VSYNC_MAX_UTILISATION          90
-/* Otherwise aim for 10-40% */
-#define KBASE_PM_NO_VSYNC_MIN_UTILISATION       10
-#define KBASE_PM_NO_VSYNC_MAX_UTILISATION       40
 
 /* Shift used for kbasep_pm_metrics_data.time_busy/idle - units of (1 << 8) ns
  * This gives a maximum period between samples of 2^(32+8)/100 ns = slightly
  * under 11s. Exceeding this will cause overflow */
 #define KBASE_PM_TIME_SHIFT			8
+
+#if MALI_USE_CSF
+/* CSHW counter block offsets */
+#define GPU_ACTIVE (4)
+
+/* To get the GPU_ACTIVE value in nano seconds unit */
+#define GPU_ACTIVE_SCALING_FACTOR ((u64)1E9)
+#endif
 
 #ifdef CONFIG_MALI_MIDGARD_DVFS
 #ifdef ENABLE_COMMON_DVFS
@@ -77,11 +85,44 @@ static enum hrtimer_restart dvfs_callback(struct hrtimer *timer)
 
 int kbasep_pm_metrics_init(struct kbase_device *kbdev)
 {
+#if MALI_USE_CSF
+	struct kbase_ipa_control_perf_counter perf_counter;
+	int err;
+
+	/* One counter group */
+	const size_t NUM_PERF_COUNTERS = 1;
+
 	KBASE_DEBUG_ASSERT(kbdev != NULL);
-
 	kbdev->pm.backend.metrics.kbdev = kbdev;
-
 	kbdev->pm.backend.metrics.time_period_start = ktime_get();
+	kbdev->pm.backend.metrics.values.time_busy = 0;
+	kbdev->pm.backend.metrics.values.time_idle = 0;
+
+	perf_counter.scaling_factor = GPU_ACTIVE_SCALING_FACTOR;
+
+	/* Normalize values by GPU frequency */
+	perf_counter.gpu_norm = true;
+
+	/* We need the GPU_ACTIVE counter, which is in the CSHW group */
+	perf_counter.type = KBASE_IPA_CORE_TYPE_CSHW;
+
+	/* We need the GPU_ACTIVE counter */
+	perf_counter.idx = GPU_ACTIVE;
+
+	err = kbase_ipa_control_register(
+		kbdev, &perf_counter, NUM_PERF_COUNTERS,
+		&kbdev->pm.backend.metrics.ipa_control_client);
+	if (err) {
+		dev_err(kbdev->dev,
+			"Failed to register IPA with kbase_ipa_control: err=%d",
+			err);
+		return -1;
+	}
+#else
+	KBASE_DEBUG_ASSERT(kbdev != NULL);
+	kbdev->pm.backend.metrics.kbdev = kbdev;
+	kbdev->pm.backend.metrics.time_period_start = ktime_get();
+
 	kbdev->pm.backend.metrics.gpu_active = false;
 	kbdev->pm.backend.metrics.active_cl_ctx[0] = 0;
 	kbdev->pm.backend.metrics.active_cl_ctx[1] = 0;
@@ -95,6 +136,7 @@ int kbasep_pm_metrics_init(struct kbase_device *kbdev)
 	kbdev->pm.backend.metrics.values.busy_cl[1] = 0;
 	kbdev->pm.backend.metrics.values.busy_gl = 0;
 
+#endif
 	spin_lock_init(&kbdev->pm.backend.metrics.lock);
 
 #ifdef CONFIG_MALI_MIDGARD_DVFS
@@ -126,6 +168,11 @@ void kbasep_pm_metrics_term(struct kbase_device *kbdev)
 	hrtimer_cancel(&kbdev->pm.backend.metrics.timer);
 #endif /* ENABLE_COMMON_DVFS */
 #endif /* CONFIG_MALI_MIDGARD_DVFS */
+
+#if MALI_USE_CSF
+	kbase_ipa_control_unregister(
+		kbdev, kbdev->pm.backend.metrics.ipa_control_client);
+#endif
 }
 
 KBASE_EXPORT_TEST_API(kbasep_pm_metrics_term);
@@ -133,8 +180,52 @@ KBASE_EXPORT_TEST_API(kbasep_pm_metrics_term);
 /* caller needs to hold kbdev->pm.backend.metrics.lock before calling this
  * function
  */
+#if MALI_USE_CSF
+#if defined(CONFIG_MALI_DEVFREQ) || defined(CONFIG_MALI_MIDGARD_DVFS)
 static void kbase_pm_get_dvfs_utilisation_calc(struct kbase_device *kbdev,
-								ktime_t now)
+					       ktime_t now)
+{
+	ktime_t diff;
+	int err;
+	u64 gpu_active_counter;
+
+	lockdep_assert_held(&kbdev->pm.backend.metrics.lock);
+
+	diff = ktime_sub(now, kbdev->pm.backend.metrics.time_period_start);
+	if (ktime_to_ns(diff) < 0)
+		return;
+
+	/* TODO: The final parameter to this function is used to obtain the amount of
+	 * protected-mode time the GPU has spent. This is the subject of a future
+	 * ticket, and is not yet considered / implemented.
+	 */
+	err = kbase_ipa_control_query(
+		kbdev, kbdev->pm.backend.metrics.ipa_control_client,
+		&gpu_active_counter, 1, NULL);
+
+	if (err) {
+		dev_err(kbdev->dev,
+			"Failed to query the increment of GPU_ACTIVE counter: err=%d",
+			err);
+	} else {
+		u32 ns_time = (u32) (ktime_to_ns(diff) >> KBASE_PM_TIME_SHIFT);
+
+		gpu_active_counter >>= KBASE_PM_TIME_SHIFT;
+
+		WARN_ON_ONCE(gpu_active_counter > ns_time);
+
+		kbdev->pm.backend.metrics.values.time_busy +=
+			gpu_active_counter;
+		kbdev->pm.backend.metrics.values.time_idle +=
+			ns_time - gpu_active_counter;
+	}
+
+	kbdev->pm.backend.metrics.time_period_start = now;
+}
+#endif /* defined(CONFIG_MALI_DEVFREQ) || defined(CONFIG_MALI_MIDGARD_DVFS) */
+#else
+static void kbase_pm_get_dvfs_utilisation_calc(struct kbase_device *kbdev,
+					       ktime_t now)
 {
 	ktime_t diff;
 
@@ -165,6 +256,7 @@ static void kbase_pm_get_dvfs_utilisation_calc(struct kbase_device *kbdev,
 
 	kbdev->pm.backend.metrics.time_period_start = now;
 }
+#endif  /* MALI_USE_CSF */
 
 #if defined(CONFIG_MALI_DEVFREQ) || defined(CONFIG_MALI_MIDGARD_DVFS)
 void kbase_pm_get_dvfs_metrics(struct kbase_device *kbdev,
@@ -180,9 +272,12 @@ void kbase_pm_get_dvfs_metrics(struct kbase_device *kbdev,
 	memset(diff, 0, sizeof(*diff));
 	diff->time_busy = cur->time_busy - last->time_busy;
 	diff->time_idle = cur->time_idle - last->time_idle;
+
+#if !MALI_USE_CSF
 	diff->busy_cl[0] = cur->busy_cl[0] - last->busy_cl[0];
 	diff->busy_cl[1] = cur->busy_cl[1] - last->busy_cl[1];
 	diff->busy_gl = cur->busy_gl - last->busy_gl;
+#endif
 
 	*last = *cur;
 
@@ -258,10 +353,13 @@ KBASE_EXPORT_TEST_API(kbasep_get_cl_js1_utilization)
 
 void kbase_pm_get_dvfs_action(struct kbase_device *kbdev)
 {
-	int utilisation, util_gl_share;
-	int util_cl_share[2];
+	int utilisation;
 	int busy;
 	struct kbasep_pm_metrics *diff;
+#if !MALI_USE_CSF
+	int util_gl_share;
+	int util_cl_share[2];
+#endif
 
 	KBASE_DEBUG_ASSERT(kbdev != NULL);
 
@@ -273,13 +371,16 @@ void kbase_pm_get_dvfs_action(struct kbase_device *kbdev)
 			max(diff->time_busy + diff->time_idle, 1u);
 
 	busy = max(diff->busy_gl + diff->busy_cl[0] + diff->busy_cl[1], 1u);
+
+#if !MALI_USE_CSF
 	util_gl_share = (100 * diff->busy_gl) / busy;
 	util_cl_share[0] = (100 * diff->busy_cl[0]) / busy;
 	util_cl_share[1] = (100 * diff->busy_cl[1]) / busy;
 
 #if 0 /* #ifdef CONFIG_MALI_MIDGARD_DVFS */
 	kbase_platform_dvfs_event(kbdev, utilisation, util_gl_share, util_cl_share);
-#endif /*CONFIG_MALI_MIDGARD_DVFS */
+#endif
+#endif
 }
 
 #ifndef ENABLE_COMMON_DVFS
@@ -324,6 +425,7 @@ void kbase_pm_metrics_stop(struct kbase_device *kbdev)
 
 #endif /* CONFIG_MALI_MIDGARD_DVFS */
 
+#if !MALI_USE_CSF
 /**
  * kbase_pm_metrics_active_calc - Update PM active counts based on currently
  *                                running atoms
@@ -387,10 +489,12 @@ void kbase_pm_metrics_update(struct kbase_device *kbdev, ktime_t *timestamp)
 		timestamp = &now;
 	}
 
-	/* Track how long CL and/or GL jobs have been busy for */
+	/* Track how much of time has been spent busy or idle. For JM GPUs, this also
+	 * evaluates how long CL and/or GL jobs have been busy for
+	 */
 	kbase_pm_get_dvfs_utilisation_calc(kbdev, *timestamp);
 
 	kbase_pm_metrics_active_calc(kbdev);
-
 	spin_unlock_irqrestore(&kbdev->pm.backend.metrics.lock, flags);
 }
+#endif /* !MALI_USE_CSF */

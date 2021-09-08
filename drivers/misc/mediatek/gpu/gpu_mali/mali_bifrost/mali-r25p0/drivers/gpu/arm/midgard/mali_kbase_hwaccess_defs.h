@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014, 2016, 2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014, 2016-2018, 2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -19,7 +19,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
-
 
 /**
  * @file mali_kbase_hwaccess_gpu_defs.h
@@ -43,7 +42,9 @@
  * @backend:         GPU backend specific data for HW access layer
  */
 struct kbase_hwaccess_data {
+#if !MALI_USE_CSF
 	struct kbase_context *active_kctx[BASE_JM_MAX_NR_SLOTS];
+#endif
 
 	struct kbase_backend_data backend;
 };

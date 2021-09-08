@@ -24,7 +24,7 @@ include $(src)/platform/mtk_platform_common/Kbuild
 
 
 # Driver version string which is returned to userspace via an ioctl
-MALI_RELEASE_NAME ?= "r26p0-01eac0"
+MALI_RELEASE_NAME ?= "r28p0-01eac0"
 
 # Paths required for build
 
@@ -86,6 +86,7 @@ SRC := \
 	context/mali_kbase_context.c \
 	debug/mali_kbase_debug_ktrace.c \
 	device/mali_kbase_device.c \
+	device/mali_kbase_device_hw.c \
 	mali_kbase_cache_policy.c \
 	mali_kbase_ccswe.c \
 	mali_kbase_mem.c \
@@ -124,19 +125,21 @@ SRC := \
 	mali_kbase_strings.c \
 	mali_kbase_as_fault_debugfs.c \
 	mali_kbase_regs_history_debugfs.c \
+	mali_kbase_dvfs_debugfs.c \
 	mali_power_gpu_frequency_trace.c \
+	mali_kbase_trace_gpu_mem.c \
 	thirdparty/mali_kbase_mmap.c \
 	tl/mali_kbase_timeline.c \
 	tl/mali_kbase_timeline_io.c \
 	tl/mali_kbase_tlstream.c \
 	tl/mali_kbase_tracepoints.c \
-	gpu/mali_kbase_gpu.c \
-	mali_kbase_trace_gpu_mem.c
+	gpu/mali_kbase_gpu.c
 
 ifeq ($(MALI_USE_CSF),1)
 	SRC += \
 		debug/backend/mali_kbase_debug_ktrace_csf.c \
 		device/backend/mali_kbase_device_csf.c \
+		device/backend/mali_kbase_device_hw_csf.c \
 		gpu/backend/mali_kbase_gpu_fault_csf.c \
 		tl/backend/mali_kbase_timeline_csf.c \
 		mmu/backend/mali_kbase_mmu_csf.c \
@@ -153,6 +156,7 @@ else
 		mali_kbase_kinstr_jm.c \
 		debug/backend/mali_kbase_debug_ktrace_jm.c \
 		device/backend/mali_kbase_device_jm.c \
+		device/backend/mali_kbase_device_hw_jm.c \
 		gpu/backend/mali_kbase_gpu_fault_jm.c \
 		tl/backend/mali_kbase_timeline_jm.c \
 		mmu/backend/mali_kbase_mmu_jm.c \
@@ -206,16 +210,25 @@ else
 # empty
 endif
 
-mali_kbase-$(CONFIG_MALI_DMA_FENCE) += \
-	mali_kbase_dma_fence.o \
-	mali_kbase_fence.o
+ifeq ($(MALI_USE_CSF),0)
+	mali_kbase-$(CONFIG_MALI_DMA_FENCE) += \
+		mali_kbase_fence_ops.o \
+		mali_kbase_dma_fence.o \
+		mali_kbase_fence.o
+
+	mali_kbase-$(CONFIG_SYNC_FILE) += \
+		mali_kbase_fence_ops.o \
+		mali_kbase_fence.o
+endif
+
 mali_kbase-$(CONFIG_SYNC) += \
 	mali_kbase_sync_android.o \
 	mali_kbase_sync_common.o
+
 mali_kbase-$(CONFIG_SYNC_FILE) += \
+	mali_kbase_fence_ops.o \
 	mali_kbase_sync_file.o \
-	mali_kbase_sync_common.o \
-	mali_kbase_fence.o
+	mali_kbase_sync_common.o
 
 include  $(src)/backend/gpu/Kbuild
 mali_kbase-y += $(BACKEND:.c=.o)

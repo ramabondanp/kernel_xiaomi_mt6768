@@ -823,4 +823,27 @@ struct jsctx_queue {
 	struct list_head x_dep_head;
 };
 
+/**
+ * struct kbase_as   - Object representing an address space of GPU.
+ * @number:            Index at which this address space structure is present
+ *                     in an array of address space structures embedded inside
+ *                     the &struct kbase_device.
+ * @pf_wq:             Workqueue for processing work items related to
+ *                     Page fault and Bus fault handling.
+ * @work_pagefault:    Work item for the Page fault handling.
+ * @work_busfault:     Work item for the Bus fault handling.
+ * @pf_data:           Data relating to Page fault.
+ * @bf_data:           Data relating to Bus fault.
+ * @current_setup:     Stores the MMU configuration for this address space.
+ */
+struct kbase_as {
+	int number;
+	struct workqueue_struct *pf_wq;
+	struct work_struct work_pagefault;
+	struct work_struct work_busfault;
+	struct kbase_fault pf_data;
+	struct kbase_fault bf_data;
+	struct kbase_mmu_setup current_setup;
+};
+
 #endif /* _KBASE_JM_DEFS_H_ */

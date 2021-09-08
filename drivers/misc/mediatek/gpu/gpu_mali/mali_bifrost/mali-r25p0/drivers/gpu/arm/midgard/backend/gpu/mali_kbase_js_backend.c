@@ -31,6 +31,7 @@
 #include <backend/gpu/mali_kbase_jm_internal.h>
 #include <backend/gpu/mali_kbase_js_internal.h>
 
+#if !MALI_USE_CSF
 /*
  * Hold the runpool_mutex for this
  */
@@ -270,9 +271,11 @@ static enum hrtimer_restart timer_callback(struct hrtimer *timer)
 
 	return HRTIMER_NORESTART;
 }
+#endif /* !MALI_USE_CSF */
 
 void kbase_backend_ctx_count_changed(struct kbase_device *kbdev)
 {
+#if !MALI_USE_CSF
 	struct kbasep_js_device_data *js_devdata = &kbdev->js_data;
 	struct kbase_backend_data *backend = &kbdev->hwaccess.backend;
 	unsigned long flags;
@@ -303,25 +306,36 @@ void kbase_backend_ctx_count_changed(struct kbase_device *kbdev)
 
 		KBASE_KTRACE_ADD_JM(kbdev, JS_POLICY_TIMER_START, NULL, NULL, 0u, 0u);
 	}
+#else /* !MALI_USE_CSF */
+	CSTD_UNUSED(kbdev);
+#endif /* !MALI_USE_CSF */
 }
 
 int kbase_backend_timer_init(struct kbase_device *kbdev)
 {
+#if !MALI_USE_CSF
 	struct kbase_backend_data *backend = &kbdev->hwaccess.backend;
 
 	hrtimer_init(&backend->scheduling_timer, CLOCK_MONOTONIC,
 							HRTIMER_MODE_REL);
 	backend->scheduling_timer.function = timer_callback;
 	backend->timer_running = false;
+#else /* !MALI_USE_CSF */
+	CSTD_UNUSED(kbdev);
+#endif /* !MALI_USE_CSF */
 
 	return 0;
 }
 
 void kbase_backend_timer_term(struct kbase_device *kbdev)
 {
+#if !MALI_USE_CSF
 	struct kbase_backend_data *backend = &kbdev->hwaccess.backend;
 
 	hrtimer_cancel(&backend->scheduling_timer);
+#else /* !MALI_USE_CSF */
+	CSTD_UNUSED(kbdev);
+#endif /* !MALI_USE_CSF */
 }
 
 void kbase_backend_timer_suspend(struct kbase_device *kbdev)

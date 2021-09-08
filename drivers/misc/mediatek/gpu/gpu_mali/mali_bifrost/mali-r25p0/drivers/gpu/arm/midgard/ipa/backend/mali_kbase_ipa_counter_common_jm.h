@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2017-2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2017-2018, 2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -20,8 +20,8 @@
  *
  */
 
-#ifndef _KBASE_IPA_VINSTR_COMMON_H_
-#define _KBASE_IPA_VINSTR_COMMON_H_
+#ifndef _KBASE_IPA_COUNTER_COMMON_JM_H_
+#define _KBASE_IPA_COUNTER_COMMON_JM_H_
 
 #include "mali_kbase.h"
 #include "mali_kbase_hwcnt_virtualizer.h"
@@ -214,4 +214,4 @@ int kbase_ipa_vinstr_common_model_init(struct kbase_ipa_model *model,
  */
 void kbase_ipa_vinstr_common_model_term(struct kbase_ipa_model *model);
 
-#endif /* _KBASE_IPA_VINSTR_COMMON_H_ */
+#endif /* _KBASE_IPA_COUNTER_COMMON_JM_H_ */

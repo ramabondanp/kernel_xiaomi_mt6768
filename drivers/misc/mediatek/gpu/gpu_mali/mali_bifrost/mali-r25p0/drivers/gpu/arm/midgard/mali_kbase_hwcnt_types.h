@@ -783,8 +783,8 @@ void kbase_hwcnt_dump_buffer_free(struct kbase_hwcnt_dump_buffer *dump_buf);
  *             dump buffer in the array will be initialised to undefined values,
  *             so must be used as a copy dest, or cleared before use.
  *
- * A single contiguous page allocation will be used for all of the buffers
- * inside the array, where:
+ * A single zeroed contiguous page allocation will be used for all of the
+ * buffers inside the array, where:
  * dump_bufs[n].dump_buf == page_addr + n * metadata.dump_buf_bytes
  *
  * Return: 0 on success, else error code.

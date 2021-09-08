@@ -127,31 +127,31 @@ static bool kbase_capture_dma_buf_mapping(struct kbase_context *kctx,
 	}
 
 	if (unique_buf_imported) {
-		struct kbase_dma_buf *buf_node =
-			kzalloc(sizeof(*buf_node), GFP_KERNEL);
+		struct kbase_dma_buf *new_buf_node =
+			kzalloc(sizeof(*new_buf_node), GFP_KERNEL);
 
-		if (buf_node == NULL) {
+		if (new_buf_node == NULL) {
 			dev_err(kctx->kbdev->dev, "Error allocating memory for kbase_dma_buf\n");
 			/* Dont account for it if we fail to allocate memory */
 			unique_buf_imported = false;
 		} else {
 			struct rb_node **new = &(root->rb_node), *parent = NULL;
 
-			buf_node->dma_buf = dma_buf;
-			buf_node->import_count = 1;
+			new_buf_node->dma_buf = dma_buf;
+			new_buf_node->import_count = 1;
 			while (*new) {
-				struct kbase_dma_buf *node;
+				struct kbase_dma_buf *new_node;
 
 				parent = *new;
-				node = rb_entry(parent, struct kbase_dma_buf,
-						dma_buf_node);
-				if (dma_buf < node->dma_buf)
+				new_node = rb_entry(parent, struct kbase_dma_buf,
+						   dma_buf_node);
+				if (dma_buf < new_node->dma_buf)
 					new = &(*new)->rb_left;
 				else
 					new = &(*new)->rb_right;
 			}
-			rb_link_node(&buf_node->dma_buf_node, parent, new);
-			rb_insert_color(&buf_node->dma_buf_node, root);
+			rb_link_node(&new_buf_node->dma_buf_node, parent, new);
+			rb_insert_color(&new_buf_node->dma_buf_node, root);
 		}
 	} else if (!WARN_ON(!buf_node)) {
 		buf_node->import_count++;
@@ -221,7 +221,7 @@ void kbase_add_dma_buf_usage(struct kbase_context *kctx,
 	mutex_unlock(&kbdev->dma_buf_lock);
 }
 
-#ifndef CONFIG_TRACE_GPU_MEM
+#if !defined(CONFIG_TRACE_GPU_MEM) && !MALI_CUSTOMER_RELEASE
 #define CREATE_TRACE_POINTS
 #include "mali_gpu_mem_trace.h"
 #endif

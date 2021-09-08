@@ -30,23 +30,13 @@ extern "C" {
 #include <asm-generic/ioctl.h>
 #include <linux/types.h>
 
+#if MALI_USE_CSF
+#include "csf/mali_kbase_csf_ioctl.h"
+#else
 #include "jm/mali_kbase_jm_ioctl.h"
+#endif /* MALI_USE_CSF */
 
 #define KBASE_IOCTL_TYPE 0x80
-
-/**
- * struct kbase_ioctl_version_check - Check version compatibility with kernel
- *
- * @major: Major version number
- * @minor: Minor version number
- */
-struct kbase_ioctl_version_check {
-	__u16 major;
-	__u16 minor;
-};
-
-#define KBASE_IOCTL_VERSION_CHECK \
-	_IOWR(KBASE_IOCTL_TYPE, 0, struct kbase_ioctl_version_check)
 
 /**
  * struct kbase_ioctl_set_flags - Set kernel context creation flags
@@ -100,7 +90,7 @@ struct kbase_ioctl_get_gpuprops {
  *
  * @va_pages: The number of pages of virtual address space to reserve
  * @commit_pages: The number of physical pages to allocate
- * @extent: The number of extra pages to allocate on each GPU fault which grows
+ * @extension: The number of extra pages to allocate on each GPU fault which grows
  *          the region
  * @flags: Flags
  * @gpu_va: The GPU virtual address which is allocated
@@ -112,7 +102,7 @@ union kbase_ioctl_mem_alloc {
 	struct {
 		__u64 va_pages;
 		__u64 commit_pages;
-		__u64 extent;
+		__u64 extension;
 		__u64 flags;
 	} in;
 	struct {
