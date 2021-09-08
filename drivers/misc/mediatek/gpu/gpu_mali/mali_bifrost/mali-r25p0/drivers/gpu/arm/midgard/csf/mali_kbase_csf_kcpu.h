@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -67,9 +47,9 @@ struct kbase_kcpu_command_import_info {
  * struct kbase_kcpu_command_fence_info - Structure which holds information
  *		about the fence object enqueued in the kcpu command queue
  *
- * @fence_cb:
- * @fence:
- * @kcpu_queue:
+ * @fence_cb:   Fence callback
+ * @fence:      Fence
+ * @kcpu_queue: kcpu command queue
  */
 struct kbase_kcpu_command_fence_info {
 #if (KERNEL_VERSION(4, 10, 0) > LINUX_VERSION_CODE)
@@ -112,7 +92,7 @@ struct kbase_kcpu_command_cqs_set_info {
  *			queue's error-state.
  */
 struct kbase_kcpu_command_cqs_wait_info {
-	struct base_cqs_wait *objs;
+	struct base_cqs_wait_info *objs;
 	unsigned long *signaled;
 	unsigned int nr_objs;
 	u32 inherit_err_flags;
@@ -122,7 +102,7 @@ struct kbase_kcpu_command_cqs_wait_info {
  * struct kbase_kcpu_command_jit_alloc_info - Structure which holds information
  *				needed for the kcpu command for jit allocations
  *
- * @node	Used to keep track of all JIT free/alloc commands in submission
+ * @node:	Used to keep track of all JIT free/alloc commands in submission
  *		order. This must be located in the front of this struct to
  *		match that of kbase_kcpu_command_jit_free_info.
  * @info:	Array of objects of the struct base_jit_alloc_info type which
@@ -187,6 +167,14 @@ struct kbase_kcpu_command_group_suspend_info {
 	u8 group_handle;
 };
 
+#if MALI_UNIT_TEST
+struct kbase_kcpu_command_sample_time_info {
+	u64 page_addr;
+	u64 page_offset;
+	struct page **page;
+};
+#endif /* MALI_UNIT_TEST */
+
 /**
  * struct kbase_cpu_command - Command which is to be part of the kernel
  *                            command queue
@@ -196,6 +184,14 @@ struct kbase_kcpu_command_group_suspend_info {
  *		indicates that it has been enqueued earlier.
  * @info:	Structure which holds information about the command
  *		dependent on the command type.
+ * @info.fence:            Fence
+ * @info.cqs_wait:         CQS wait
+ * @info.cqs_set:          CQS set
+ * @info.import:           import
+ * @info.jit_alloc:        jit allocation
+ * @info.jit_free:         jit deallocation
+ * @info.suspend_buf_copy: suspend buffer copy
+ * @info.sample_time:      sample time
  */
 struct kbase_kcpu_command {
 	enum base_kcpu_command_type type;
@@ -208,6 +204,9 @@ struct kbase_kcpu_command {
 		struct kbase_kcpu_command_jit_alloc_info jit_alloc;
 		struct kbase_kcpu_command_jit_free_info jit_free;
 		struct kbase_kcpu_command_group_suspend_info suspend_buf_copy;
+#if MALI_UNIT_TEST
+		struct kbase_kcpu_command_sample_time_info sample_time;
+#endif /* MALI_UNIT_TEST */
 	} info;
 };
 

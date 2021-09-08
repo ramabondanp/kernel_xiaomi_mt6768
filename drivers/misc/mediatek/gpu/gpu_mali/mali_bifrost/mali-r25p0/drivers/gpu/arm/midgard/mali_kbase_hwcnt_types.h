@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -1133,10 +1113,10 @@ static inline void kbase_hwcnt_dump_buffer_block_accumulate_strict(
 }
 
 /**
- * @brief Iterate over each clock domain in the metadata.
+ * Iterate over each clock domain in the metadata.
  *
- * @param[in] md          Non-NULL pointer to metadata.
- * @param[in] clk         size_t variable used as clock iterator.
+ * @md:          Non-NULL pointer to metadata.
+ * @clk:         size_t variable used as clock iterator.
  */
 #define kbase_hwcnt_metadata_for_each_clock(md, clk)    \
 	for ((clk) = 0; (clk) < (md)->clk_cnt; (clk)++)

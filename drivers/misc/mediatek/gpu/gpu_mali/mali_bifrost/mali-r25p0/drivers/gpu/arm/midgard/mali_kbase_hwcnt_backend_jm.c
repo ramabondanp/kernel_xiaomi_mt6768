@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -98,7 +96,7 @@ struct kbase_hwcnt_backend_jm {
  *
  * The initialised info struct will only be valid for use while kbdev is valid.
  */
-int kbase_hwcnt_gpu_info_init(struct kbase_device *kbdev,
+static int kbase_hwcnt_gpu_info_init(struct kbase_device *kbdev,
 			      struct kbase_hwcnt_gpu_info *info)
 {
 	size_t clk;
@@ -158,7 +156,7 @@ static void kbasep_hwcnt_backend_jm_on_freq_change(
 /**
  * kbasep_hwcnt_backend_jm_cc_enable() - Enable cycle count tracking
  *
- * @backend:      Non-NULL pointer to backend.
+ * @backend_jm:      Non-NULL pointer to backend.
  * @enable_map:   Non-NULL pointer to enable map specifying enabled counters.
  * @timestamp_ns: Timestamp(ns) when HWCNT were enabled.
  */
@@ -218,7 +216,7 @@ static void kbasep_hwcnt_backend_jm_cc_enable(
 /**
  * kbasep_hwcnt_backend_jm_cc_disable() - Disable cycle count tracking
  *
- * @backend:      Non-NULL pointer to backend.
+ * @backend_jm:      Non-NULL pointer to backend.
  */
 static void kbasep_hwcnt_backend_jm_cc_disable(
 	struct kbase_hwcnt_backend_jm *backend_jm)

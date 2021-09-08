@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2011-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2011-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -44,9 +42,7 @@
 
 #if !MALI_USE_CSF
 /**
- * @file mali_kbase_softjobs.c
- *
- * This file implements the logic behind software only jobs that are
+ * DOC: This file implements the logic behind software only jobs that are
  * executed within the driver rather than being handed over to the GPU.
  */
 
@@ -137,7 +133,7 @@ static int kbase_dump_cpu_gpu_time(struct kbase_jd_atom *katom)
 	void *user_result;
 	struct timespec64 ts;
 	struct base_dump_cpu_gpu_counters data;
-	u64 system_time;
+	u64 system_time = 0ULL;
 	u64 cycle_counter;
 	u64 jc = katom->jc;
 	struct kbase_context *kctx = katom->kctx;
@@ -833,7 +829,7 @@ int kbase_mem_copy_from_extres(struct kbase_context *kctx,
 				dma_buf_kunmap(dma_buf, i, extres_page);
 #endif
 				if (ret)
-					goto out_unlock;
+					break;
 			}
 		}
 		dma_buf_end_cpu_access(dma_buf,
@@ -1097,7 +1093,7 @@ static int kbase_jit_allocate_process(struct kbase_jd_atom *katom)
 	}
 
 #if MALI_JIT_PRESSURE_LIMIT_BASE
-	/**
+	/*
 	 * If this is the only JIT_ALLOC atom in-flight or if JIT pressure limit
 	 * is disabled at the context scope, then bypass JIT pressure limit
 	 * logic in kbase_jit_allocate().

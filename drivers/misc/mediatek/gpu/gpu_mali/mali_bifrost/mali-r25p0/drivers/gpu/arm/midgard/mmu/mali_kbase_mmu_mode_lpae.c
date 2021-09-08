@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -72,7 +70,7 @@ static void mmu_get_as_setup(struct kbase_mmu_table *mmut,
 		AS_TRANSTAB_LPAE_ADRMODE_TABLE |
 		AS_TRANSTAB_LPAE_READ_INNER;
 
-	setup->transcfg = 0;
+	setup->transcfg = AS_TRANSCFG_ADRMODE_LEGACY;
 }
 
 static void mmu_update(struct kbase_device *kbdev,

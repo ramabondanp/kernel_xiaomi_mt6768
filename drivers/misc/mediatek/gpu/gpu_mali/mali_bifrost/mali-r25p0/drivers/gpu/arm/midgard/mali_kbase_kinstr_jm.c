@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -73,7 +71,7 @@ typedef unsigned int __poll_t;
  */
 DEFINE_STATIC_KEY_FALSE(basep_kinstr_jm_reader_static_key);
 
-#define KBASE_KINSTR_JM_VERSION 1
+#define KBASE_KINSTR_JM_VERSION 2
 
 /**
  * struct kbase_kinstr_jm - The context for the kernel job manager atom tracing
@@ -101,6 +99,11 @@ struct kbase_kinstr_jm {
  *             KBASE_KINSTR_JM_ATOM_STATE_FLAG_* defines.
  * @reserved:  Reserved for future use.
  * @data:      Extra data for the state change. Active member depends on state.
+ * @data.start:      Extra data for the state change. Active member depends on
+ *                   state.
+ * @data.start.slot: Extra data for the state change. Active member depends on
+ *                   state.
+ * @data.padding:    Padding
  *
  * We can add new fields to the structure and old user code will gracefully
  * ignore the new fields.
@@ -827,7 +830,7 @@ void kbasep_kinstr_jm_atom_state(
 
 	switch (state) {
 	case KBASE_KINSTR_JM_READER_ATOM_STATE_START:
-		change.data.start.slot = katom->jobslot;
+		change.data.start.slot = katom->slot_nr;
 		break;
 	default:
 		break;

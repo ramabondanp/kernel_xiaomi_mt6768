@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -74,7 +54,7 @@ void kbase_csf_cpu_queue_debugfs_init(struct kbase_context *kctx);
  * @kctx: The kbase_context which cpu queue dumpped belongs to
  * @req:  Notification with cpu queue dump request.
  *
- * @return: If dumping is requested, it is true or false.
+ * Return: true if needs CPU queue dump, or false otherwise.
  */
 bool kbase_csf_cpu_queue_read_dump_req(struct kbase_context *kctx,
 					struct base_csf_notification *req);
@@ -84,7 +64,7 @@ bool kbase_csf_cpu_queue_read_dump_req(struct kbase_context *kctx,
  *
  * @kctx: The kbase_context which cpu queue dumpped belongs to
  *
- * @return: If it needs cpu queue dump, returns true, or returns false.
+ * Return: true if it needs cpu queue dump, or false otherwise.
  */
 static inline bool kbase_csf_cpu_queue_dump_needed(struct kbase_context *kctx)
 {
@@ -103,7 +83,7 @@ static inline bool kbase_csf_cpu_queue_dump_needed(struct kbase_context *kctx)
  * @buffer: Buffer containing the cpu queue information.
  * @buf_size: Buffer size.
  *
- * @return: Return 0 for dump successfully, or error code.
+ * Return: Return 0 for dump successfully, or error code.
  */
 int kbase_csf_cpu_queue_dump(struct kbase_context *kctx,
 		u64 buffer, size_t buf_size);

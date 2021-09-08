@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2017-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -106,16 +86,14 @@ struct kbase_ioctl_get_gpuprops {
 
 /**
  * union kbase_ioctl_mem_alloc - Allocate memory on the GPU
- *
- * @va_pages: The number of pages of virtual address space to reserve
- * @commit_pages: The number of physical pages to allocate
- * @extension: The number of extra pages to allocate on each GPU fault which grows
- *          the region
- * @flags: Flags
- * @gpu_va: The GPU virtual address which is allocated
- *
  * @in: Input parameters
+ * @in.va_pages: The number of pages of virtual address space to reserve
+ * @in.commit_pages: The number of physical pages to allocate
+ * @in.extension: The number of extra pages to allocate on each GPU fault which grows the region
+ * @in.flags: Flags
  * @out: Output parameters
+ * @out.flags: Flags
+ * @out.gpu_va: The GPU virtual address which is allocated
  */
 union kbase_ioctl_mem_alloc {
 	struct {
@@ -135,14 +113,13 @@ union kbase_ioctl_mem_alloc {
 
 /**
  * struct kbase_ioctl_mem_query - Query properties of a GPU memory region
- * @gpu_addr: A GPU address contained within the region
- * @query: The type of query
- * @value: The result of the query
+ * @in: Input parameters
+ * @in.gpu_addr: A GPU address contained within the region
+ * @in.query: The type of query
+ * @out: Output parameters
+ * @out.value: The result of the query
  *
  * Use a %KBASE_MEM_QUERY_xxx flag as input for @query.
- *
- * @in: Input parameters
- * @out: Output parameters
  */
 union kbase_ioctl_mem_query {
 	struct {
@@ -362,13 +339,12 @@ struct kbase_ioctl_mem_sync {
 /**
  * union kbase_ioctl_mem_find_cpu_offset - Find the offset of a CPU pointer
  *
- * @gpu_addr: The GPU address of the memory region
- * @cpu_addr: The CPU address to locate
- * @size: A size in bytes to validate is contained within the region
- * @offset: The offset from the start of the memory region to @cpu_addr
- *
  * @in: Input parameters
+ * @in.gpu_addr: The GPU address of the memory region
+ * @in.cpu_addr: The CPU address to locate
+ * @in.size: A size in bytes to validate is contained within the region
  * @out: Output parameters
+ * @out.offset: The offset from the start of the memory region to @cpu_addr
  */
 union kbase_ioctl_mem_find_cpu_offset {
 	struct {
@@ -433,15 +409,15 @@ struct kbase_ioctl_mem_commit {
 
 /**
  * union kbase_ioctl_mem_alias - Create an alias of memory regions
- * @flags: Flags, see BASE_MEM_xxx
- * @stride: Bytes between start of each memory region
- * @nents: The number of regions to pack together into the alias
- * @aliasing_info: Pointer to an array of struct base_mem_aliasing_info
- * @gpu_va: Address of the new alias
- * @va_pages: Size of the new alias
- *
  * @in: Input parameters
+ * @in.flags: Flags, see BASE_MEM_xxx
+ * @in.stride: Bytes between start of each memory region
+ * @in.nents: The number of regions to pack together into the alias
+ * @in.aliasing_info: Pointer to an array of struct base_mem_aliasing_info
  * @out: Output parameters
+ * @out.flags: Flags, see BASE_MEM_xxx
+ * @out.gpu_va: Address of the new alias
+ * @out.va_pages: Size of the new alias
  */
 union kbase_ioctl_mem_alias {
 	struct {
@@ -462,15 +438,15 @@ union kbase_ioctl_mem_alias {
 
 /**
  * union kbase_ioctl_mem_import - Import memory for use by the GPU
- * @flags: Flags, see BASE_MEM_xxx
- * @phandle: Handle to the external memory
- * @type: Type of external memory, see base_mem_import_type
- * @padding: Amount of extra VA pages to append to the imported buffer
- * @gpu_va: Address of the new alias
- * @va_pages: Size of the new alias
- *
  * @in: Input parameters
+ * @in.flags: Flags, see BASE_MEM_xxx
+ * @in.phandle: Handle to the external memory
+ * @in.type: Type of external memory, see base_mem_import_type
+ * @in.padding: Amount of extra VA pages to append to the imported buffer
  * @out: Output parameters
+ * @out.flags: Flags, see BASE_MEM_xxx
+ * @out.gpu_va: Address of the new alias
+ * @out.va_pages: Size of the new alias
  */
 union kbase_ioctl_mem_import {
 	struct {
@@ -583,15 +559,13 @@ struct kbase_ioctl_sticky_resource_unmap {
  *                                                   the given gpu address and
  *                                                   the offset of that address
  *                                                   into the region
- *
- * @gpu_addr: GPU virtual address
- * @size: Size in bytes within the region
- * @start: Address of the beginning of the memory region enclosing @gpu_addr
- *         for the length of @offset bytes
- * @offset: The offset from the start of the memory region to @gpu_addr
- *
  * @in: Input parameters
+ * @in.gpu_addr: GPU virtual address
+ * @in.size: Size in bytes within the region
  * @out: Output parameters
+ * @out.start: Address of the beginning of the memory region enclosing @gpu_addr
+ *             for the length of @offset bytes
+ * @out.offset: The offset from the start of the memory region to @gpu_addr
  */
 union kbase_ioctl_mem_find_gpu_start_and_offset {
 	struct {
@@ -616,14 +590,15 @@ union kbase_ioctl_mem_find_gpu_start_and_offset {
 
 /**
  * union kbase_ioctl_gwt_dump - Used to collect all GPU write fault addresses.
- * @addr_buffer: Address of buffer to hold addresses of gpu modified areas.
- * @size_buffer: Address of buffer to hold size of modified areas (in pages)
- * @len: Number of addresses the buffers can hold.
- * @more_data_available: Status indicating if more addresses are available.
- * @no_of_addr_collected: Number of addresses collected into addr_buffer.
- *
  * @in: Input parameters
+ * @in.addr_buffer: Address of buffer to hold addresses of gpu modified areas.
+ * @in.size_buffer: Address of buffer to hold size of modified areas (in pages)
+ * @in.len: Number of addresses the buffers can hold.
+ * @in.padding: padding
  * @out: Output parameters
+ * @out.no_of_addr_collected: Number of addresses collected into addr_buffer.
+ * @out.more_data_available: Status indicating if more addresses are available.
+ * @out.padding: padding
  *
  * This structure is used when performing a call to dump GPU write fault
  * addresses.
@@ -661,18 +636,15 @@ struct kbase_ioctl_mem_exec_init {
 /**
  * union kbase_ioctl_get_cpu_gpu_timeinfo - Request zero or more types of
  *                                          cpu/gpu time (counter values)
- *
- * @request_flags: Bit-flags indicating the requested types.
- * @paddings:      Unused, size alignment matching the out.
- * @sec:           Integer field of the monotonic time, unit in seconds.
- * @nsec:          Fractional sec of the monotonic time, in nano-seconds.
- * @padding:       Unused, for u64 alignment
- * @timestamp:     System wide timestamp (counter) value.
- * @cycle_counter: GPU cycle counter value.
- *
  * @in: Input parameters
+ * @in.request_flags: Bit-flags indicating the requested types.
+ * @in.paddings:      Unused, size alignment matching the out.
  * @out: Output parameters
- *
+ * @out.sec:           Integer field of the monotonic time, unit in seconds.
+ * @out.nsec:          Fractional sec of the monotonic time, in nano-seconds.
+ * @out.padding:       Unused, for u64 alignment
+ * @out.timestamp:     System wide timestamp (counter) value.
+ * @out.cycle_counter: GPU cycle counter value.
  */
 union kbase_ioctl_get_cpu_gpu_timeinfo {
 	struct {

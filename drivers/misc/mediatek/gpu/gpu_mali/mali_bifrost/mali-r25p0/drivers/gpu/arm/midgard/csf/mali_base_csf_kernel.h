@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -322,6 +302,18 @@ typedef u32 base_context_create_flags;
 
 /**
  * enum base_kcpu_command_type - Kernel CPU queue command type.
+ * @BASE_KCPU_COMMAND_TYPE_FENCE_SIGNAL:       fence_signal,
+ * @BASE_KCPU_COMMAND_TYPE_FENCE_WAIT:         fence_wait,
+ * @BASE_KCPU_COMMAND_TYPE_CQS_WAIT:           cqs_wait,
+ * @BASE_KCPU_COMMAND_TYPE_CQS_SET:            cqs_set,
+ * @BASE_KCPU_COMMAND_TYPE_MAP_IMPORT:         map_import,
+ * @BASE_KCPU_COMMAND_TYPE_UNMAP_IMPORT:       unmap_import,
+ * @BASE_KCPU_COMMAND_TYPE_UNMAP_IMPORT_FORCE: unmap_import_force,
+ * @BASE_KCPU_COMMAND_TYPE_JIT_ALLOC:          jit_alloc,
+ * @BASE_KCPU_COMMAND_TYPE_JIT_FREE:           jit_free,
+ * @BASE_KCPU_COMMAND_TYPE_GROUP_SUSPEND:      group_suspend,
+ * @BASE_KCPU_COMMAND_TYPE_ERROR_BARRIER:      error_barrier,
+ * @BASE_KCPU_COMMAND_TYPE_SAMPLE_TIME:        sample_time,
  */
 enum base_kcpu_command_type {
 	BASE_KCPU_COMMAND_TYPE_FENCE_SIGNAL,
@@ -335,6 +327,9 @@ enum base_kcpu_command_type {
 	BASE_KCPU_COMMAND_TYPE_JIT_FREE,
 	BASE_KCPU_COMMAND_TYPE_GROUP_SUSPEND,
 	BASE_KCPU_COMMAND_TYPE_ERROR_BARRIER,
+#if MALI_UNIT_TEST
+	BASE_KCPU_COMMAND_TYPE_SAMPLE_TIME,
+#endif /* MALI_UNIT_TEST */
 };
 
 /**
@@ -371,7 +366,7 @@ struct base_kcpu_command_fence_info {
 	u64 fence;
 };
 
-struct base_cqs_wait {
+struct base_cqs_wait_info {
 	u64 addr;
 	u32 val;
 	u32 padding;
@@ -448,13 +443,27 @@ struct base_kcpu_command_group_suspend_info {
 	u8 padding[3];
 };
 
+#if MALI_UNIT_TEST
+struct base_kcpu_command_sample_time_info {
+	u64 time;
+};
+#endif /* MALI_UNIT_TEST */
+
 /**
  * struct base_kcpu_command - kcpu command.
- *
  * @type:	type of the kcpu command, one enum base_kcpu_command_type
+ * @padding:	padding to a multiple of 64 bits
  * @info:	structure which contains information about the kcpu command;
  *		actual type is determined by @p type
- * @padding:	padding to a multiple of 64 bits
+ * @info.fence:            Fence
+ * @info.cqs_wait:         CQS wait
+ * @info.cqs_set:          CQS set
+ * @info.import:           import
+ * @info.jit_alloc:        jit allocation
+ * @info.jit_free:         jit deallocation
+ * @info.suspend_buf_copy: suspend buffer copy
+ * @info.sample_time:      sample time
+ * @info.padding:          padding
  */
 struct base_kcpu_command {
 	u8 type;
@@ -467,6 +476,9 @@ struct base_kcpu_command {
 		struct base_kcpu_command_jit_alloc_info jit_alloc;
 		struct base_kcpu_command_jit_free_info jit_free;
 		struct base_kcpu_command_group_suspend_info suspend_buf_copy;
+#if MALI_UNIT_TEST
+		struct base_kcpu_command_sample_time_info sample_time;
+#endif /* MALI_UNIT_TEST */
 		u64 padding[2]; /* No sub-struct should be larger */
 	} info;
 };
@@ -558,15 +570,13 @@ enum base_gpu_queue_group_error_type {
 
 /**
  * struct base_gpu_queue_group_error - Unrecoverable fault information
- *
- * @error_type:   Error type of @base_gpu_queue_group_error_type
- *                indicating which field in union payload is filled
- * @padding:      Unused bytes for 64bit boundary
- * @fatal_group:  Unrecoverable fault error associated with
- *                GPU command queue group
- * @fatal_queue:  Unrecoverable fault error associated with command queue
- *
- * @payload:      Input Payload
+ * @error_type:          Error type of @base_gpu_queue_group_error_type
+ *                       indicating which field in union payload is filled
+ * @padding:             Unused bytes for 64bit boundary
+ * @payload:             Input Payload
+ * @payload.fatal_group: Unrecoverable fault error associated with
+ *                       GPU command queue group
+ * @payload.fatal_queue: Unrecoverable fault error associated with command queue
  */
 struct base_gpu_queue_group_error {
 	u8 error_type;
@@ -599,13 +609,16 @@ enum base_csf_notification_type {
 /**
  * struct base_csf_notification - Event or error notification
  *
- * @type:         Notification type of @base_csf_notification_type
- * @padding:      Padding for 64bit boundary
- * @handle:       Handle of GPU command queue group associated with fatal error
- * @error:        Unrecoverable fault error
- * @align:        To fit the struct into a 64-byte cache line
+ * @type:                      Notification type of @base_csf_notification_type
+ * @padding:                   Padding for 64bit boundary
+ * @payload:                   Input Payload
+ * @payload.align:             To fit the struct into a 64-byte cache line
+ * @payload.csg_error:         CSG error
+ * @payload.csg_error.handle:  Handle of GPU command queue group associated with
+ *                             fatal error
+ * @payload.csg_error.padding: Padding
+ * @payload.csg_error.error:   Unrecoverable fault error
  *
- * @payload:      Input Payload
  */
 struct base_csf_notification {
 	u8 type;

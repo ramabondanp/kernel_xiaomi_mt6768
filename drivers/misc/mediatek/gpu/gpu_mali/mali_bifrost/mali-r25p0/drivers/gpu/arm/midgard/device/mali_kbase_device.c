@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -38,6 +36,7 @@
 #include <mali_kbase_hwaccess_instr.h>
 #include <mali_kbase_hw.h>
 #include <mali_kbase_config_defaults.h>
+#include <linux/priority_control_manager.h>
 
 #include <tl/mali_kbase_timeline.h>
 #include "mali_kbase_vinstr.h"
@@ -110,15 +109,61 @@ static void kbase_device_all_as_term(struct kbase_device *kbdev)
 		kbase_mmu_as_term(kbdev, i);
 }
 
+int kbase_device_pcm_dev_init(struct kbase_device *const kbdev)
+{
+	int err = 0;
+
+#ifdef CONFIG_OF
+	struct device_node *prio_ctrl_node;
+
+	/* Check to see whether or not a platform specific priority control manager
+	 * is available.
+	 */
+	prio_ctrl_node = of_parse_phandle(kbdev->dev->of_node,
+			"priority-control-manager", 0);
+	if (!prio_ctrl_node) {
+		dev_info(kbdev->dev,
+			"No priority control manager is configured");
+	} else {
+		struct platform_device *const pdev =
+			of_find_device_by_node(prio_ctrl_node);
+
+		if (!pdev) {
+			dev_err(kbdev->dev,
+				"The configured priority control manager was not found");
+		} else {
+			struct priority_control_manager_device *pcm_dev =
+						platform_get_drvdata(pdev);
+			if (!pcm_dev) {
+				dev_info(kbdev->dev, "Priority control manager is not ready");
+				err = -EPROBE_DEFER;
+			} else if (!try_module_get(pcm_dev->owner)) {
+				dev_err(kbdev->dev, "Failed to get priority control manager module");
+				err = -ENODEV;
+			} else {
+				dev_info(kbdev->dev, "Priority control manager successfully loaded");
+				kbdev->pcm_dev = pcm_dev;
+			}
+		}
+		of_node_put(prio_ctrl_node);
+	}
+#endif /* CONFIG_OF */
+
+	return err;
+}
+
+void kbase_device_pcm_dev_term(struct kbase_device *const kbdev)
+{
+	if (kbdev->pcm_dev)
+		module_put(kbdev->pcm_dev->owner);
+}
+
 int kbase_device_misc_init(struct kbase_device * const kbdev)
 {
 	int err;
 #ifdef CONFIG_ARM64
 	struct device_node *np = NULL;
 #endif /* CONFIG_ARM64 */
-#ifdef CONFIG_OF
-	struct device_node *prio_ctrl_node = NULL;
-#endif
 
 	spin_lock_init(&kbdev->mmu_mask_change);
 	mutex_init(&kbdev->mmu_hw_mutex);
@@ -143,33 +188,6 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 		}
 	}
 #endif /* CONFIG_ARM64 */
-	kbdev->pcm_dev = NULL;
-#ifdef CONFIG_OF
-	/* Check to see whether or not a platform specific priority control manager
-	 * is available.
-	 */
-	prio_ctrl_node = of_parse_phandle(kbdev->dev->of_node,
-			"priority-control-manager", 0);
-	if (!prio_ctrl_node) {
-		dev_info(kbdev->dev,
-			"No priority control manager is configured\n");
-	} else {
-		struct platform_device *const pdev =
-			of_find_device_by_node(prio_ctrl_node);
-		if (!pdev) {
-			dev_err(kbdev->dev,
-				"The configured priority control manager was not found\n");
-		} else {
-			kbdev->pcm_dev = platform_get_drvdata(pdev);
-			if (!kbdev->pcm_dev) {
-				dev_info(kbdev->dev,
-					"Priority control manager is not ready\n");
-				err = -EPROBE_DEFER;
-			}
-		}
-		of_node_put(prio_ctrl_node);
-	}
-#endif /* CONFIG_OF */
 
 	/* Get the list of workarounds for issues on the current HW
 	 * (identified by the GPU_ID register)

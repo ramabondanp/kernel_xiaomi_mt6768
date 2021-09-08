@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -2719,12 +2717,21 @@ kbase_pm_request_gpu_cycle_counter_do_request(struct kbase_device *kbdev)
 
 	spin_lock_irqsave(&kbdev->pm.backend.gpu_cycle_counter_requests_lock,
 									flags);
-
 	++kbdev->pm.backend.gpu_cycle_counter_requests;
 
 	if (kbdev->pm.backend.gpu_cycle_counter_requests == 1)
 		kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
 					GPU_COMMAND_CYCLE_COUNT_START);
+	else {
+		/* This might happen after GPU reset.
+		 * Then counter needs to be kicked.
+		 */
+		if (!(kbase_reg_read(kbdev, GPU_CONTROL_REG(GPU_STATUS)) &
+		      GPU_STATUS_CYCLE_COUNT_ACTIVE)) {
+			kbase_reg_write(kbdev, GPU_CONTROL_REG(GPU_COMMAND),
+					GPU_COMMAND_CYCLE_COUNT_START);
+		}
+	}
 
 	spin_unlock_irqrestore(
 			&kbdev->pm.backend.gpu_cycle_counter_requests_lock,
@@ -2739,6 +2746,8 @@ void kbase_pm_request_gpu_cycle_counter(struct kbase_device *kbdev)
 
 	KBASE_DEBUG_ASSERT(kbdev->pm.backend.gpu_cycle_counter_requests <
 								INT_MAX);
+
+	kbase_pm_wait_for_l2_powered(kbdev);
 
 	kbase_pm_request_gpu_cycle_counter_do_request(kbdev);
 }

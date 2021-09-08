@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2017-2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2017-2018, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -66,6 +46,7 @@ typedef u32 (*kbase_ipa_get_active_cycles_callback)(struct kbase_ipa_model_vinst
 /**
  * struct kbase_ipa_model_vinstr_data - IPA context per device
  * @kbdev:               pointer to kbase device
+ * @group_values:        values of coefficients for IPA groups
  * @groups_def:          Array of IPA groups.
  * @groups_def_num:      Number of elements in the array of IPA groups.
  * @get_active_cycles:   Callback to return number of active cycles during
@@ -121,7 +102,7 @@ struct kbase_ipa_group {
  * @model_data:		pointer to model data
  * @coeff:		model coefficient. Unity is ~2^20, so range approx
  *			+/- 4.0: -2^22 < coeff < 2^22
- * @counter		offset in bytes of the counter used to calculate energy
+ * @counter:		offset in bytes of the counter used to calculate energy
  *			for IPA group
  *
  * Calculate energy estimation based on hardware counter `counter'
@@ -168,7 +149,7 @@ s64 kbase_ipa_single_counter(
 
 /**
  * attach_vinstr() - attach a vinstr_buffer to an IPA model.
- * @model_data		pointer to model data
+ * @model_data:		pointer to model data
  *
  * Attach a vinstr_buffer to an IPA model. The vinstr_buffer
  * allows access to the hardware counters used to calculate
@@ -180,7 +161,7 @@ int kbase_ipa_attach_vinstr(struct kbase_ipa_model_vinstr_data *model_data);
 
 /**
  * detach_vinstr() - detach a vinstr_buffer from an IPA model.
- * @model_data		pointer to model data
+ * @model_data:		pointer to model data
  *
  * Detach a vinstr_buffer from an IPA model.
  */

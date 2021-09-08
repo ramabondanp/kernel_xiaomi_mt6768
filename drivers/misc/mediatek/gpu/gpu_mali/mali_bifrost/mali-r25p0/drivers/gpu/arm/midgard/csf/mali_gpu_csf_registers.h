@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -1114,6 +1094,16 @@
 #define GLB_REQ_PING_GET(reg_val) (((reg_val)&GLB_REQ_PING_MASK) >> GLB_REQ_PING_SHIFT)
 #define GLB_REQ_PING_SET(reg_val, value) \
 	(((reg_val) & ~GLB_REQ_PING_MASK) | (((value) << GLB_REQ_PING_SHIFT) & GLB_REQ_PING_MASK))
+#define GLB_REQ_FIRMWARE_CONFIG_UPDATE_SHIFT 9
+#define GLB_REQ_FIRMWARE_CONFIG_UPDATE_MASK                                    \
+	(0x1 << GLB_REQ_FIRMWARE_CONFIG_UPDATE_SHIFT)
+#define GLB_REQ_FIRMWARE_CONFIG_UPDATE_GET(reg_val)                            \
+	(((reg_val)&GLB_REQ_FIRMWARE_CONFIG_UPDATE_MASK) >>                    \
+	 GLB_REQ_FIRMWARE_CONFIG_UPDATE_SHIFT)
+#define GLB_REQ_FIRMWARE_CONFIG_UPDATE_SET(reg_val, value)                     \
+	(((reg_val) & ~GLB_REQ_FIRMWARE_CONFIG_UPDATE_MASK) |                  \
+	 (((value) << GLB_REQ_FIRMWARE_CONFIG_UPDATE_SHIFT) &                  \
+	  GLB_REQ_FIRMWARE_CONFIG_UPDATE_MASK))
 #define GLB_REQ_INACTIVE_COMPUTE_SHIFT 20
 #define GLB_REQ_INACTIVE_COMPUTE_MASK (0x1 << GLB_REQ_INACTIVE_COMPUTE_SHIFT)
 #define GLB_REQ_INACTIVE_COMPUTE_GET(reg_val) \
@@ -1227,6 +1217,16 @@
 #define GLB_ACK_IRQ_MASK_PING_SET(reg_val, value) \
 	(((reg_val) & ~GLB_ACK_IRQ_MASK_PING_MASK) |  \
 	 (((value) << GLB_ACK_IRQ_MASK_PING_SHIFT) & GLB_ACK_IRQ_MASK_PING_MASK))
+#define GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_SHIFT 9
+#define GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_MASK                           \
+	(0x1 << GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_SHIFT)
+#define GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_GET(reg_val)                   \
+	(((reg_val)&GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_MASK) >>           \
+	 GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_SHIFT)
+#define GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_SET(reg_val, value)            \
+	(((reg_val) & ~GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_MASK) |         \
+	 (((value) << GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_SHIFT) &         \
+	  GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_MASK))
 #define GLB_ACK_IRQ_MASK_INACTIVE_COMPUTE_SHIFT 20
 #define GLB_ACK_IRQ_MASK_INACTIVE_COMPUTE_MASK (0x1 << GLB_ACK_IRQ_MASK_INACTIVE_COMPUTE_SHIFT)
 #define GLB_ACK_IRQ_MASK_INACTIVE_COMPUTE_GET(reg_val) \

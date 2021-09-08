@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -96,6 +94,7 @@ static struct kbase_queue_group *get_tock_top_group(
 static void scheduler_enable_tick_timer_nolock(struct kbase_device *kbdev);
 static int suspend_active_queue_groups(struct kbase_device *kbdev,
 				       unsigned long *slot_mask);
+static void schedule_in_cycle(struct kbase_queue_group *group, bool force);
 
 #define kctx_as_enabled(kctx) (!kbase_ctx_flag(kctx, KCTX_AS_DISABLED_ON_FAULT))
 
@@ -492,12 +491,18 @@ static void update_idle_suspended_group_state(struct kbase_queue_group *group)
 		remove_group_from_idle_wait(group);
 		insert_group_to_runnable(scheduler, group,
 					 KBASE_CSF_GROUP_SUSPENDED);
-	} else {
-		if (group->run_state == KBASE_CSF_GROUP_SUSPENDED_ON_IDLE)
-			group->run_state = KBASE_CSF_GROUP_SUSPENDED;
-		else
-			return;
-	}
+	} else if (group->run_state == KBASE_CSF_GROUP_SUSPENDED_ON_IDLE) {
+		group->run_state = KBASE_CSF_GROUP_SUSPENDED;
+
+		/* If scheduler is not suspended and the given group's
+		 * static priority (reflected by the scan_seq_num) is inside
+		 * the current tick slot-range, schedules an async tock.
+		 */
+		if (scheduler->state != SCHED_SUSPENDED &&
+		    group->scan_seq_num < scheduler->num_csg_slots_for_tick)
+			schedule_in_cycle(group, true);
+	} else
+		return;
 
 	atomic_inc(&scheduler->non_idle_offslot_grps);
 }
@@ -1522,6 +1527,17 @@ static void deschedule_idle_wait_group(struct kbase_csf_scheduler *scheduler,
 	insert_group_to_idle_wait(group);
 }
 
+static void update_offslot_non_idle_cnt_for_faulty_grp(struct kbase_queue_group *group)
+{
+	struct kbase_device *kbdev = group->kctx->kbdev;
+	struct kbase_csf_scheduler *const scheduler = &kbdev->csf.scheduler;
+
+	lockdep_assert_held(&scheduler->lock);
+
+	if (group->prepared_seq_num < scheduler->non_idle_scanout_grps)
+		atomic_dec(&scheduler->non_idle_offslot_grps);
+}
+
 static void update_offslot_non_idle_cnt_for_onslot_grp(struct kbase_queue_group *group)
 {
 	struct kbase_device *kbdev = group->kctx->kbdev;
@@ -2180,6 +2196,67 @@ static inline void count_active_address_space(struct kbase_device *kbdev,
 	}
 }
 
+/* Two schemes are used in assigning the priority to CSG slots for a given
+ * CSG from the 'groups_to_schedule' list.
+ * This is needed as an idle on-slot group is deprioritized by moving it to
+ * the tail of 'groups_to_schedule' list. As a result it can either get
+ * evicted from the CSG slot in current tick/tock dealing, or its position
+ * can be after the lower priority non-idle groups in the 'groups_to_schedule'
+ * list. The latter case can result in the on-slot subset containing both
+ * non-idle and idle CSGs, and is handled through the 2nd scheme described
+ * below.
+ *
+ * First scheme :- If all the slots are going to be occupied by the non-idle or
+ * idle groups, then a simple assignment of the priority is done as per the
+ * position of a group in the 'groups_to_schedule' list. So maximum priority
+ * gets assigned to the slot of a group which is at the head of the list.
+ * Here the 'groups_to_schedule' list would effectively be ordered as per the
+ * static priority of groups.
+ *
+ * Second scheme :- If the slots are going to be occupied by a mix of idle and
+ * non-idle groups then the priority assignment needs to ensure that the
+ * priority of a slot belonging to a higher priority idle group will always be
+ * greater than the priority of a slot belonging to a lower priority non-idle
+ * group, reflecting the original position of a group in the scan order (i.e
+ * static priority) 'scan_seq_num', which is set during the prepare phase of a
+ * tick/tock before the group is moved to 'idle_groups_to_schedule' list if it
+ * is idle.
+ * The priority range [MAX_CSG_SLOT_PRIORITY, 0] is partitioned with the first
+ * 'slots_for_tick' groups in the original scan order are assigned a priority in
+ * the subrange [MAX_CSG_SLOT_PRIORITY, MAX_CSG_SLOT_PRIORITY - slots_for_tick),
+ * whereas rest of the groups are assigned the priority in the subrange
+ * [MAX_CSG_SLOT_PRIORITY - slots_for_tick, 0]. This way even if an idle higher
+ * priority group ends up after the non-idle lower priority groups in the
+ * 'groups_to_schedule' list, it will get a higher slot priority. And this will
+ * enable the FW to quickly start the execution of higher priority group when it
+ * gets de-idled.
+ */
+static u8 get_slot_priority(struct kbase_queue_group *group)
+{
+	struct kbase_csf_scheduler *scheduler =
+		&group->kctx->kbdev->csf.scheduler;
+	u8 slot_prio;
+	u32 slots_for_tick = scheduler->num_csg_slots_for_tick;
+	u32 used_slots = slots_for_tick - scheduler->remaining_tick_slots;
+	/* Check if all the slots are going to be occupied by the non-idle or
+	 * idle groups.
+	 */
+	if (scheduler->non_idle_scanout_grps >= slots_for_tick ||
+	    !scheduler->non_idle_scanout_grps) {
+		slot_prio = (u8)(MAX_CSG_SLOT_PRIORITY - used_slots);
+	} else {
+		/* There will be a mix of idle and non-idle groups. */
+		if (group->scan_seq_num < slots_for_tick)
+			slot_prio = (u8)(MAX_CSG_SLOT_PRIORITY -
+					 group->scan_seq_num);
+		else if (MAX_CSG_SLOT_PRIORITY > (slots_for_tick + used_slots))
+			slot_prio = (u8)(MAX_CSG_SLOT_PRIORITY - (slots_for_tick + used_slots));
+		else
+			slot_prio = 0;
+	}
+	return slot_prio;
+}
+
 /**
  * update_resident_groups_priority() - Update the priority of resident groups
  *
@@ -2189,7 +2266,7 @@ static inline void count_active_address_space(struct kbase_device *kbdev,
  * that are at the head of groups_to_schedule list, preceding the first
  * non-resident group.
  *
- * This function will also adjust kbase_csf_scheduler.head_slot_priority on
+ * This function will also adjust kbase_csf_scheduler.remaining_tick_slots on
  * the priority update.
  */
 static void update_resident_groups_priority(struct kbase_device *kbdev)
@@ -2210,11 +2287,11 @@ static void update_resident_groups_priority(struct kbase_device *kbdev)
 			break;
 
 		update_csg_slot_priority(group,
-					 scheduler->head_slot_priority);
+					 get_slot_priority(group));
 
 		/* Drop the head group from the list */
 		remove_scheduled_group(kbdev, group);
-		scheduler->head_slot_priority--;
+		scheduler->remaining_tick_slots--;
 	}
 }
 
@@ -2229,7 +2306,7 @@ static void update_resident_groups_priority(struct kbase_device *kbdev)
  * CSG slot, provided the initial position of the non-resident
  * group in the list is less than the number of CSG slots and there is
  * an available GPU address space slot.
- * kbase_csf_scheduler.head_slot_priority would also be adjusted after
+ * kbase_csf_scheduler.remaining_tick_slots would also be adjusted after
  * programming the slot.
  */
 static void program_group_on_vacant_csg_slot(struct kbase_device *kbdev,
@@ -2249,17 +2326,19 @@ static void program_group_on_vacant_csg_slot(struct kbase_device *kbdev,
 
 		if (!WARN_ON(ret)) {
 			if (kctx_as_enabled(group->kctx) && !group->faulted) {
-				program_csg_slot(group,
-					 slot,
-					 scheduler->head_slot_priority);
+				program_csg_slot(group, slot,
+					get_slot_priority(group));
 
 				if (likely(csg_slot_in_use(kbdev, slot))) {
 					/* Drop the head group from the list */
 					remove_scheduled_group(kbdev, group);
-					scheduler->head_slot_priority--;
+					scheduler->remaining_tick_slots--;
 				}
-			} else
+			} else {
+				update_offslot_non_idle_cnt_for_faulty_grp(
+					group);
 				remove_scheduled_group(kbdev, group);
+			}
 		}
 	}
 }
@@ -2277,7 +2356,7 @@ static void program_group_on_vacant_csg_slot(struct kbase_device *kbdev,
  * group slot with the non-resident group. Finally update the priority of all
  * resident queue groups following the non-resident group.
  *
- * kbase_csf_scheduler.head_slot_priority would also be adjusted.
+ * kbase_csf_scheduler.remaining_tick_slots would also be adjusted.
  */
 static void program_vacant_csg_slot(struct kbase_device *kbdev, s8 slot)
 {
@@ -2440,6 +2519,8 @@ static void program_suspending_csg_slots(struct kbase_device *kbdev)
 				 */
 				clear_bit(i, slot_mask);
 				set_bit(i, scheduler->csgs_events_enable_mask);
+				update_offslot_non_idle_cnt_for_onslot_grp(
+					group);
 			}
 
 			suspend_wait_failed = true;
@@ -2454,8 +2535,7 @@ static void program_suspending_csg_slots(struct kbase_device *kbdev)
 		u32 i;
 
 		while (scheduler->ngrp_to_schedule &&
-			(scheduler->head_slot_priority > (MAX_CSG_SLOT_PRIORITY
-				- scheduler->num_csg_slots_for_tick))) {
+		       scheduler->remaining_tick_slots) {
 			i = find_first_zero_bit(scheduler->csg_inuse_bitmap,
 					num_groups);
 			if (WARN_ON(i == num_groups))
@@ -2899,6 +2979,9 @@ static void scheduler_apply(struct kbase_device *kbdev)
 		}
 	}
 
+	/* Initialize the remaining avialable csg slots for the tick/tock */
+	scheduler->remaining_tick_slots = available_csg_slots;
+
 	/* If there are spare slots, apply heads in the list */
 	spare = (available_csg_slots > resident_cnt) ?
 		(available_csg_slots - resident_cnt) : 0;
@@ -2911,7 +2994,7 @@ static void scheduler_apply(struct kbase_device *kbdev)
 		    group->prepared_seq_num < available_csg_slots) {
 			/* One of the resident remainders */
 			update_csg_slot_priority(group,
-						scheduler->head_slot_priority);
+					get_slot_priority(group));
 		} else if (spare != 0) {
 			s8 slot = (s8)find_first_zero_bit(
 				     kbdev->csf.scheduler.csg_inuse_bitmap,
@@ -2922,11 +3005,13 @@ static void scheduler_apply(struct kbase_device *kbdev)
 
 			if (!kctx_as_enabled(group->kctx) || group->faulted) {
 				/* Drop the head group and continue */
+				update_offslot_non_idle_cnt_for_faulty_grp(
+					group);
 				remove_scheduled_group(kbdev, group);
 				continue;
 			}
 			program_csg_slot(group, slot,
-					 scheduler->head_slot_priority);
+					 get_slot_priority(group));
 			if (unlikely(!csg_slot_in_use(kbdev, slot)))
 				break;
 
@@ -2936,8 +3021,8 @@ static void scheduler_apply(struct kbase_device *kbdev)
 
 		/* Drop the head csg from the list */
 		remove_scheduled_group(kbdev, group);
-		if (scheduler->head_slot_priority)
-			scheduler->head_slot_priority--;
+		if (!WARN_ON(!scheduler->remaining_tick_slots))
+			scheduler->remaining_tick_slots--;
 	}
 
 	/* Dealing with groups currently going through suspend */
@@ -2966,6 +3051,9 @@ static void scheduler_ctx_scan_groups(struct kbase_device *kbdev,
 
 		if (unlikely(group->faulted))
 			continue;
+
+		/* Set the scanout sequence number, starting from 0 */
+		group->scan_seq_num = scheduler->csg_scan_count_for_tick++;
 
 		if (queue_group_idle_locked(group)) {
 			list_add_tail(&group->link_to_schedule,
@@ -3324,17 +3412,6 @@ static bool scheduler_idle_suspendable(struct kbase_device *kbdev)
 	if  (scheduler->state == SCHED_SUSPENDED)
 		return false;
 
-	/* Work around for TTUX, skip scheduler suspend on idle-groups.
-	 * ToDo: GPUCORE-26768, or its descendants after root cause
-	 * investigation, needs to revert this WA.
-	 */
-	if (scheduler->total_runnable_grps &&
-	    (kbdev->gpu_props.props.raw_props.gpu_id &
-	     GPU_ID2_PRODUCT_MODEL) == GPU_ID2_PRODUCT_TTUX) {
-		dev_dbg(kbdev->dev, "GPU: TTUX, skipping idle suspend");
-		return false;
-	}
-
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 	if (scheduler->total_runnable_grps) {
 		spin_lock(&scheduler->interrupt_lock);
@@ -3359,6 +3436,10 @@ static void gpu_idle_worker(struct work_struct *work)
 		work, struct kbase_device, csf.scheduler.gpu_idle_work);
 	struct kbase_csf_scheduler *const scheduler = &kbdev->csf.scheduler;
 
+	if (kbase_reset_gpu_try_prevent(kbdev)) {
+		dev_warn(kbdev->dev, "Quit idle for failing to prevent gpu reset.\n");
+		return;
+	}
 	mutex_lock(&scheduler->lock);
 
 	/* Cycle completed, disable the firmware idle timer */
@@ -3380,6 +3461,7 @@ static void gpu_idle_worker(struct work_struct *work)
 	}
 
 	mutex_unlock(&scheduler->lock);
+	kbase_reset_gpu_allow(kbdev);
 }
 
 static int scheduler_prepare(struct kbase_device *kbdev)
@@ -3404,7 +3486,7 @@ static int scheduler_prepare(struct kbase_device *kbdev)
 		scheduler->ngrp_to_schedule = 0;
 	scheduler->top_ctx = NULL;
 	scheduler->top_grp = NULL;
-	scheduler->head_slot_priority = MAX_CSG_SLOT_PRIORITY;
+	scheduler->csg_scan_count_for_tick = 0;
 	WARN_ON(!list_empty(&scheduler->idle_groups_to_schedule));
 	scheduler->num_active_address_spaces = 0;
 	scheduler->num_csg_slots_for_tick = 0;
@@ -3431,6 +3513,9 @@ static int scheduler_prepare(struct kbase_device *kbdev)
 
 	/* Adds those idle but runnable groups to the scanout list */
 	scheduler_scan_idle_groups(kbdev);
+
+	/* After adding the idle CSGs, the two counts should be the same */
+	WARN_ON(scheduler->csg_scan_count_for_tick != scheduler->ngrp_to_schedule);
 
 	KBASE_KTRACE_ADD_CSF_GRP(kbdev, SCHEDULER_TOP_GRP, scheduler->top_grp,
 			scheduler->num_active_address_spaces |
@@ -4453,6 +4538,12 @@ void kbase_csf_scheduler_pm_suspend(struct kbase_device *kbdev)
 	cancel_work_sync(&scheduler->tick_work);
 	cancel_delayed_work_sync(&scheduler->tock_work);
 
+	if (kbase_reset_gpu_prevent_and_wait(kbdev)) {
+		dev_warn(kbdev->dev,
+			 "Stop PM suspending for failing to prevent gpu reset.\n");
+		return;
+	}
+
 	mutex_lock(&scheduler->lock);
 
 	disable_gpu_idle_fw_timer(kbdev);
@@ -4464,6 +4555,8 @@ void kbase_csf_scheduler_pm_suspend(struct kbase_device *kbdev)
 		cancel_tick_timer(kbdev);
 	}
 	mutex_unlock(&scheduler->lock);
+
+	kbase_reset_gpu_allow(kbdev);
 }
 KBASE_EXPORT_TEST_API(kbase_csf_scheduler_pm_suspend);
 

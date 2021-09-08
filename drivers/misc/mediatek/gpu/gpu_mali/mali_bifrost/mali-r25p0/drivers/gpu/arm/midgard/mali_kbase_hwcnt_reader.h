@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2015, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2015, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -108,14 +88,14 @@ enum base_hwcnt_reader_event {
 	BASE_HWCNT_READER_EVENT_COUNT
 };
 
+#define KBASE_HWCNT_READER_API_VERSION_NO_FEATURE (0)
+#define KBASE_HWCNT_READER_API_VERSION_FEATURE_CYCLES_TOP (1 << 0)
+#define KBASE_HWCNT_READER_API_VERSION_FEATURE_CYCLES_SHADER_CORES (1 << 1)
 /**
  * struct kbase_hwcnt_reader_api_version - hwcnt reader API version
- * @versoin:  API version
+ * @version:  API version
  * @features: available features in this API version
  */
-#define KBASE_HWCNT_READER_API_VERSION_NO_FEATURE                  (0)
-#define KBASE_HWCNT_READER_API_VERSION_FEATURE_CYCLES_TOP          (1 << 0)
-#define KBASE_HWCNT_READER_API_VERSION_FEATURE_CYCLES_SHADER_CORES (1 << 1)
 struct kbase_hwcnt_reader_api_version {
 	u32 version;
 	u32 features;

@@ -6,7 +6,7 @@
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -283,11 +281,9 @@ void kbase_context_mem_pool_group_term(struct kbase_context *kctx)
 
 int kbase_context_mmu_init(struct kbase_context *kctx)
 {
-	kbase_mmu_init(kctx->kbdev,
-		&kctx->mmu, kctx,
+	return kbase_mmu_init(
+		kctx->kbdev, &kctx->mmu, kctx,
 		base_context_mmu_group_id_get(kctx->create_flags));
-
-	return 0;
 }
 
 void kbase_context_mmu_term(struct kbase_context *kctx)

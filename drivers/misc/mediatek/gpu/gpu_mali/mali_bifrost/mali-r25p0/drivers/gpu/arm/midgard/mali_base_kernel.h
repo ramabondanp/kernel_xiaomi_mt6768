@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -138,7 +118,7 @@ typedef u32 base_mem_alloc_flags;
  */
 enum base_mem_import_type {
 	BASE_MEM_IMPORT_TYPE_INVALID = 0,
-	/**
+	/*
 	 * Import type with value 1 is deprecated.
 	 */
 	BASE_MEM_IMPORT_TYPE_UMM = 2,
@@ -180,7 +160,7 @@ struct base_mem_import_user_buffer {
 /* Maximum size allowed in a single KBASE_IOCTL_MEM_ALLOC call */
 #define KBASE_MEM_ALLOC_MAX_SIZE ((8ull << 30) >> PAGE_SHIFT) /* 8 GB */
 
-/**
+/*
  * struct base_fence - Cross-device synchronisation fence.
  *
  * A fence is used to signal when the GPU has finished accessing a resource that
@@ -486,74 +466,49 @@ struct base_jd_debug_copy_buffer {
 #define BASE_GPU_NUM_TEXTURE_FEATURES_REGISTERS 4
 
 #define BASE_MAX_COHERENT_GROUPS 16
-
+/**
+ * struct mali_base_gpu_core_props - GPU core props info
+ * @product_id: Pro specific value.
+ * @version_status: Status of the GPU release. No defined values, but starts at
+ * 	0 and increases by one for each release status (alpha, beta, EAC, etc.).
+ * 	4 bit values (0-15).
+ * @minor_revision: Minor release number of the GPU. "P" part of an "RnPn"
+ * 	release number.
+ * 	8 bit values (0-255).
+ * @major_revision: Major release number of the GPU. "R" part of an "RnPn"
+ * 	release number.
+ * 	4 bit values (0-15).
+ * @padding: padding to allign to 8-byte
+ * @gpu_freq_khz_max: The maximum GPU frequency. Reported to applications by
+ * 	clGetDeviceInfo()
+ * @log2_program_counter_size: Size of the shader program counter, in bits.
+ * @texture_features: TEXTURE_FEATURES_x registers, as exposed by the GPU. This
+ * 	is a bitpattern where a set bit indicates that the format is supported.
+ * 	Before using a texture format, it is recommended that the corresponding
+ * 	bit be checked.
+ * @gpu_available_memory_size: Theoretical maximum memory available to the GPU.
+ * 	It is unlikely that a client will be able to allocate all of this memory
+ * 	for their own purposes, but this at least provides an upper bound on the
+ * 	memory available to the GPU.
+ * 	This is required for OpenCL's clGetDeviceInfo() call when
+ * 	CL_DEVICE_GLOBAL_MEM_SIZE is requested, for OpenCL GPU devices. The
+ * 	client will not be expecting to allocate anywhere near this value.
+ * @num_exec_engines: The number of execution engines.
+ */
 struct mali_base_gpu_core_props {
-	/**
-	 * Product specific value.
-	 */
 	u32 product_id;
-
-	/**
-	 * Status of the GPU release.
-	 * No defined values, but starts at 0 and increases by one for each
-	 * release status (alpha, beta, EAC, etc.).
-	 * 4 bit values (0-15).
-	 */
 	u16 version_status;
-
-	/**
-	 * Minor release number of the GPU. "P" part of an "RnPn" release number.
-     * 8 bit values (0-255).
-	 */
 	u16 minor_revision;
-
-	/**
-	 * Major release number of the GPU. "R" part of an "RnPn" release number.
-     * 4 bit values (0-15).
-	 */
 	u16 major_revision;
-
 	u16 padding;
-
-	/* The maximum GPU frequency. Reported to applications by
-	 * clGetDeviceInfo()
-	 */
 	u32 gpu_freq_khz_max;
-
-	/**
-	 * Size of the shader program counter, in bits.
-	 */
 	u32 log2_program_counter_size;
-
-	/**
-	 * TEXTURE_FEATURES_x registers, as exposed by the GPU. This is a
-	 * bitpattern where a set bit indicates that the format is supported.
-	 *
-	 * Before using a texture format, it is recommended that the corresponding
-	 * bit be checked.
-	 */
 	u32 texture_features[BASE_GPU_NUM_TEXTURE_FEATURES_REGISTERS];
-
-	/**
-	 * Theoretical maximum memory available to the GPU. It is unlikely that a
-	 * client will be able to allocate all of this memory for their own
-	 * purposes, but this at least provides an upper bound on the memory
-	 * available to the GPU.
-	 *
-	 * This is required for OpenCL's clGetDeviceInfo() call when
-	 * CL_DEVICE_GLOBAL_MEM_SIZE is requested, for OpenCL GPU devices. The
-	 * client will not be expecting to allocate anywhere near this value.
-	 */
 	u64 gpu_available_memory_size;
-
-	/**
-	 * The number of execution engines.
-	 */
 	u8 num_exec_engines;
 };
 
-/**
- *
+/*
  * More information is possible - but associativity and bus width are not
  * required by upper-level apis.
  */
@@ -570,41 +525,70 @@ struct mali_base_gpu_tiler_props {
 };
 
 /**
- * GPU threading system details.
+ * struct mali_base_gpu_thread_props - GPU threading system details.
+ * @max_threads: Max. number of threads per core
+ * @max_workgroup_size:     Max. number of threads per workgroup
+ * @max_barrier_size:       Max. number of threads that can synchronize on a
+ *                          simple barrier
+ * @max_registers:          Total size [1..65535] of the register file available
+ *                          per core.
+ * @max_task_queue:         Max. tasks [1..255] which may be sent to a core
+ *                          before it becomes blocked.
+ * @max_thread_group_split: Max. allowed value [1..15] of the Thread Group Split
+ *                          field.
+ * @impl_tech:              0 = Not specified, 1 = Silicon, 2 = FPGA,
+ *                          3 = SW Model/Emulation
+ * @padding:                padding to allign to 8-byte
+ * @tls_alloc:              Number of threads per core that TLS must be
+ *                          allocated for
  */
 struct mali_base_gpu_thread_props {
-	u32 max_threads;            /* Max. number of threads per core */
-	u32 max_workgroup_size;     /* Max. number of threads per workgroup */
-	u32 max_barrier_size;       /* Max. number of threads that can synchronize on a simple barrier */
-	u16 max_registers;          /* Total size [1..65535] of the register file available per core. */
-	u8  max_task_queue;         /* Max. tasks [1..255] which may be sent to a core before it becomes blocked. */
-	u8  max_thread_group_split; /* Max. allowed value [1..15] of the Thread Group Split field. */
-	u8  impl_tech;              /* 0 = Not specified, 1 = Silicon, 2 = FPGA, 3 = SW Model/Emulation */
+	u32 max_threads;
+	u32 max_workgroup_size;
+	u32 max_barrier_size;
+	u16 max_registers;
+	u8 max_task_queue;
+	u8 max_thread_group_split;
+	u8 impl_tech;
 	u8  padding[3];
-	u32 tls_alloc;              /* Number of threads per core that TLS must
-				     * be allocated for
-				     */
+	u32 tls_alloc;
 };
 
 /**
  * struct mali_base_gpu_coherent_group - descriptor for a coherent group
+ * @core_mask: Core restriction mask required for the group
+ * @num_cores: Number of cores in the group
+ * @padding:   padding to allign to 8-byte
  *
  * \c core_mask exposes all cores in that coherent group, and \c num_cores
- * provides a cached population-count for that mask.
+ * 	provides a cached population-count for that mask.
  *
  * @note Whilst all cores are exposed in the mask, not all may be available to
- * the application, depending on the Kernel Power policy.
+ * 	the application, depending on the Kernel Power policy.
  *
- * @note if u64s must be 8-byte aligned, then this structure has 32-bits of wastage.
+ * @note if u64s must be 8-byte aligned, then this structure has 32-bits of
+ * 	wastage.
  */
 struct mali_base_gpu_coherent_group {
-	u64 core_mask;	       /**< Core restriction mask required for the group */
-	u16 num_cores;	       /**< Number of cores in the group */
+	u64 core_mask;
+	u16 num_cores;
 	u16 padding[3];
 };
 
 /**
  * struct mali_base_gpu_coherent_group_info - Coherency group information
+ * @num_groups: Number of coherent groups in the GPU.
+ * @num_core_groups: Number of core groups (coherent or not) in the GPU.
+ * 	Equivalent to the number of L2 Caches.
+ * 	  The GPU Counter dumping writes 2048 bytes per core group, regardless
+ * 	of whether the core groups are coherent or not. Hence this member is
+ * 	needed to calculate how much memory is required for dumping.
+ * 	  @note Do not use it to work out how many valid elements are in the
+ * 	group[] member. Use num_groups instead.
+ * @coherency: Coherency features of the memory, accessed by gpu_mem_features
+ * 	methods
+ * @padding: padding to allign to 8-byte
+ * @group: Descriptors of coherent groups
  *
  * Note that the sizes of the members could be reduced. However, the \c group
  * member might be 8-byte aligned to ensure the u64 core_mask is 8-byte
@@ -615,36 +599,37 @@ struct mali_base_gpu_coherent_group {
  */
 struct mali_base_gpu_coherent_group_info {
 	u32 num_groups;
-
-	/**
-	 * Number of core groups (coherent or not) in the GPU. Equivalent to the number of L2 Caches.
-	 *
-	 * The GPU Counter dumping writes 2048 bytes per core group, regardless of
-	 * whether the core groups are coherent or not. Hence this member is needed
-	 * to calculate how much memory is required for dumping.
-	 *
-	 * @note Do not use it to work out how many valid elements are in the
-	 * group[] member. Use num_groups instead.
-	 */
 	u32 num_core_groups;
-
-	/**
-	 * Coherency features of the memory, accessed by gpu_mem_features
-	 * methods
-	 */
 	u32 coherency;
-
 	u32 padding;
-
-	/**
-	 * Descriptors of coherent groups
-	 */
 	struct mali_base_gpu_coherent_group group[BASE_MAX_COHERENT_GROUPS];
 };
 
 /**
  * struct gpu_raw_gpu_props - A complete description of the GPU's Hardware
  *                            Configuration Discovery registers.
+ * @shader_present: Shader core present bitmap
+ * @tiler_present: Tiler core present bitmap
+ * @l2_present: Level 2 cache present bitmap
+ * @stack_present: Core stack present bitmap
+ * @l2_features: L2 features
+ * @core_features: Core features
+ * @mem_features: Mem features
+ * @mmu_features: Mmu features
+ * @as_present: Bitmap of address spaces present
+ * @js_present: Job slots present
+ * @js_features: Array of job slot features.
+ * @tiler_features: Tiler features
+ * @texture_features: TEXTURE_FEATURES_x registers, as exposed by the GPU
+ * @gpu_id: GPU and revision identifier
+ * @thread_max_threads: Maximum number of threads per core
+ * @thread_max_workgroup_size: Maximum number of threads per workgroup
+ * @thread_max_barrier_size: Maximum number of threads per barrier
+ * @thread_features: Thread features
+ * @coherency_mode: Note: This is the _selected_ coherency mode rather than the
+ * 	available modes as exposed in the coherency_features register
+ * @thread_tls_alloc: Number of threads per core that TLS must be allocated for
+ * @gpu_features: GPU features
  *
  * The information is presented inefficiently for access. For frequent access,
  * the values should be better expressed in an unpacked form in the
@@ -694,16 +679,19 @@ struct gpu_raw_gpu_props {
 
 /**
  * struct base_gpu_props - Return structure for base_get_gpu_props().
+ * @core_props:     Core props.
+ * @l2_props:       L2 props.
+ * @unused_1:       Keep for backwards compatibility.
+ * @tiler_props:    Tiler props.
+ * @thread_props:   Thread props.
+ * @raw_props:      This member is large, likely to be 128 bytes.
+ * @coherency_info: This must be last member of the structure.
  *
  * NOTE: the raw_props member in this data structure contains the register
  * values from which the value of the other members are derived. The derived
  * members exist to allow for efficient access and/or shielding the details
  * of the layout of the registers.
- *
- * @unused_1:       Keep for backwards compatibility.
- * @raw_props:      This member is large, likely to be 128 bytes.
- * @coherency_info: This must be last member of the structure.
- */
+ * */
 struct base_gpu_props {
 	struct mali_base_gpu_core_props core_props;
 	struct mali_base_gpu_l2_cache_props l2_props;

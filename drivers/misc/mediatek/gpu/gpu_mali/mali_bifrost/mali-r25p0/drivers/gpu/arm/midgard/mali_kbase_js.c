@@ -6,7 +6,7 @@
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -2450,8 +2448,6 @@ static void kbase_js_evict_deps(struct kbase_context *kctx,
 				KBASE_KATOM_FLAG_JSCTX_IN_X_DEP_LIST))) {
 		/* Remove dependency.*/
 		x_dep->atom_flags &= ~KBASE_KATOM_FLAG_X_DEP_BLOCKED;
-		trace_sysgraph(SGR_DEP_RES, kctx->id,
-				kbase_jd_atom_id(kctx, x_dep));
 
 		dev_dbg(kctx->kbdev->dev, "Cleared X_DEP flag on atom %p\n",
 			(void *)x_dep);
@@ -3312,8 +3308,6 @@ struct kbase_jd_atom *kbase_js_complete_atom(struct kbase_jd_atom *katom,
 		bool was_pullable = kbase_js_ctx_pullable(kctx, x_dep->slot_nr,
 				false);
 		x_dep->atom_flags &= ~KBASE_KATOM_FLAG_X_DEP_BLOCKED;
-		trace_sysgraph(SGR_DEP_RES, kctx->id,
-				kbase_jd_atom_id(katom->kctx, x_dep));
 		dev_dbg(kbdev->dev, "Cleared X_DEP flag on atom %p\n",
 			(void *)x_dep);
 

@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -64,6 +44,14 @@
  * space.
  */
 #define MAX_TILER_HEAPS (128)
+
+#define CSF_FIRMWARE_ENTRY_READ       (1ul << 0)
+#define CSF_FIRMWARE_ENTRY_WRITE      (1ul << 1)
+#define CSF_FIRMWARE_ENTRY_EXECUTE    (1ul << 2)
+#define CSF_FIRMWARE_ENTRY_CACHE_MODE (3ul << 3)
+#define CSF_FIRMWARE_ENTRY_PROTECTED  (1ul << 5)
+#define CSF_FIRMWARE_ENTRY_SHARED     (1ul << 30)
+#define CSF_FIRMWARE_ENTRY_ZERO       (1ul << 31)
 
 /**
  * enum kbase_csf_bind_state - bind state of the queue
@@ -327,6 +315,10 @@ struct kbase_csf_notification {
  * @blocked_reason: Value shows if the queue is blocked, and if so,
  *                  the reason why it is blocked
  * @error:          GPU command queue fatal information to pass to user space.
+ * @fatal_event_work: Work item to handle the CS fatal event reported for this
+ *                    queue.
+ * @cs_fatal_info:    Records additional information about the CS fatal event.
+ * @cs_fatal:         Records information about the CS fatal event.
  */
 struct kbase_queue {
 	struct kbase_context *kctx;
@@ -353,6 +345,9 @@ struct kbase_queue {
 	u32 sb_status;
 	u32 blocked_reason;
 	struct kbase_csf_notification error;
+	struct work_struct fatal_event_work;
+	u64 cs_fatal_info;
+	u32 cs_fatal;
 };
 
 /**
@@ -415,6 +410,10 @@ struct kbase_protected_suspend_buffer {
  * @run_state:      Current state of the queue group.
  * @prepared_seq_num: Indicates the position of queue group in the list of
  *                    prepared groups to be scheduled.
+ * @scan_seq_num:     Scan out sequence number before adjusting for dynamic
+ *                    idle conditions. It is used for setting a group's
+ *                    onslot priority. It could differ from prepared_seq_number
+ *                    when there are idle groups.
  * @faulted:          Indicates that a GPU fault occurred for the queue group.
  *                    This flag persists until the fault has been queued to be
  *                    reported to userspace.
@@ -431,6 +430,8 @@ struct kbase_protected_suspend_buffer {
  *                 to be returned to userspace if such an error has occurred.
  * @error_tiler_oom: An error of type BASE_GPU_QUEUE_GROUP_ERROR_TILER_HEAP_OOM
  *                   to be returned to userspace if such an error has occurred.
+ * @timer_event_work: Work item to handle the progress timeout fatal event
+ *                    for the group.
  */
 struct kbase_queue_group {
 	struct kbase_context *kctx;
@@ -452,6 +453,7 @@ struct kbase_queue_group {
 	struct list_head link_to_schedule;
 	enum kbase_csf_group_state run_state;
 	u32 prepared_seq_num;
+	u32 scan_seq_num;
 	bool faulted;
 
 	struct kbase_queue *bound_queues[MAX_SUPPORTED_STREAMS_PER_GROUP];
@@ -463,6 +465,8 @@ struct kbase_queue_group {
 	struct kbase_csf_notification error_fatal;
 	struct kbase_csf_notification error_timeout;
 	struct kbase_csf_notification error_tiler_oom;
+
+	struct work_struct timer_event_work;
 };
 
 /**
@@ -499,7 +503,7 @@ struct kbase_csf_kcpu_queue_context {
  * struct kbase_csf_cpu_queue_context - Object representing the cpu queue
  *                                      information.
  *
- * @bufffer:     Buffer containing CPU queue information provided by Userspace.
+ * @buffer:     Buffer containing CPU queue information provided by Userspace.
  * @buffer_size: The size of @buffer.
  * @dump_req_status:  Indicates the current status for CPU queues dump request.
  * @dump_cmp:         Dumping cpu queue completion event.
@@ -733,6 +737,9 @@ struct kbase_csf_csg_slot {
  * @num_csg_slots_for_tick:  Number of CSG slots that can be
  *                           active in the given tick/tock. This depends on the
  *                           value of @num_active_address_spaces.
+ * @remaining_tick_slots:    Tracking the number of remaining available slots
+ *                           for @num_csg_slots_for_tick during the scheduling
+ *                           operation in a tick/tock.
  * @idle_groups_to_schedule: List of runnable queue groups, in which all GPU
  *                           command queues became idle or are waiting for
  *                           synchronization object, prepared on every
@@ -740,6 +747,9 @@ struct kbase_csf_csg_slot {
  *                           appended to the tail of @groups_to_schedule list
  *                           after the scan out so that the idle groups aren't
  *                           preferred for scheduling over the non-idle ones.
+ * @csg_scan_count_for_tick: CSG scanout count for assign the scan_seq_num for
+ *                           each scanned out group during scheduling operation
+ *                           in a tick/tock.
  * @total_runnable_grps:     Total number of runnable groups across all KCTXs.
  * @csgs_events_enable_mask: Use for temporary masking off asynchronous events
  *                           from firmware (such as OoM events) before a group
@@ -775,11 +785,6 @@ struct kbase_csf_csg_slot {
  *                          @top_grp.
  * @top_grp:                Pointer to queue group inside @groups_to_schedule
  *                          list that was assigned the highest slot priority.
- * @head_slot_priority:     The dynamic slot priority to be used for the
- *                          queue group at the head of @groups_to_schedule
- *                          list. Once the queue group is assigned a CSG slot,
- *                          it is removed from the list and priority is
- *                          decremented.
  * @tock_pending_request:   A "tock" request is pending: a group that is not
  *                          currently on the GPU demands to be scheduled.
  * @active_protm_grp:       Indicates if firmware has been permitted to let GPU
@@ -826,7 +831,9 @@ struct kbase_csf_scheduler {
 	u32 ngrp_to_schedule;
 	u32 num_active_address_spaces;
 	u32 num_csg_slots_for_tick;
+	u32 remaining_tick_slots;
 	struct list_head idle_groups_to_schedule;
+	u32 csg_scan_count_for_tick;
 	u32 total_runnable_grps;
 	DECLARE_BITMAP(csgs_events_enable_mask, MAX_SUPPORTED_CSGS);
 	DECLARE_BITMAP(csg_slots_idle_mask, MAX_SUPPORTED_CSGS);
@@ -840,7 +847,6 @@ struct kbase_csf_scheduler {
 	struct delayed_work ping_work;
 	struct kbase_context *top_ctx;
 	struct kbase_queue_group *top_grp;
-	u8 head_slot_priority;
 	bool tock_pending_request;
 	struct kbase_queue_group *active_protm_grp;
 	bool gpu_idle_fw_timer_enabled;
@@ -1021,6 +1027,35 @@ struct kbase_ipa_control {
 };
 
 /**
+ * struct kbase_csf_firmware_interface - Interface in the MCU firmware
+ *
+ * @node:  Interface objects are on the kbase_device:csf.firmware_interfaces
+ *         list using this list_head to link them
+ * @phys:  Array of the physical (tagged) addresses making up this interface
+ * @name:  NULL-terminated string naming the interface
+ * @num_pages: Number of entries in @phys and @pma (and length of the interface)
+ * @virtual: Starting GPU virtual address this interface is mapped at
+ * @flags: bitmask of CSF_FIRMWARE_ENTRY_* conveying the interface attributes
+ * @data_start: Offset into firmware image at which the interface data starts
+ * @data_end: Offset into firmware image at which the interface data ends
+ * @kernel_map: A kernel mapping of the memory or NULL if not required to be
+ *              mapped in the kernel
+ * @pma: Array of pointers to protected memory allocations.
+ */
+struct kbase_csf_firmware_interface {
+	struct list_head node;
+	struct tagged_addr *phys;
+	char *name;
+	u32 num_pages;
+	u32 virtual;
+	u32 flags;
+	u32 data_start;
+	u32 data_end;
+	void *kernel_map;
+	struct protected_memory_allocation **pma;
+};
+
+/**
  * struct kbase_csf_hwcnt - Object containing members for handling the dump of
  *                          HW counters.
  *
@@ -1035,8 +1070,8 @@ struct kbase_csf_hwcnt {
 };
 
 /**
- * struct kbase_csf      -  Object representing CSF for an instance of GPU
- *                          platform device.
+ * struct kbase_csf_device - Object representing CSF for an instance of GPU
+ *                           platform device.
  *
  * @mcu_mmu:                MMU page tables for the MCU firmware
  * @firmware_interfaces:    List of interfaces defined in the firmware image

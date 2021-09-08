@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -330,7 +328,8 @@ static phys_addr_t simple_pma_get_phys_addr(
 		container_of(pma_dev, struct simple_pma_device, pma_dev);
 
 	dev_dbg(epma_dev->dev, "%s(pma_dev=%px, pma=%px, pa=%llx\n",
-		__func__, (void *)pma_dev, (void *)pma, pma->pa);
+		__func__, (void *)pma_dev, (void *)pma,
+		(unsigned long long)pma->pa);
 
 	return pma->pa;
 }
@@ -354,7 +353,8 @@ static void simple_pma_free_page(
 	WARN_ON(pma == NULL);
 
 	dev_dbg(epma_dev->dev, "%s(pma_dev=%px, pma=%px, pa=%llx\n",
-		__func__, (void *)pma_dev, (void *)pma, pma->pa);
+		__func__, (void *)pma_dev, (void *)pma,
+		(unsigned long long)pma->pa);
 
 	WARN_ON(pma->pa < epma_dev->rmem_base);
 
@@ -496,7 +496,7 @@ static int protected_memory_allocator_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev,
 		"Protected memory allocator probed successfully\n");
 	dev_info(&pdev->dev, "Protected memory region: base=%llx num pages=%zu\n",
-		rmem_base, rmem_size);
+		(unsigned long long)rmem_base, rmem_size);
 
 	return 0;
 }

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2015-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2015-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -279,7 +277,7 @@ void kbase_tlstream_msgbuf_release(
 	spin_unlock_irqrestore(&stream->lock, flags);
 }
 
-void kbase_tlstream_flush_stream(
+size_t kbase_tlstream_flush_stream(
 	struct kbase_tlstream *stream)
 {
 	unsigned long    flags;
@@ -287,6 +285,7 @@ void kbase_tlstream_flush_stream(
 	unsigned int     wb_idx;
 	size_t           wb_size;
 	size_t           min_size = PACKET_HEADER_SIZE;
+
 
 	if (stream->numbered)
 		min_size += PACKET_NUMBER_SIZE;
@@ -302,7 +301,14 @@ void kbase_tlstream_flush_stream(
 				stream, wb_idx_raw, wb_size);
 		wb_idx = (wb_idx_raw + 1) % PACKET_COUNT;
 		atomic_set(&stream->buffer[wb_idx].size, wb_size);
+	} else {
+		/* we return that there is no bytes to be read.*/
+		/* Timeline io fsync will use this info the decide whether
+		 * fsync should return an error
+		 */
+		wb_size = 0;
 	}
-	spin_unlock_irqrestore(&stream->lock, flags);
-}
 
+	spin_unlock_irqrestore(&stream->lock, flags);
+	return wb_size;
+}

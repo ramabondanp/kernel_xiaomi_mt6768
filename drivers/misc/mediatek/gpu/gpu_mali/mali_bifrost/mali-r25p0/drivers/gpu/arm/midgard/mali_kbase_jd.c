@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -461,9 +459,6 @@ static inline void jd_resolve_dep(struct list_head *out_list,
 #endif /* CONFIG_MALI_DMA_FENCE */
 
 			if (dep_satisfied) {
-				trace_sysgraph(SGR_DEP_RES,
-				   dep_atom->kctx->id,
-				   kbase_jd_atom_id(katom->kctx, dep_atom));
 				dep_atom->in_jd_list = true;
 				list_add_tail(&dep_atom->jd_item, out_list);
 			}
@@ -552,10 +547,6 @@ static void jd_try_submitting_deps(struct list_head *out_list,
 #endif /* CONFIG_MALI_DMA_FENCE */
 
 				if (dep0_valid && dep1_valid && dep_satisfied) {
-					trace_sysgraph(SGR_DEP_RES,
-					    dep_atom->kctx->id,
-					    kbase_jd_atom_id(dep_atom->kctx,
-					    dep_atom));
 					dep_atom->in_jd_list = true;
 					list_add(&dep_atom->jd_item, out_list);
 				}

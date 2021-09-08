@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -595,6 +593,7 @@ static void global_init(struct kbase_device *const kbdev, u64 core_mask)
 				 GLB_ACK_IRQ_MASK_PING_MASK |
 				 GLB_ACK_IRQ_MASK_CFG_PROGRESS_TIMER_MASK |
 				 GLB_ACK_IRQ_MASK_PROTM_ENTER_MASK |
+				 GLB_ACK_IRQ_MASK_FIRMWARE_CONFIG_UPDATE_MASK |
 				 GLB_ACK_IRQ_MASK_PROTM_EXIT_MASK |
 				 GLB_ACK_IRQ_MASK_CFG_PWROFF_TIMER_MASK |
 				 GLB_ACK_IRQ_MASK_IDLE_EVENT_MASK;
@@ -1075,13 +1074,9 @@ void kbase_csf_enter_protected_mode(struct kbase_device *kbdev)
 {
 	struct kbase_csf_global_iface *global_iface = &kbdev->csf.global_iface;
 	unsigned long flags;
-	unsigned int value;
 
 	kbase_csf_scheduler_spin_lock(kbdev, &flags);
-	value = kbase_csf_firmware_global_output(global_iface, GLB_ACK);
-	value ^= GLB_REQ_PROTM_ENTER_MASK;
-	kbase_csf_firmware_global_input_mask(global_iface, GLB_REQ, value,
-					     GLB_REQ_PROTM_ENTER_MASK);
+	set_global_request(global_iface, GLB_REQ_PROTM_ENTER_MASK);
 	dev_dbg(kbdev->dev, "Sending request to enter protected mode");
 	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
 	kbase_csf_scheduler_spin_unlock(kbdev, flags);
@@ -1093,16 +1088,35 @@ void kbase_csf_firmware_trigger_mcu_halt(struct kbase_device *kbdev)
 {
 	struct kbase_csf_global_iface *global_iface = &kbdev->csf.global_iface;
 	unsigned long flags;
-	unsigned int value;
 
 	kbase_csf_scheduler_spin_lock(kbdev, &flags);
-	value = kbase_csf_firmware_global_output(global_iface, GLB_ACK);
-	value ^= GLB_REQ_HALT_MASK;
-	kbase_csf_firmware_global_input_mask(global_iface, GLB_REQ, value,
-					     GLB_REQ_HALT_MASK);
+	set_global_request(global_iface, GLB_REQ_HALT_MASK);
 	dev_dbg(kbdev->dev, "Sending request to HALT MCU");
 	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
 	kbase_csf_scheduler_spin_unlock(kbdev, flags);
+}
+
+int kbase_csf_trigger_firmware_config_update(struct kbase_device *kbdev)
+{
+	struct kbase_csf_global_iface *global_iface = &kbdev->csf.global_iface;
+	unsigned long flags;
+	int err = 0;
+
+	/* The 'reg_lock' is also taken and is held till the update is
+	 * complete, to ensure the config update gets serialized.
+	 */
+	mutex_lock(&kbdev->csf.reg_lock);
+	kbase_csf_scheduler_spin_lock(kbdev, &flags);
+
+	set_global_request(global_iface, GLB_REQ_FIRMWARE_CONFIG_UPDATE_MASK);
+	dev_dbg(kbdev->dev, "Sending request for FIRMWARE_CONFIG_UPDATE");
+	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
+	kbase_csf_scheduler_spin_unlock(kbdev, flags);
+
+	err = wait_for_global_request(kbdev,
+				      GLB_REQ_FIRMWARE_CONFIG_UPDATE_MASK);
+	mutex_unlock(&kbdev->csf.reg_lock);
+	return err;
 }
 
 /**

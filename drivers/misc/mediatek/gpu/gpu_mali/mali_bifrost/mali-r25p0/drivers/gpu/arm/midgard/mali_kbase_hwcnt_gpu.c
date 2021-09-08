@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -218,7 +216,7 @@ static int kbasep_hwcnt_backend_gpu_metadata_create(
 /**
  * kbasep_hwcnt_backend_jm_dump_bytes() - Get the raw dump buffer size for the
  *                                        GPU.
- * @v5_info: Non-NULL pointer to hwcnt info for the GPU.
+ * @gpu_info: Non-NULL pointer to hwcnt info for the GPU.
  *
  * Return: Size of buffer the GPU needs to perform a counter dump.
  */

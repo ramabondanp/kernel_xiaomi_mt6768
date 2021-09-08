@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,13 +17,10 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
- * SPDX-License-Identifier: GPL-2.0
- *
  */
 
 /**
- * @file mali_kbase_mmu.c
- * Base kernel MMU management.
+ * DOC: Base kernel MMU management.
  */
 
 #include <linux/kernel.h>
@@ -83,21 +80,20 @@ static void kbase_mmu_flush_invalidate_no_ctx(struct kbase_device *kbdev,
 		u64 vpfn, size_t nr, bool sync, int as_nr);
 
 /**
- * kbase_mmu_sync_pgd - sync page directory to memory
+ * kbase_mmu_sync_pgd() - sync page directory to memory when needed.
  * @kbdev:	Device pointer.
  * @handle:	Address of DMA region.
  * @size:       Size of the region to sync.
  *
  * This should be called after each page directory update.
  */
-
 static void kbase_mmu_sync_pgd(struct kbase_device *kbdev,
 		dma_addr_t handle, size_t size)
 {
-	/* If page table is not coherent then ensure the gpu can read
+	/* In non-coherent system, ensure the GPU can read
 	 * the pages from memory
 	 */
-	if (kbdev->system_coherency != COHERENCY_ACE)
+	if (kbdev->system_coherency == COHERENCY_NONE)
 		dma_sync_single_for_device(kbdev->dev, handle, size,
 				DMA_TO_DEVICE);
 }
@@ -118,7 +114,7 @@ static int kbase_mmu_update_pages_no_flush(struct kbase_context *kctx, u64 vpfn,
 /**
  * reg_grow_calc_extra_pages() - Calculate the number of backed pages to add to
  *                               a region on a GPU page fault
- *
+ * @kbdev:         KBase device
  * @reg:           The region that will be backed with more pages
  * @fault_rel_pfn: PFN of the fault relative to the start of the region
  *
@@ -1615,7 +1611,7 @@ static void kbase_mmu_flush_invalidate_as(struct kbase_device *kbdev,
 		/* Flush failed to complete, assume the GPU has hung and
 		 * perform a reset to recover
 		 */
-		dev_err(kbdev->dev, "Flush for GPU page table update did not complete. Issueing GPU soft-reset to recover\n");
+		dev_err(kbdev->dev, "Flush for GPU page table update did not complete. Issuing GPU soft-reset to recover\n");
 
 #if MALI_USE_CSF
 		/* A GPU hang could mean hardware counters will stop working.

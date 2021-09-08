@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -40,8 +20,7 @@
  */
 
 /**
- * @file mali_kbase_mem.h
- * Base kernel memory APIs
+ * DOC: Base kernel memory APIs
  */
 
 #ifndef _KBASE_MEM_H_
@@ -80,7 +59,8 @@ static inline void kbase_process_page_usage_inc(struct kbase_context *kctx,
 #define KBASEP_TMEM_GROWABLE_BLOCKSIZE_PAGES (1u << KBASEP_TMEM_GROWABLE_BLOCKSIZE_PAGES_LOG2)
 #define KBASEP_TMEM_GROWABLE_BLOCKSIZE_PAGES_HW_ISSUE_8316 (1u << KBASEP_TMEM_GROWABLE_BLOCKSIZE_PAGES_LOG2_HW_ISSUE_8316)
 #define KBASEP_TMEM_GROWABLE_BLOCKSIZE_PAGES_HW_ISSUE_9630 (1u << KBASEP_TMEM_GROWABLE_BLOCKSIZE_PAGES_LOG2_HW_ISSUE_9630)
-/**
+
+/*
  * A CPU mapping
  */
 struct kbase_cpu_mapping {
@@ -109,9 +89,7 @@ struct kbase_aliased {
 	u64 length; /* in pages */
 };
 
-/**
- * @brief Physical pages tracking object properties
-  */
+/* Physical pages tracking object properties */
 #define KBASE_MEM_PHY_ALLOC_ACCESSED_CACHED  (1u << 0)
 #define KBASE_MEM_PHY_ALLOC_LARGE            (1u << 1)
 
@@ -129,6 +107,10 @@ struct kbase_aliased {
  * @gpu_mappings: count number of times mapped on the GPU. Indicates the number
  *                of references there are to the physical pages from different
  *                GPU VA regions.
+ * @kernel_mappings: count number of times mapped on the CPU, specifically in
+ *                   the kernel. Indicates the number of references there are
+ *                   to the physical pages to prevent flag changes or shrink
+ *                   while maps are still held.
  * @nents: 0..N
  * @pages: N elements, only 0..nents are valid
  * @mappings: List of CPU mappings of this physical memory allocation.
@@ -151,6 +133,7 @@ struct kbase_aliased {
 struct kbase_mem_phy_alloc {
 	struct kref           kref;
 	atomic_t              gpu_mappings;
+	atomic_t              kernel_mappings;
 	size_t                nents;
 	struct tagged_addr    *pages;
 	struct list_head      mappings;
@@ -241,6 +224,30 @@ static inline void kbase_mem_phy_alloc_gpu_unmapped(struct kbase_mem_phy_alloc *
 }
 
 /**
+ * kbase_mem_phy_alloc_kernel_mapped - Increment kernel_mappings
+ * counter for a memory region to prevent commit and flag changes
+ *
+ * @alloc:  Pointer to physical pages tracking object
+ */
+static inline void
+kbase_mem_phy_alloc_kernel_mapped(struct kbase_mem_phy_alloc *alloc)
+{
+	atomic_inc(&alloc->kernel_mappings);
+}
+
+/**
+ * kbase_mem_phy_alloc_kernel_unmapped - Decrement kernel_mappings
+ * counter for a memory region to allow commit and flag changes
+ *
+ * @alloc:  Pointer to physical pages tracking object
+ */
+static inline void
+kbase_mem_phy_alloc_kernel_unmapped(struct kbase_mem_phy_alloc *alloc)
+{
+	WARN_ON(atomic_dec_return(&alloc->kernel_mappings) < 0);
+}
+
+/**
  * kbase_mem_is_imported - Indicate whether a memory type is imported
  *
  * @type: the memory type
@@ -272,7 +279,7 @@ static inline struct kbase_mem_phy_alloc *kbase_mem_phy_alloc_put(struct kbase_m
 }
 
 /**
- * A GPU memory region, and attributes for CPU mappings.
+ * struct kbase_va_region - A GPU memory region, and attributes for CPU mappings
  *
  * @rblink: Node in a red-black tree of memory regions within the same zone of
  *          the GPU's virtual address space.
@@ -286,6 +293,7 @@ static inline struct kbase_mem_phy_alloc *kbase_mem_phy_alloc_put(struct kbase_m
  * @threshold_pages: If non-zero and the amount of memory committed to a region
  *                   that can grow on page fault exceeds this number of pages
  *                   then the driver switches to incremental rendering.
+ * @flags:           Flags
  * @extension:    Number of pages allocated on page fault.
  * @cpu_alloc: The physical memory we mmap to the CPU when mapping this region.
  * @gpu_alloc: The physical memory we mmap to the GPU when mapping this region.
@@ -293,6 +301,23 @@ static inline struct kbase_mem_phy_alloc *kbase_mem_phy_alloc_put(struct kbase_m
  * @jit_usage_id: The last just-in-time memory usage ID for this region.
  * @jit_bin_id:   The just-in-time memory bin this region came from.
  * @va_refcnt:    Number of users of this region. Protected by reg_lock.
+ * @heap_info_gpu_addr: Pointer to an object in GPU memory defining an end of
+ *                      an allocated region
+ *                      The object can be one of:
+ *                      - u32 value defining the size of the region
+ *                      - u64 pointer first unused byte in the region
+ *                      The interpretation of the object depends on
+ *                      BASE_JIT_ALLOC_HEAP_INFO_IS_SIZE flag in
+ *                      jit_info_flags - if it is set, the heap info object
+ *                      should be interpreted as size.
+ * @used_pages: The current estimate of the number of pages used, which in
+ *              normal use is either:
+ *              - the initial estimate == va_pages
+ *              - the actual pages used, as found by a JIT usage report
+ *              Note that since the value is calculated from GPU memory after a
+ *              JIT usage report, at any point in time it is allowed to take a
+ *              random value that is no greater than va_pages (e.g. it may be
+ *              greater than gpu_alloc->nents)
  */
 struct kbase_va_region {
 	struct rb_node rblink;
@@ -332,8 +357,13 @@ struct kbase_va_region {
 #define KBASE_REG_SHARE_BOTH        (1ul << 10)
 
 /* Space for 4 different zones */
-#define KBASE_REG_ZONE_MASK         (3ul << 11)
-#define KBASE_REG_ZONE(x)           (((x) & 3) << 11)
+#define KBASE_REG_ZONE_MASK         ((KBASE_REG_ZONE_MAX - 1ul) << 11)
+#define KBASE_REG_ZONE(x)           (((x) & (KBASE_REG_ZONE_MAX - 1ul)) << 11)
+#define KBASE_REG_ZONE_IDX(x)       (((x) & KBASE_REG_ZONE_MASK) >> 11)
+
+#if ((KBASE_REG_ZONE_MAX - 1) & 0x3) != (KBASE_REG_ZONE_MAX - 1)
+#error KBASE_REG_ZONE_MAX too large for allocation of KBASE_REG_<...> bits
+#endif
 
 /* GPU read access */
 #define KBASE_REG_GPU_RD            (1ul<<13)
@@ -628,6 +658,7 @@ static inline struct kbase_mem_phy_alloc *kbase_alloc_create(
 
 	kref_init(&alloc->kref);
 	atomic_set(&alloc->gpu_mappings, 0);
+	atomic_set(&alloc->kernel_mappings, 0);
 	alloc->nents = 0;
 	alloc->pages = (void *)(alloc + 1);
 	INIT_LIST_HEAD(&alloc->mappings);
@@ -1067,7 +1098,9 @@ struct kbase_va_region *kbase_find_region_enclosing_address(
 		struct rb_root *rbtree, u64 gpu_addr);
 
 /**
- * @brief Check that a pointer is actually a valid region.
+ * Check that a pointer is actually a valid region.
+ * @kctx: kbase context containing the region
+ * @gpu_addr: pointer to check
  *
  * Must be called with context lock held.
  */
@@ -1128,14 +1161,21 @@ void kbase_gpu_vm_unlock(struct kbase_context *kctx);
 int kbase_alloc_phy_pages(struct kbase_va_region *reg, size_t vsize, size_t size);
 
 /**
- * @brief Register region and map it on the GPU.
+ * Register region and map it on the GPU.
+ * @kctx: kbase context containing the region
+ * @reg: the region to add
+ * @addr: the address to insert the region at
+ * @nr_pages: the number of pages in the region
+ * @align: the minimum alignment in pages
  *
  * Call kbase_add_va_region() and map the region on the GPU.
  */
 int kbase_gpu_mmap(struct kbase_context *kctx, struct kbase_va_region *reg, u64 addr, size_t nr_pages, size_t align);
 
 /**
- * @brief Remove the region from the GPU and unregister it.
+ * Remove the region from the GPU and unregister it.
+ * @kctx:  KBase context
+ * @reg:   The region to remove
  *
  * Must be called with context lock held.
  */
@@ -1983,5 +2023,77 @@ int kbase_mem_do_sync_imported(struct kbase_context *kctx,
 int kbase_mem_copy_to_pinned_user_pages(struct page **dest_pages,
 		void *src_page, size_t *to_copy, unsigned int nr_pages,
 		unsigned int *target_page_nr, size_t offset);
+
+/**
+ * kbase_ctx_reg_zone_end_pfn - return the end Page Frame Number of @zone
+ * @zone: zone to query
+ *
+ * Return: The end of the zone corresponding to @zone
+ */
+static inline u64 kbase_reg_zone_end_pfn(struct kbase_reg_zone *zone)
+{
+	return zone->base_pfn + zone->va_size_pages;
+}
+
+/**
+ * kbase_ctx_reg_zone_init - initialize a zone in @kctx
+ * @kctx: Pointer to kbase context
+ * @zone_bits: A KBASE_REG_ZONE_<...> to initialize
+ * @base_pfn: Page Frame Number in GPU virtual address space for the start of
+ *            the Zone
+ * @va_size_pages: Size of the Zone in pages
+ */
+static inline void kbase_ctx_reg_zone_init(struct kbase_context *kctx,
+					   unsigned long zone_bits,
+					   u64 base_pfn, u64 va_size_pages)
+{
+	struct kbase_reg_zone *zone;
+
+	lockdep_assert_held(&kctx->reg_lock);
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
+
+	zone = &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
+	*zone = (struct kbase_reg_zone){
+		.base_pfn = base_pfn, .va_size_pages = va_size_pages,
+	};
+}
+
+/**
+ * kbase_ctx_reg_zone_get_nolock - get a zone from @kctx where the caller does
+ *                                 not have @kctx 's region lock
+ * @kctx: Pointer to kbase context
+ * @zone_bits: A KBASE_REG_ZONE_<...> to retrieve
+ *
+ * This should only be used in performance-critical paths where the code is
+ * resilient to a race with the zone changing.
+ *
+ * Return: The zone corresponding to @zone_bits
+ */
+static inline struct kbase_reg_zone *
+kbase_ctx_reg_zone_get_nolock(struct kbase_context *kctx,
+			      unsigned long zone_bits)
+{
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
+
+	return &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
+}
+
+/**
+ * kbase_ctx_reg_zone_get - get a zone from @kctx
+ * @kctx: Pointer to kbase context
+ * @zone_bits: A KBASE_REG_ZONE_<...> to retrieve
+ *
+ * The get is not refcounted - there is no corresponding 'put' operation
+ *
+ * Return: The zone corresponding to @zone_bits
+ */
+static inline struct kbase_reg_zone *
+kbase_ctx_reg_zone_get(struct kbase_context *kctx, unsigned long zone_bits)
+{
+	lockdep_assert_held(&kctx->reg_lock);
+	WARN_ON((zone_bits & KBASE_REG_ZONE_MASK) != zone_bits);
+
+	return &kctx->reg_zone[KBASE_REG_ZONE_IDX(zone_bits)];
+}
 
 #endif				/* _KBASE_MEM_H_ */

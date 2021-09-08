@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -279,6 +277,7 @@ unlock:
 	return ret;
 }
 
+static void term_queue_group(struct kbase_queue_group *group);
 static void get_queue(struct kbase_queue *queue);
 static void release_queue(struct kbase_queue *queue);
 
@@ -454,6 +453,7 @@ static void release_queue(struct kbase_queue *queue)
 }
 
 static void oom_event_worker(struct work_struct *data);
+static void fatal_event_worker(struct work_struct *data);
 
 int kbase_csf_queue_register(struct kbase_context *kctx,
 			     struct kbase_ioctl_cs_queue_register *reg)
@@ -524,6 +524,7 @@ int kbase_csf_queue_register(struct kbase_context *kctx,
 	INIT_LIST_HEAD(&queue->link);
 	INIT_LIST_HEAD(&queue->error.link);
 	INIT_WORK(&queue->oom_event_work, oom_event_worker);
+	INIT_WORK(&queue->fatal_event_work, fatal_event_worker);
 	list_add(&queue->link, &kctx->csf.queue_list);
 
 	region->flags |= KBASE_REG_NO_USER_FREE;
@@ -838,7 +839,24 @@ void kbase_csf_queue_unbind(struct kbase_queue *queue)
 
 	lockdep_assert_held(&kctx->csf.lock);
 
-	unbind_queue(kctx, queue);
+	/* As the process itself is exiting, the termination of queue group can
+	 * be done which would be much faster than stopping of individual
+	 * queues. This would ensure a faster exit for the process especially
+	 * in the case where CSI gets stuck.
+	 * The CSI STOP request will wait for the in flight work to drain
+	 * whereas CSG TERM request would result in an immediate abort or
+	 * cancellation of the pending work.
+	 */
+	if (current->flags & PF_EXITING) {
+		struct kbase_queue_group *group = get_bound_queue_group(queue);
+
+		if (group)
+			term_queue_group(group);
+
+		WARN_ON(queue->bind_state != KBASE_CSF_QUEUE_UNBOUND);
+	} else {
+		unbind_queue(kctx, queue);
+	}
 
 	/* Free the resources, if allocated for this queue. */
 	if (queue->reg)
@@ -1073,6 +1091,7 @@ phy_alloc_failed:
 	return err;
 }
 
+static void timer_event_worker(struct work_struct *data);
 static void protm_event_worker(struct work_struct *data);
 static void term_normal_suspend_buffer(struct kbase_context *const kctx,
 		struct kbase_normal_suspend_buffer *s_buf);
@@ -1164,6 +1183,7 @@ static int create_queue_group(struct kbase_context *const kctx,
 			INIT_LIST_HEAD(&group->error_fatal.link);
 			INIT_LIST_HEAD(&group->error_timeout.link);
 			INIT_LIST_HEAD(&group->error_tiler_oom.link);
+			INIT_WORK(&group->timer_event_work, timer_event_worker);
 			INIT_WORK(&group->protm_event_work, protm_event_worker);
 			bitmap_zero(group->protm_pending_bitmap,
 					MAX_SUPPORTED_STREAMS_PER_GROUP);
@@ -1358,6 +1378,7 @@ static void term_queue_group(struct kbase_queue_group *group)
 
 static void cancel_queue_group_events(struct kbase_queue_group *group)
 {
+	cancel_work_sync(&group->timer_event_work);
 	cancel_work_sync(&group->protm_event_work);
 }
 
@@ -2124,14 +2145,11 @@ static void oom_event_worker(struct work_struct *data)
 }
 
 /**
- * handle_progress_timer_event - Progress timer timeout event handler.
+ * report_group_timeout_error - Report the timeout error for the group to userspace.
  *
- * @group: Pointer to GPU queue group for which the timeout event is received.
- *
- * Notify the event notification thread of progress timeout fault
- * for the GPU command queue group.
+ * @group: Pointer to the group for which timeout error occurred
  */
-static void handle_progress_timer_event(struct kbase_queue_group *const group)
+static void report_group_timeout_error(struct kbase_queue_group *const group)
 {
 	struct base_csf_notification const
 		error = { .type = BASE_CSF_NOTIFICATION_GPU_QUEUE_GROUP_ERROR,
@@ -2142,16 +2160,59 @@ static void handle_progress_timer_event(struct kbase_queue_group *const group)
 						  .error_type =
 							  BASE_GPU_QUEUE_GROUP_ERROR_TIMEOUT,
 					  } } } };
-	struct kbase_context *const kctx = group->kctx;
 
-	kbase_csf_scheduler_spin_lock_assert_held(kctx->kbdev);
-
-	dev_warn(kctx->kbdev->dev,
+	dev_warn(group->kctx->kbdev->dev,
 		 "Notify the event notification thread, forward progress timeout (%llu cycles)\n",
-		 kbase_csf_timeout_get(kctx->kbdev));
+		 kbase_csf_timeout_get(group->kctx->kbdev));
 
-	add_error(kctx, &group->error_timeout, &error);
-	kbase_event_wakeup(kctx);
+	add_error(group->kctx, &group->error_timeout, &error);
+	kbase_event_wakeup(group->kctx);
+}
+
+/**
+ * timer_event_worker - Handle the progress timeout error for the group
+ *
+ * @data: Pointer to a work_struct embedded in GPU command queue group data.
+ *
+ * Terminate the CSG and report the error to userspace
+ */
+static void timer_event_worker(struct work_struct *data)
+{
+	struct kbase_queue_group *const group =
+		container_of(data, struct kbase_queue_group, timer_event_work);
+	struct kbase_context *const kctx = group->kctx;
+	bool reset_prevented = false;
+	int err = kbase_reset_gpu_prevent_and_wait(kctx->kbdev);
+
+	if (err)
+		dev_warn(
+			kctx->kbdev->dev,
+			"Unsuccessful GPU reset detected when terminating group %d on progress timeout, attempting to terminate regardless",
+			group->handle);
+	else
+		reset_prevented = true;
+
+	mutex_lock(&kctx->csf.lock);
+
+	term_queue_group(group);
+	report_group_timeout_error(group);
+
+	mutex_unlock(&kctx->csf.lock);
+	if (reset_prevented)
+		kbase_reset_gpu_allow(kctx->kbdev);
+}
+
+/**
+ * handle_progress_timer_event - Progress timer timeout event handler.
+ *
+ * @group: Pointer to GPU queue group for which the timeout event is received.
+ *
+ * Enqueue a work item to terminate the group and notify the event notification
+ * thread of progress timeout fault for the GPU command queue group.
+ */
+static void handle_progress_timer_event(struct kbase_queue_group *const group)
+{
+	queue_work(group->kctx->csf.wq, &group->timer_event_work);
 }
 
 /**
@@ -2219,14 +2280,15 @@ handle_fault_event(struct kbase_queue *const queue,
 			queue, GPU_EXCEPTION_TYPE_SW_FAULT_2, 0);
 }
 
-void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
-				     u32 cs_fatal, u64 cs_fatal_info)
+static void report_queue_fatal_error(struct kbase_queue *const queue,
+				     u32 cs_fatal, u64 cs_fatal_info,
+				     u8 group_handle)
 {
 	struct base_csf_notification error = {
 		.type = BASE_CSF_NOTIFICATION_GPU_QUEUE_GROUP_ERROR,
 		.payload = {
 			.csg_error = {
-				.handle = queue->group->handle,
+				.handle = group_handle,
 				.error = {
 					.error_type =
 					BASE_GPU_QUEUE_GROUP_QUEUE_ERROR_FATAL,
@@ -2242,9 +2304,60 @@ void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
 		}
 	};
 
-	kbase_csf_scheduler_spin_lock_assert_held(queue->kctx->kbdev);
 	add_error(queue->kctx, &queue->error, &error);
 	kbase_event_wakeup(queue->kctx);
+}
+
+void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
+				     u32 cs_fatal, u64 cs_fatal_info)
+{
+	report_queue_fatal_error(queue, cs_fatal, cs_fatal_info,
+				 queue->group->handle);
+}
+
+/**
+ * fatal_event_worker - Handle the fatal error for the GPU queue
+ *
+ * @data: Pointer to a work_struct embedded in GPU command queue.
+ *
+ * Terminate the CSG and report the error to userspace.
+ */
+static void fatal_event_worker(struct work_struct *const data)
+{
+	struct kbase_queue *const queue =
+		container_of(data, struct kbase_queue, fatal_event_work);
+	struct kbase_context *const kctx = queue->kctx;
+	struct kbase_device *const kbdev = kctx->kbdev;
+	struct kbase_queue_group *group;
+	u8 group_handle;
+	bool reset_prevented = false;
+	int err = kbase_reset_gpu_prevent_and_wait(kbdev);
+
+	if (err)
+		dev_warn(
+			kbdev->dev,
+			"Unsuccessful GPU reset detected when terminating group to handle fatal event, attempting to terminate regardless");
+	else
+		reset_prevented = true;
+
+	mutex_lock(&kctx->csf.lock);
+
+	group = get_bound_queue_group(queue);
+	if (!group) {
+		dev_warn(kbdev->dev, "queue not bound when handling fatal event");
+		goto unlock;
+	}
+
+	group_handle = group->handle;
+	term_queue_group(group);
+	report_queue_fatal_error(queue, queue->cs_fatal, queue->cs_fatal_info,
+				 group_handle);
+
+unlock:
+	release_queue(queue);
+	mutex_unlock(&kctx->csf.lock);
+	if (reset_prevented)
+		kbase_reset_gpu_allow(kbdev);
 }
 
 /**
@@ -2253,16 +2366,14 @@ void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
  * @queue:    Pointer to queue for which fatal event was received.
  * @stream:   Pointer to the structure containing info provided by the
  *            firmware about the CSI.
- * @fw_error: Return true if internal firmware fatal is handled
  *
  * Prints meaningful CS fatal information.
- * Report queue fatal error to user space.
- *
+ * Enqueue a work item to terminate the group and report the fatal error
+ * to user space.
  */
 static void
 handle_fatal_event(struct kbase_queue *const queue,
-		   struct kbase_csf_cmd_stream_info const *const stream,
-		   bool *fw_error)
+		   struct kbase_csf_cmd_stream_info const *const stream)
 {
 	const u32 cs_fatal = kbase_csf_firmware_cs_output(stream, CS_FATAL);
 	const u64 cs_fatal_info =
@@ -2290,10 +2401,15 @@ handle_fatal_event(struct kbase_queue *const queue,
 		 cs_fatal_exception_data, cs_fatal_info_exception_data);
 
 	if (cs_fatal_exception_type ==
-			CS_FATAL_EXCEPTION_TYPE_FIRMWARE_INTERNAL_ERROR)
-		*fw_error = true;
-	else
-		kbase_csf_add_queue_fatal_error(queue, cs_fatal, cs_fatal_info);
+			CS_FATAL_EXCEPTION_TYPE_FIRMWARE_INTERNAL_ERROR) {
+		queue_work(system_wq, &kbdev->csf.fw_error_work);
+	} else {
+		get_queue(queue);
+		queue->cs_fatal = cs_fatal;
+		queue->cs_fatal_info = cs_fatal_info;
+		if (!queue_work(queue->kctx->csf.wq, &queue->fatal_event_work))
+			release_queue(queue);
+	}
 }
 
 /**
@@ -2313,7 +2429,6 @@ static void handle_queue_exception_event(struct kbase_queue *const queue,
 	struct kbase_queue_group *group = queue->group;
 	int csi_index = queue->csi_index;
 	int slot_num = group->csg_nr;
-	bool internal_fw_error = false;
 
 	kbase_csf_scheduler_spin_lock_assert_held(kbdev);
 
@@ -2321,7 +2436,7 @@ static void handle_queue_exception_event(struct kbase_queue *const queue,
 	stream = &ginfo->streams[csi_index];
 
 	if ((cs_ack & CS_ACK_FATAL_MASK) != (cs_req & CS_REQ_FATAL_MASK)) {
-		handle_fatal_event(queue, stream, &internal_fw_error);
+		handle_fatal_event(queue, stream);
 		kbase_csf_firmware_cs_input_mask(stream, CS_REQ, cs_ack,
 						 CS_REQ_FATAL_MASK);
 	}
@@ -2332,9 +2447,6 @@ static void handle_queue_exception_event(struct kbase_queue *const queue,
 						 CS_REQ_FAULT_MASK);
 		kbase_csf_ring_cs_kernel_doorbell(kbdev, csi_index, slot_num, true);
 	}
-
-	if (internal_fw_error)
-		queue_work(system_wq, &kbdev->csf.fw_error_work);
 }
 
 /**
@@ -2521,9 +2633,9 @@ static void process_csg_interrupts(struct kbase_device *const kbdev,
 		kbase_csf_firmware_csg_input_mask(ginfo, CSG_REQ, ack,
 			CSG_REQ_PROGRESS_TIMER_EVENT_MASK);
 
-		dev_dbg(kbdev->dev,
-			"Timeout notification received for Group %u on slot %d\n",
-			group->handle, csg_nr);
+		dev_info(kbdev->dev,
+			"Timeout notification received for group %u of ctx %d_%d on slot %d\n",
+			group->handle, group->kctx->tgid, group->kctx->id, csg_nr);
 
 		handle_progress_timer_event(group);
 	}

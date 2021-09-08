@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2011-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2011-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -474,6 +472,16 @@ int kbase_gpuprops_update_l2_features(struct kbase_device *kbdev)
 			break;
 		}
 
+		/* pm.active_count is expected to be 1 here, which is set in
+		 * kbase_hwaccess_pm_powerup().
+		 */
+		WARN_ON(kbdev->pm.active_count != 1);
+		/* The new settings for L2 cache can only be applied when it is
+		 * off, so first do the power down.
+		 */
+		kbase_pm_context_idle(kbdev);
+		kbase_pm_wait_for_desired_state(kbdev);
+
 		/* Need L2 to get powered to reflect to L2_FEATURES */
 		kbase_pm_context_active(kbdev);
 
@@ -483,7 +491,7 @@ int kbase_gpuprops_update_l2_features(struct kbase_device *kbdev)
 		/* Dump L2_FEATURES register */
 		err = kbase_backend_gpuprops_get_l2_features(kbdev, &regdump);
 		if (err)
-			goto idle_gpu;
+			goto exit;
 
 		dev_info(kbdev->dev, "Reflected L2_FEATURES is 0x%x\n",
 				regdump.l2_features);
@@ -492,11 +500,7 @@ int kbase_gpuprops_update_l2_features(struct kbase_device *kbdev)
 		gpu_props->raw_props.l2_features = regdump.l2_features;
 		gpu_props->l2_props.log2_cache_size =
 			KBASE_UBFX32(gpu_props->raw_props.l2_features, 16U, 8);
-
-idle_gpu:
-		/* Let GPU idle */
-		kbase_pm_context_idle(kbdev);
-}
+	}
 
 exit:
 	return err;

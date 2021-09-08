@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -243,7 +241,7 @@ static int kbase_kcpu_jit_allocate_process(
 					u8 const*const free_ids = jit_cmd->info.jit_free.ids;
 
 					if (free_ids && *free_ids && kctx->jit_alloc[*free_ids]) {
-						/**
+						/*
 						 * A JIT free which is active
 						 * and submitted before this
 						 * command.
@@ -255,7 +253,7 @@ static int kbase_kcpu_jit_allocate_process(
 			}
 
 			if (!can_block) {
-				/**
+				/*
 				 * No prior JIT_FREE command is active. Roll
 				 * back previous allocations and fail.
 				 */
@@ -401,7 +399,7 @@ static void kbase_kcpu_jit_allocate_finish(
 	/* Remove this command from the jit_cmds_head list */
 	list_del(&cmd->info.jit_alloc.node);
 
-	/**
+	/*
 	 * If we get to this point we must have already cleared the blocked
 	 * flag, otherwise it'd be a bug.
 	 */
@@ -424,7 +422,7 @@ static void kbase_kcpu_jit_retry_pending_allocs(struct kbase_context *kctx)
 
 	lockdep_assert_held(&kctx->csf.kcpu_queues.lock);
 
-	/**
+	/*
 	 * Reschedule all queues blocked by JIT_ALLOC commands.
 	 * NOTE: This code traverses the list of blocked queues directly. It
 	 * only works as long as the queued works are not executed at the same
@@ -485,7 +483,7 @@ static int kbase_kcpu_jit_free_process(struct kbase_kcpu_command_queue *queue,
 	/* Free the list of ids */
 	kfree(ids);
 
-	/**
+	/*
 	 * Remove this command from the jit_cmds_head list and retry pending
 	 * allocations.
 	 */
@@ -648,6 +646,7 @@ static int kbase_csf_queue_group_suspend_prepare(
 		}
 
 		sus_buf->cpu_alloc = kbase_mem_phy_alloc_get(reg->cpu_alloc);
+		kbase_mem_phy_alloc_kernel_mapped(reg->cpu_alloc);
 		page_array = kbase_get_cpu_phy_pages(reg);
 		page_array += start;
 
@@ -782,7 +781,7 @@ static int kbase_kcpu_cqs_wait_prepare(struct kbase_kcpu_command_queue *queue,
 		struct base_kcpu_command_cqs_wait_info *cqs_wait_info,
 		struct kbase_kcpu_command *current_command)
 {
-	struct base_cqs_wait *objs;
+	struct base_cqs_wait_info *objs;
 	unsigned int nr_objs = cqs_wait_info->nr_objs;
 
 	lockdep_assert_held(&queue->kctx->csf.kcpu_queues.lock);
@@ -1491,6 +1490,8 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 				for (i = 0; i < sus_buf->nr_pages; i++)
 					put_page(sus_buf->pages[i]);
 			} else {
+				kbase_mem_phy_alloc_kernel_unmapped(
+					sus_buf->cpu_alloc);
 				kbase_mem_phy_alloc_put(sus_buf->cpu_alloc);
 			}
 
@@ -1498,6 +1499,26 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 			kfree(sus_buf);
 			break;
 		}
+#if MALI_UNIT_TEST
+		case BASE_KCPU_COMMAND_TYPE_SAMPLE_TIME: {
+			u64 time = ktime_get_raw_ns();
+			void *target_page = kmap(*cmd->info.sample_time.page);
+
+			if (target_page) {
+				memcpy(target_page +
+					       cmd->info.sample_time.page_offset,
+				       &time, sizeof(time));
+				kunmap(*cmd->info.sample_time.page);
+			} else {
+				dev_warn(kbdev->dev,
+					 "Could not kmap target page\n");
+				queue->has_error = true;
+			}
+			put_page(*cmd->info.sample_time.page);
+			kfree(cmd->info.sample_time.page);
+			break;
+		}
+#endif /* MALI_UNIT_TEST */
 		default:
 			dev_warn(kbdev->dev,
 				"Unrecognized command type\n");
@@ -1547,14 +1568,15 @@ static void KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_COMMAND(
 		break;
 	case BASE_KCPU_COMMAND_TYPE_CQS_WAIT:
 	{
-		const struct base_cqs_wait *waits = cmd->info.cqs_wait.objs;
+		const struct base_cqs_wait_info *waits =
+			cmd->info.cqs_wait.objs;
 		u32 inherit_err_flags = cmd->info.cqs_wait.inherit_err_flags;
 		unsigned int i;
 
 		for (i = 0; i < cmd->info.cqs_wait.nr_objs; i++) {
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_CQS_WAIT(
 				kbdev, queue, waits[i].addr, waits[i].val,
-				inherit_err_flags & ((u32)1 << i));
+				(inherit_err_flags & ((u32)1 << i)) ? 1 : 0);
 		}
 		break;
 	}
@@ -1625,6 +1647,14 @@ static void KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_COMMAND(
 			kbdev, queue, cmd->info.suspend_buf_copy.sus_buf,
 			cmd->info.suspend_buf_copy.group_handle);
 		break;
+#if MALI_UNIT_TEST
+	case BASE_KCPU_COMMAND_TYPE_SAMPLE_TIME:
+		/*
+		 * This is test-only KCPU command, no need to have a timeline
+		 * entry
+		 */
+		break;
+#endif /* MALI_UNIT_TEST */
 	}
 }
 
@@ -1757,7 +1787,37 @@ int kbase_csf_kcpu_queue_enqueue(struct kbase_context *kctx,
 					&command.info.suspend_buf_copy,
 					kcpu_cmd);
 			break;
+#if MALI_UNIT_TEST
+		case BASE_KCPU_COMMAND_TYPE_SAMPLE_TIME: {
+			int const page_cnt = 1;
 
+			kcpu_cmd->type = BASE_KCPU_COMMAND_TYPE_SAMPLE_TIME;
+			kcpu_cmd->info.sample_time.page_addr =
+				command.info.sample_time.time & PAGE_MASK;
+			kcpu_cmd->info.sample_time.page_offset =
+				command.info.sample_time.time & ~PAGE_MASK;
+			kcpu_cmd->info.sample_time.page = kcalloc(
+				page_cnt, sizeof(struct page *), GFP_KERNEL);
+			if (!kcpu_cmd->info.sample_time.page) {
+				ret = -ENOMEM;
+			} else {
+				int pinned_pages = get_user_pages_fast(
+					kcpu_cmd->info.sample_time.page_addr,
+					page_cnt, 1,
+					kcpu_cmd->info.sample_time.page);
+
+				if (pinned_pages < 0) {
+					ret = pinned_pages;
+					kfree(kcpu_cmd->info.sample_time.page);
+				} else if (pinned_pages != page_cnt) {
+					ret = -EINVAL;
+					kfree(kcpu_cmd->info.sample_time.page);
+				}
+			}
+
+			break;
+		}
+#endif /* MALI_UNIT_TEST */
 		default:
 			dev_warn(queue->kctx->kbdev->dev,
 				"Unknown command type %u\n", command.type);

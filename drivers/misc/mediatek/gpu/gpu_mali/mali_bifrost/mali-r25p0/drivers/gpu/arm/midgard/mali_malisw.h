@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2014-2015, 2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2015, 2018, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -50,6 +30,8 @@
 
 /**
  * MIN - Return the lesser of two values.
+ * @x: value1
+ * @y: value2
  *
  * As a macro it may evaluate its arguments more than once.
  * Refer to MAX macro for more details
@@ -57,7 +39,9 @@
 #define MIN(x, y)	((x) < (y) ? (x) : (y))
 
 /**
- * MAX -  Return the greater of two values.
+ * MAX - Return the greater of two values.
+ * @x: value1
+ * @y: value2
  *
  * As a macro it may evaluate its arguments more than once.
  * If called on the same two arguments as MIN it is guaranteed to return
@@ -69,24 +53,27 @@
 #define MAX(x, y)	((x) < (y) ? (y) : (x))
 
 /**
- * @hideinitializer
- * Function-like macro for suppressing unused variable warnings. Where possible
- * such variables should be removed; this macro is present for cases where we
- * much support API backwards compatibility.
+ * Function-like macro for suppressing unused variable warnings.
+ * @x: unused variable
+ *
+ * Where possible such variables should be removed; this macro is present for
+ * cases where we much support API backwards compatibility.
  */
 #define CSTD_UNUSED(x)	((void)(x))
 
 /**
- * @hideinitializer
- * Function-like macro for use where "no behavior" is desired. This is useful
- * when compile time macros turn a function-like macro in to a no-op, but
- * where having no statement is otherwise invalid.
+ * Function-like macro for use where "no behavior" is desired.
+ * @...: no-op
+ *
+ * This is useful when compile time macros turn a function-like macro in to a
+ * no-op, but where having no statement is otherwise invalid.
  */
 #define CSTD_NOP(...)	((void)#__VA_ARGS__)
 
 /**
- * @hideinitializer
  * Function-like macro for stringizing a single level macro.
+ * @x: macro's value
+ *
  * @code
  * #define MY_MACRO 32
  * CSTD_STR1( MY_MACRO )
@@ -96,10 +83,11 @@
 #define CSTD_STR1(x)	#x
 
 /**
- * @hideinitializer
- * Function-like macro for stringizing a macro's value. This should not be used
- * if the macro is defined in a way which may have no value; use the
- * alternative @c CSTD_STR2N macro should be used instead.
+ * Function-like macro for stringizing a macro's value.
+ * @x: macro's value
+ *
+ * This should not be used if the macro is defined in a way which may have no
+ * value; use the alternative @c CSTD_STR2N macro should be used instead.
  * @code
  * #define MY_MACRO 32
  * CSTD_STR2( MY_MACRO )

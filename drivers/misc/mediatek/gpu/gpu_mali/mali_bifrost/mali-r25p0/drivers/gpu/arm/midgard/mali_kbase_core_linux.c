@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -130,7 +128,9 @@
 #define KERNEL_SIDE_DDK_VERSION_STRING "K:" MALI_RELEASE_NAME "(GPL)"
 
 /**
- * Kernel min/maj <=> API Version
+ * KBASE_API_VERSION - KBase API Version
+ * @major: Kernel major version
+ * @minor: Kernel minor version
  */
 #define KBASE_API_VERSION(major, minor) ((((major) & 0xFFF) << 20)  | \
 					 (((minor) & 0xFFF) << 8) | \
@@ -140,14 +140,14 @@
 #define KBASE_API_MAJ(api_version) ((api_version >> 20) & 0xFFF)
 
 /**
- * kbase capabilities table
+ * typedef mali_kbase_capability_def - kbase capabilities table
  */
 typedef struct mali_kbase_capability_def {
 	u16 required_major;
 	u16 required_minor;
 } mali_kbase_capability_def;
 
-/**
+/*
  * This must be kept in-sync with mali_kbase_cap
  *
  * TODO: The alternative approach would be to embed the cap enum values
@@ -3176,16 +3176,8 @@ static ssize_t kbase_show_gpuinfo(struct device *dev,
 		  .name = "Mali-G57" },
 		{ .id = GPU_ID2_PRODUCT_TODX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
 		  .name = "Mali-TODX" },
-		{ .id = GPU_ID2_PRODUCT_TGRX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
-		  .name = "Mali-TGRX" },
-		{ .id = GPU_ID2_PRODUCT_TVAX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
-		  .name = "Mali-TVAX" },
 		{ .id = GPU_ID2_PRODUCT_LODX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
 		  .name = "Mali-LODX" },
-		{ .id = GPU_ID2_PRODUCT_TTUX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
-		  .name = "Mali-TTUX" },
-		{ .id = GPU_ID2_PRODUCT_LTUX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
-		  .name = "Mali-LTUX" },
 	};
 	const char *product_name = "(Unknown Mali GPU)";
 	struct kbase_device *kbdev;
@@ -4934,6 +4926,17 @@ int kbase_device_coherency_init(struct kbase_device *kbdev)
 	if (coherency_override_dts) {
 
 		override_coherency = be32_to_cpup(coherency_override_dts);
+
+#if MALI_USE_CSF && !defined(CONFIG_MALI_NO_MALI)
+		/* ACE coherency mode is not supported by Driver on CSF GPUs.
+		 * Return an error to signal the invalid device tree configuration.
+		 */
+		if (override_coherency == COHERENCY_ACE) {
+			dev_err(kbdev->dev,
+				"ACE coherency not supported, wrong DT configuration");
+			return -EINVAL;
+		}
+#endif
 
 		if ((override_coherency <= COHERENCY_NONE) &&
 			(supported_coherency_bitmap &

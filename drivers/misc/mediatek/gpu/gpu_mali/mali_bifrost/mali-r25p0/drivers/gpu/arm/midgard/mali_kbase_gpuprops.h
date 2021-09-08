@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2011-2015, 2017, 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2011-2015, 2017, 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -40,8 +20,7 @@
  */
 
 /**
- * @file mali_kbase_gpuprops.h
- * Base kernel property query APIs
+ * DOC: Base kernel property query APIs
  */
 
 #ifndef _KBASE_GPUPROPS_H_
@@ -67,11 +46,10 @@ struct kbase_device;
 	(((u32)(value) >> (u32)(offset)) & (u32)((1ULL << (u32)(size)) - 1))
 
 /**
- * @brief Set up Kbase GPU properties.
+ * kbase_gpuprops_set - Set up Kbase GPU properties.
+ * @kbdev: The struct kbase_device structure for the device
  *
  * Set up Kbase GPU properties with information from the GPU registers
- *
- * @param kbdev		The struct kbase_device structure for the device
  */
 void kbase_gpuprops_set(struct kbase_device *kbdev);
 
@@ -92,6 +70,8 @@ int kbase_gpuprops_set_features(struct kbase_device *kbdev);
  * @kbdev:   Device pointer
  *
  * This function updates l2_features and the log2 cache size.
+ * The function expects GPU to be powered up and value of pm.active_count
+ * to be 1.
  *
  * Return: Zero on success, Linux error code for failure
  */

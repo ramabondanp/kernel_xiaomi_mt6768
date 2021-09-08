@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2012-2014, 2017-2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2012-2014, 2017-2018, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -30,7 +28,11 @@
 #include <linux/device.h>
 #include <linux/slab.h>
 #include <linux/atomic.h>
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
 #include <linux/reservation.h>
+#else
+#include <linux/dma-resv.h>
+#endif
 #include <linux/dma-buf.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
@@ -323,6 +325,7 @@ dma_buf_lock_add_fence_reservation_callback(dma_buf_lock_resource *resource,
 					    struct reservation_object *resv,
 					    bool exclusive)
 #else
+static int
 dma_buf_lock_add_fence_reservation_callback(dma_buf_lock_resource *resource,
 					    struct dma_resv *resv,
 					    bool exclusive)
@@ -338,7 +341,12 @@ dma_buf_lock_add_fence_reservation_callback(dma_buf_lock_resource *resource,
 	unsigned int shared_count = 0;
 	int err, i;
 
-	err = reservation_object_get_fences_rcu(resv,
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
+	err = reservation_object_get_fences_rcu(
+#else
+	err = dma_resv_get_fences_rcu(
+#endif
+						resv,
 						&excl_fence,
 						&shared_count,
 						&shared_fences);
@@ -677,7 +685,12 @@ static int dma_buf_lock_dolock(dma_buf_lock_k_request *request)
 		struct dma_resv *resv = resource->dma_bufs[i]->resv;
 #endif
 		if (!test_bit(i, &resource->exclusive)) {
+
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
 			ret = reservation_object_reserve_shared(resv);
+#else
+			ret = dma_resv_reserve_shared(resv, 0);
+#endif
 			if (ret) {
 #if DMA_BUF_LOCK_DEBUG
 				printk(KERN_DEBUG "dma_buf_lock_dolock : Error %d reserving space for shared fence.\n", ret);
@@ -695,7 +708,11 @@ static int dma_buf_lock_dolock(dma_buf_lock_k_request *request)
 				break;
 			}
 
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
 			reservation_object_add_shared_fence(resv, &resource->fence);
+#else
+			dma_resv_add_shared_fence(resv, &resource->fence);
+#endif
 		} else {
 			ret = dma_buf_lock_add_fence_reservation_callback(resource,
 									  resv,
@@ -707,7 +724,11 @@ static int dma_buf_lock_dolock(dma_buf_lock_k_request *request)
 				break;
 			}
 
+#if (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)
 			reservation_object_add_excl_fence(resv, &resource->fence);
+#else
+			dma_resv_add_excl_fence(resv, &resource->fence);
+#endif
 		}
 	}
 

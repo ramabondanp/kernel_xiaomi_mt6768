@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -17,36 +17,28 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
- * SPDX-License-Identifier: GPL-2.0
- *
  */
 
 #include "mali_kbase_ipa_counter_common_csf.h"
 #include "mali_kbase.h"
 
-/* CSHW counter block offsets */
-#define MESSAGES_RECEIVED   (9)
-#define CEU_ACTIVE          (40)
-
 /* MEMSYS counter block offsets */
-#define L2_RD_MSG_IN        (16)
-#define L2_WR_MSG_IN_STALL  (19)
-#define L2_SNP_MSG_IN       (20)
-#define L2_ANY_LOOKUP       (25)
-#define L2_EXT_READ_BEATS   (32)
-#define L2_EXT_AR_CNT_Q3    (36)
-#define L2_EXT_AW_CNT_Q2    (50)
+#define L2_RD_MSG_IN            (16)
+#define L2_EXT_WRITE_NOSNP_FULL (43)
 
 /* SC counter block offsets */
-#define FRAG_FPK_ACTIVE     (7)
-#define COMPUTE_ACTIVE      (22)
-#define EXEC_CORE_ACTIVE    (26)
-#define EXEC_STARVE_ARITH   (33)
-#define TEX_FILT_NUM_OPS    (39)
-#define BEATS_RD_TEX_EXT    (59)
+#define FRAG_QUADS_EZS_UPDATE   (13)
+#define EXEC_INSTR_FMA          (27)
+#define TEX_FILT_NUM_OPS        (39)
+#define LS_MEM_READ_SHORT       (45)
+#define LS_MEM_WRITE_SHORT      (47)
+#define VARY_SLOT_16            (51)
 
 /* Tiler counter block offsets */
-#define PRIM_SAT_CULLED     (14)
+#define IDVS_POS_SHAD_STALL     (23)
+#define PREFETCH_STALL          (25)
+#define VFETCH_POS_READ_WAIT    (29)
+#define IDVS_VAR_SHAD_STALL     (38)
 
 #define COUNTER_DEF(cnt_name, coeff, cnt_idx, block_type)	\
 	{							\
@@ -68,36 +60,31 @@
 #define TILER_COUNTER_DEF(cnt_name, coeff, cnt_idx)	\
 	COUNTER_DEF(cnt_name, coeff, cnt_idx, KBASE_IPA_CORE_TYPE_TILER)
 
-/** Table of description of HW counters used by IPA counter model.
+/* Table of description of HW counters used by IPA counter model.
  *
  * This table provides a description of each performance counter
  * used by the top level counter model for energy estimation.
  */
 static const struct kbase_ipa_counter ipa_top_level_cntrs_def_todx[] = {
-	CSHW_COUNTER_DEF("messages_received", 925749, MESSAGES_RECEIVED),
-	CSHW_COUNTER_DEF("ceu_active", 25611, CEU_ACTIVE),
+	MEMSYS_COUNTER_DEF("l2_rd_msg_in", 295631, L2_RD_MSG_IN),
+	MEMSYS_COUNTER_DEF("l2_ext_write_nosnp_ull", 325168, L2_EXT_WRITE_NOSNP_FULL),
 
-	MEMSYS_COUNTER_DEF("l2_ext_read_beats", 3413, L2_EXT_READ_BEATS),
-	MEMSYS_COUNTER_DEF("l2_ext_ar_cnt_q3", 8141, L2_EXT_AR_CNT_Q3),
-	MEMSYS_COUNTER_DEF("l2_rd_msg_in", 3231, L2_RD_MSG_IN),
-	MEMSYS_COUNTER_DEF("l2_ext_aw_cnt_q2", 21714, L2_EXT_AW_CNT_Q2),
-	MEMSYS_COUNTER_DEF("l2_any_lookup", 110567, L2_ANY_LOOKUP),
-	MEMSYS_COUNTER_DEF("l2_wr_msg_in_stall", -370971, L2_WR_MSG_IN_STALL),
-	MEMSYS_COUNTER_DEF("l2_snp_msg_in", 270337, L2_SNP_MSG_IN),
-
-	TILER_COUNTER_DEF("prim_sat_culled", -1094458, PRIM_SAT_CULLED),
+	TILER_COUNTER_DEF("prefetch_stall", 145435, PREFETCH_STALL),
+	TILER_COUNTER_DEF("idvs_var_shad_stall", -171917, IDVS_VAR_SHAD_STALL),
+	TILER_COUNTER_DEF("idvs_pos_shad_stall", 109980, IDVS_POS_SHAD_STALL),
+	TILER_COUNTER_DEF("vfetch_pos_read_wait", -119118, VFETCH_POS_READ_WAIT),
 };
 
  /* This table provides a description of each performance counter
   * used by the shader cores counter model for energy estimation.
   */
-static const struct kbase_ipa_counter ipa_shader_core_cntrs_def_todx[] = {
-	SC_COUNTER_DEF("frag_fpk_active", -91312, FRAG_FPK_ACTIVE),
-	SC_COUNTER_DEF("exec_core_active", 485012, EXEC_CORE_ACTIVE),
-	SC_COUNTER_DEF("beats_rd_tex_ext", 174174, BEATS_RD_TEX_EXT),
-	SC_COUNTER_DEF("tex_filt_num_operations", 164419, TEX_FILT_NUM_OPS),
-	SC_COUNTER_DEF("exec_starve_arith", -59107, EXEC_STARVE_ARITH),
-	SC_COUNTER_DEF("compute_active", -277940, COMPUTE_ACTIVE),
+ static const struct kbase_ipa_counter ipa_shader_core_cntrs_def_todx[] = {
+	SC_COUNTER_DEF("exec_instr_fma", 505449, EXEC_INSTR_FMA),
+	SC_COUNTER_DEF("tex_filt_num_operations", 574869, TEX_FILT_NUM_OPS),
+	SC_COUNTER_DEF("ls_mem_read_short", 60917, LS_MEM_READ_SHORT),
+	SC_COUNTER_DEF("frag_quads_ezs_update", 694555, FRAG_QUADS_EZS_UPDATE),
+	SC_COUNTER_DEF("ls_mem_write_short", 698290, LS_MEM_WRITE_SHORT),
+	SC_COUNTER_DEF("vary_slot_16", 181069, VARY_SLOT_16),
 };
 
 #define IPA_POWER_MODEL_OPS(gpu, init_token) \

@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -942,6 +922,109 @@ enum {
  *                                         Such codes are never returned to
  *                                         user-space.
  * @BASE_JD_EVENT_RANGE_KERNEL_ONLY_END: End of kernel-only status codes.
+ * @BASE_JD_EVENT_DONE: atom has completed successfull
+ * @BASE_JD_EVENT_JOB_CONFIG_FAULT: Atom dependencies configuration error which
+ *                                  shall result in a failed atom
+ * @BASE_JD_EVENT_JOB_POWER_FAULT:  The job could not be executed because the
+ *                                  part of the memory system required to access
+ *                                  job descriptors was not powered on
+ * @BASE_JD_EVENT_JOB_READ_FAULT:   Reading a job descriptor into the Job
+ *                                  manager failed
+ * @BASE_JD_EVENT_JOB_WRITE_FAULT:  Writing a job descriptor from the Job
+ *                                  manager failed
+ * @BASE_JD_EVENT_JOB_AFFINITY_FAULT: The job could not be executed because the
+ *                                    specified affinity mask does not intersect
+ *                                    any available cores
+ * @BASE_JD_EVENT_JOB_BUS_FAULT:    A bus access failed while executing a job
+ * @BASE_JD_EVENT_INSTR_INVALID_PC: A shader instruction with an illegal program
+ *                                  counter was executed.
+ * @BASE_JD_EVENT_INSTR_INVALID_ENC: A shader instruction with an illegal
+ *                                  encoding was executed.
+ * @BASE_JD_EVENT_INSTR_TYPE_MISMATCH: A shader instruction was executed where
+ *                                  the instruction encoding did not match the
+ *                                  instruction type encoded in the program
+ *                                  counter.
+ * @BASE_JD_EVENT_INSTR_OPERAND_FAULT: A shader instruction was executed that
+ *                                  contained invalid combinations of operands.
+ * @BASE_JD_EVENT_INSTR_TLS_FAULT:  A shader instruction was executed that tried
+ *                                  to access the thread local storage section
+ *                                  of another thread.
+ * @BASE_JD_EVENT_INSTR_ALIGN_FAULT: A shader instruction was executed that
+ *                                  tried to do an unsupported unaligned memory
+ *                                  access.
+ * @BASE_JD_EVENT_INSTR_BARRIER_FAULT: A shader instruction was executed that
+ *                                  failed to complete an instruction barrier.
+ * @BASE_JD_EVENT_DATA_INVALID_FAULT: Any data structure read as part of the job
+ *                                  contains invalid combinations of data.
+ * @BASE_JD_EVENT_TILE_RANGE_FAULT: Tile or fragment shading was asked to
+ *                                  process a tile that is entirely outside the
+ *                                  bounding box of the frame.
+ * @BASE_JD_EVENT_STATE_FAULT:      Matches ADDR_RANGE_FAULT. A virtual address
+ *                                  has been found that exceeds the virtual
+ *                                  address range.
+ * @BASE_JD_EVENT_OUT_OF_MEMORY:    The tiler ran out of memory when executing a job.
+ * @BASE_JD_EVENT_UNKNOWN:          If multiple jobs in a job chain fail, only
+ *                                  the first one the reports an error will set
+ *                                  and return full error information.
+ *                                  Subsequent failing jobs will not update the
+ *                                  error status registers, and may write an
+ *                                  error status of UNKNOWN.
+ * @BASE_JD_EVENT_DELAYED_BUS_FAULT: The GPU received a bus fault for access to
+ *                                  physical memory where the original virtual
+ *                                  address is no longer available.
+ * @BASE_JD_EVENT_SHAREABILITY_FAULT: Matches GPU_SHAREABILITY_FAULT. A cache
+ *                                  has detected that the same line has been
+ *                                  accessed as both shareable and non-shareable
+ *                                  memory from inside the GPU.
+ * @BASE_JD_EVENT_TRANSLATION_FAULT_LEVEL1: A memory access hit an invalid table
+ *                                  entry at level 1 of the translation table.
+ * @BASE_JD_EVENT_TRANSLATION_FAULT_LEVEL2: A memory access hit an invalid table
+ *                                  entry at level 2 of the translation table.
+ * @BASE_JD_EVENT_TRANSLATION_FAULT_LEVEL3: A memory access hit an invalid table
+ *                                  entry at level 3 of the translation table.
+ * @BASE_JD_EVENT_TRANSLATION_FAULT_LEVEL4: A memory access hit an invalid table
+ *                                  entry at level 4 of the translation table.
+ * @BASE_JD_EVENT_PERMISSION_FAULT: A memory access could not be allowed due to
+ *                                  the permission flags set in translation
+ *                                  table
+ * @BASE_JD_EVENT_TRANSTAB_BUS_FAULT_LEVEL1: A bus fault occurred while reading
+ *                                  level 0 of the translation tables.
+ * @BASE_JD_EVENT_TRANSTAB_BUS_FAULT_LEVEL2: A bus fault occurred while reading
+ *                                  level 1 of the translation tables.
+ * @BASE_JD_EVENT_TRANSTAB_BUS_FAULT_LEVEL3: A bus fault occurred while reading
+ *                                  level 2 of the translation tables.
+ * @BASE_JD_EVENT_TRANSTAB_BUS_FAULT_LEVEL4: A bus fault occurred while reading
+ *                                  level 3 of the translation tables.
+ * @BASE_JD_EVENT_ACCESS_FLAG:      Matches ACCESS_FLAG_0. A memory access hit a
+ *                                  translation table entry with the ACCESS_FLAG
+ *                                  bit set to zero in level 0 of the
+ *                                  page table, and the DISABLE_AF_FAULT flag
+ *                                  was not set.
+ * @BASE_JD_EVENT_MEM_GROWTH_FAILED: raised for JIT_ALLOC atoms that failed to
+ *                                   grow memory on demand
+ * @BASE_JD_EVENT_JOB_CANCELLED: raised when this atom was hard-stopped or its
+ *                               dependencies failed
+ * @BASE_JD_EVENT_JOB_INVALID: raised for many reasons, including invalid data
+ *                             in the atom which overlaps with
+ *                             BASE_JD_EVENT_JOB_CONFIG_FAULT, or if the
+ *                             platform doesn't support the feature specified in
+ *                             the atom.
+ * @BASE_JD_EVENT_PM_EVENT:   TODO: remove as it's not used
+ * @BASE_JD_EVENT_TIMED_OUT:   TODO: remove as it's not used
+ * @BASE_JD_EVENT_BAG_INVALID:   TODO: remove as it's not used
+ * @BASE_JD_EVENT_PROGRESS_REPORT:   TODO: remove as it's not used
+ * @BASE_JD_EVENT_BAG_DONE:   TODO: remove as it's not used
+ * @BASE_JD_EVENT_DRV_TERMINATED: this is a special event generated to indicate
+ *                                to userspace that the KBase context has been
+ *                                destroyed and Base should stop listening for
+ *                                further events
+ * @BASE_JD_EVENT_REMOVED_FROM_NEXT: raised when an atom that was configured in
+ *                                   the GPU has to be retried (but it has not
+ *                                   started) due to e.g., GPU reset
+ * @BASE_JD_EVENT_END_RP_DONE: this is used for incremental rendering to signal
+ *                             the completion of a renderpass. This value
+ *                             shouldn't be returned to userspace but I haven't
+ *                             seen where it is reset back to JD_EVENT_DONE.
  *
  * HW and low-level SW events are represented by event codes.
  * The status of jobs which succeeded are also represented by
@@ -1088,6 +1171,11 @@ struct base_jd_event_v2 {
  * struct base_dump_cpu_gpu_counters - Structure for
  *                                     BASE_JD_REQ_SOFT_DUMP_CPU_GPU_COUNTERS
  *                                     jobs.
+ * @system_time:   gpu timestamp
+ * @cycle_counter: gpu cycle count
+ * @sec:           cpu time(sec)
+ * @usec:          cpu time(usec)
+ * @padding:       padding
  *
  * This structure is stored into the memory pointed to by the @jc field
  * of &struct base_jd_atom.

@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -94,18 +74,20 @@
  * Contains only a struct but is a union such that it is compatible with
  * generic JM and CSF KTrace calls.
  *
- * @atom_udata:  Copy of the user data sent for the atom in base_jd_submit.
- *               Only valid if KBASE_KTRACE_FLAG_JM_ATOM is set in @flags
- * @gpu_addr:    GPU address, usually of the job-chain represented by an atom.
- * @atom_number: id of the atom for which trace message was added. Only valid
- *               if KBASE_KTRACE_FLAG_JM_ATOM is set in @flags
- * @code:        Identifies the event, refer to enum kbase_ktrace_code.
- * @flags:       indicates information about the trace message itself. Used
- *               during dumping of the message.
- * @jobslot:     job-slot for which trace message was added, valid only for
- *               job-slot management events.
- * @refcount:    reference count for the context, valid for certain events
- *               related to scheduler core and policy.
+ * @gpu:             gpu union member
+ * @gpu.atom_udata:  Copy of the user data sent for the atom in base_jd_submit.
+ *                   Only valid if KBASE_KTRACE_FLAG_JM_ATOM is set in @flags
+ * @gpu.gpu_addr:    GPU address, usually of the job-chain represented by an
+ *                   atom.
+ * @gpu.atom_number: id of the atom for which trace message was added. Only
+ *                   valid if KBASE_KTRACE_FLAG_JM_ATOM is set in @flags
+ * @gpu.code:        Identifies the event, refer to enum kbase_ktrace_code.
+ * @gpu.flags:       indicates information about the trace message itself. Used
+ *                   during dumping of the message.
+ * @gpu.jobslot:     job-slot for which trace message was added, valid only for
+ *                   job-slot management events.
+ * @gpu.refcount:    reference count for the context, valid for certain events
+ *                   related to scheduler core and policy.
  */
 union kbase_ktrace_backend {
 	struct {

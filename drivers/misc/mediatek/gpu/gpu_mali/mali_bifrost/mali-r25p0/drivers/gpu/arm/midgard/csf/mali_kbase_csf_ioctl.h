@@ -1,27 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT ARM Limited. All rights reserved.
- *
- * This program is free software and is provided to you under the terms of the
- * GNU General Public License version 2 as published by the Free Software
- * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can access it online at
- * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
- *
- *//* SPDX-License-Identifier: GPL-2.0 */
-/*
- *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -110,16 +90,14 @@ struct kbase_ioctl_cs_queue_kick {
 /**
  * union kbase_ioctl_cs_queue_bind - Bind a GPU command queue to a group
  *
- * @buffer_gpu_addr: GPU address of the buffer backing the queue
- * @group_handle: Handle of the group to which the queue should be bound
- * @csi_index: Index of the CSF interface the queue should be bound to
- * @padding: Currently unused, must be zero
- * @mmap_handle: Handle to be used for creating the mapping of CS
- *               input/output pages
- *
- * @in: Input parameters
- * @out: Output parameters
- *
+ * @in:                 Input parameters
+ * @in.buffer_gpu_addr: GPU address of the buffer backing the queue
+ * @in.group_handle:    Handle of the group to which the queue should be bound
+ * @in.csi_index:       Index of the CSF interface the queue should be bound to
+ * @in.padding:         Currently unused, must be zero
+ * @out:                Output parameters
+ * @out.mmap_handle:    Handle to be used for creating the mapping of CS
+ *                      input/output pages
  */
 union kbase_ioctl_cs_queue_bind {
 	struct {
@@ -152,24 +130,22 @@ struct kbase_ioctl_cs_queue_terminate {
 
 /**
  * union kbase_ioctl_cs_queue_group_create - Create a GPU command queue group
- *
- * @tiler_mask:		Mask of tiler endpoints the group is allowed to use.
- * @fragment_mask:	Mask of fragment endpoints the group is allowed to use.
- * @compute_mask:	Mask of compute endpoints the group is allowed to use.
- * @cs_min:		Minimum number of CSs required.
- * @priority:		Queue group's priority within a process.
- * @tiler_max:		Maximum number of tiler endpoints the group is allowed
- *			to use.
- * @fragment_max:	Maximum number of fragment endpoints the group is
- *			allowed to use.
- * @compute_max:	Maximum number of compute endpoints the group is allowed
- *			to use.
- * @padding:		Currently unused, must be zero
- * @group_handle:	Handle of a newly created queue group.
- *
- * @in: Input parameters
- * @out: Output parameters
- *
+ * @in:               Input parameters
+ * @in.tiler_mask:    Mask of tiler endpoints the group is allowed to use.
+ * @in.fragment_mask: Mask of fragment endpoints the group is allowed to use.
+ * @in.compute_mask:  Mask of compute endpoints the group is allowed to use.
+ * @in.cs_min:        Minimum number of CSs required.
+ * @in.priority:      Queue group's priority within a process.
+ * @in.tiler_max:     Maximum number of tiler endpoints the group is allowed
+ *                    to use.
+ * @in.fragment_max:  Maximum number of fragment endpoints the group is
+ *                    allowed to use.
+ * @in.compute_max:   Maximum number of compute endpoints the group is allowed
+ *                    to use.
+ * @in.padding:       Currently unused, must be zero
+ * @out:              Output parameters
+ * @out.group_handle: Handle of a newly created queue group.
+ * @out.padding:      Currently unused, must be zero
  */
 union kbase_ioctl_cs_queue_group_create {
 	struct {
@@ -260,23 +236,21 @@ struct kbase_ioctl_kcpu_queue_enqueue {
 
 /**
  * union kbase_ioctl_cs_tiler_heap_init - Initialize chunked tiler memory heap
- *
- * @chunk_size: Size of each chunk.
- * @initial_chunks: Initial number of chunks that heap will be created with.
- * @max_chunks: Maximum number of chunks that the heap is allowed to use.
- * @target_in_flight: Number of render-passes that the driver should attempt to
- *                    keep in flight for which allocation of new chunks is
- *                    allowed.
- * @group_id: Group ID to be used for physical allocations.
- * @gpu_heap_va: GPU VA (virtual address) of Heap context that was set up for
- *               the heap.
- * @first_chunk_va: GPU VA of the first chunk allocated for the heap, actually
- *                  points to the header of heap chunk and not to the low
- *                  address of free memory in the chunk.
- *
- * @in: Input parameters
- * @out: Output parameters
- *
+ * @in:                Input parameters
+ * @in.chunk_size:     Size of each chunk.
+ * @in.initial_chunks: Initial number of chunks that heap will be created with.
+ * @in.max_chunks:     Maximum number of chunks that the heap is allowed to use.
+ * @in.target_in_flight: Number of render-passes that the driver should attempt to
+ *                     keep in flight for which allocation of new chunks is
+ *                     allowed.
+ * @in.group_id:       Group ID to be used for physical allocations.
+ * @in.padding:        Padding
+ * @out:               Output parameters
+ * @out.gpu_heap_va:   GPU VA (virtual address) of Heap context that was set up
+ *                     for the heap.
+ * @out.first_chunk_va: GPU VA of the first chunk allocated for the heap,
+ *                     actually points to the header of heap chunk and not to
+ *                     the low address of free memory in the chunk.
  */
 union kbase_ioctl_cs_tiler_heap_init {
 	struct {
@@ -313,25 +287,25 @@ struct kbase_ioctl_cs_tiler_heap_term {
  * union kbase_ioctl_cs_get_glb_iface - Request the global control block
  *                                        of CSF interface capabilities
  *
- * @max_group_num:        The maximum number of groups to be read. Can be 0, in
- *                        which case groups_ptr is unused.
- * @max_total_stream_num: The maximum number of CSs to be read. Can be 0, in
- *                        which case streams_ptr is unused.
- * @groups_ptr:       Pointer where to store all the group data (sequentially).
- * @streams_ptr:      Pointer where to store all the CS data (sequentially).
- * @glb_version:      Global interface version.
- * @features:         Bit mask of features (e.g. whether certain types of job
- *                    can be suspended).
- * @group_num:        Number of CSGs supported.
- * @prfcnt_size:      Size of CSF performance counters, in bytes. Bits 31:16
- *                    hold the size of firmware performance counter data
- *                    and 15:0 hold the size of hardware performance counter
- *                    data.
- * @total_stream_num: Total number of CSs, summed across all groups.
- * @padding:          Will be zeroed.
+ * @in:                Input parameters
+ * @in.max_group_num:  The maximum number of groups to be read. Can be 0, in
+ *                     which case groups_ptr is unused.
+ * @in.max_total_stream_num: The maximum number of CSs to be read. Can be 0, in
+ *                     which case streams_ptr is unused.
+ * @in.groups_ptr:     Pointer where to store all the group data (sequentially).
+ * @in.streams_ptr:    Pointer where to store all the CS data (sequentially).
+ * @out:               Output parameters
+ * @out.glb_version:   Global interface version.
+ * @out.features:      Bit mask of features (e.g. whether certain types of job
+ *                     can be suspended).
+ * @out.group_num:     Number of CSGs supported.
+ * @out.prfcnt_size:   Size of CSF performance counters, in bytes. Bits 31:16
+ *                     hold the size of firmware performance counter data
+ *                     and 15:0 hold the size of hardware performance counter
+ *                     data.
+ * @out.total_stream_num: Total number of CSs, summed across all groups.
+ * @out.padding:       Will be zeroed.
  *
- * @in: Input parameters
- * @out: Output parameters
  *
  */
 union kbase_ioctl_cs_get_glb_iface {
@@ -387,12 +361,11 @@ struct kbase_ioctl_cs_event_memory_write {
 
 /**
  * union kbase_ioctl_cs_event_memory_read - Read an event memory address
- * @cpu_addr: Memory address to read
- * @value: Value read
- * @padding: Currently unused, must be zero
- *
  * @in: Input parameters
+ * @in.cpu_addr: Memory address to read
  * @out: Output parameters
+ * @out.value: Value read
+ * @out.padding: Currently unused, must be zero
  */
 union kbase_ioctl_cs_event_memory_read {
 	struct {

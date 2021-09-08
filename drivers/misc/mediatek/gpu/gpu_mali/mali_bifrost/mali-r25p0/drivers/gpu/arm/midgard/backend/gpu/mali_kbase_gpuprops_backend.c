@@ -6,7 +6,7 @@
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
  * Foundation, and any use by you of this program is subject to the terms
- * of such GNU licence.
+ * of such GNU license.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
- * SPDX-License-Identifier: GPL-2.0
  *
  */
 
@@ -41,19 +39,12 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev,
 
 	registers.l2_features = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(L2_FEATURES));
+	registers.core_features = 0;
 #if !MALI_USE_CSF
 	/* TGOx */
 	registers.core_features = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(CORE_FEATURES));
 #else /* !MALI_USE_CSF */
-	if (((registers.gpu_id & GPU_ID2_PRODUCT_MODEL) ==
-	     GPU_ID2_PRODUCT_TGRX) ||
-	    ((registers.gpu_id & GPU_ID2_PRODUCT_MODEL) ==
-	     GPU_ID2_PRODUCT_TVAX))
-		registers.core_features =
-			kbase_reg_read(kbdev, GPU_CONTROL_REG(CORE_FEATURES));
-	else
-		registers.core_features = 0;
 #endif /* MALI_USE_CSF */
 	registers.tiler_features = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(TILER_FEATURES));
