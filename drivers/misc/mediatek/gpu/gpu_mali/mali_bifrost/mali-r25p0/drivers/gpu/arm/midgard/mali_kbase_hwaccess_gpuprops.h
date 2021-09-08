@@ -40,6 +40,23 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev,
 					struct kbase_gpuprops_regdump *regdump);
 
 /**
+ * kbase_backend_gpuprops_get_curr_config() - Fill @curr_config_regdump with
+ *                                            relevant GPU properties read from
+ *                                            the GPU registers.
+ * @kbdev:               Device pointer.
+ * @curr_config_regdump: Pointer to struct kbase_current_config_regdump
+ *                       structure.
+ *
+ * The caller should ensure that GPU remains powered-on during this function and
+ * the caller must ensure this function returns success before using the values
+ * returned in the curr_config_regdump in any part of the kernel.
+ *
+ * Return: Zero for succeess or a Linux error code
+ */
+int kbase_backend_gpuprops_get_curr_config(struct kbase_device *kbdev,
+		struct kbase_current_config_regdump *curr_config_regdump);
+
+/**
  * kbase_backend_gpuprops_get_features - Fill @regdump with GPU properties read
  *                                       from GPU
  * @kbdev:   Device pointer

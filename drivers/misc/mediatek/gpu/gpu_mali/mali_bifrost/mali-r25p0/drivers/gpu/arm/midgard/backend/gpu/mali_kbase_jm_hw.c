@@ -40,10 +40,12 @@
 #include <mali_kbase_regs_history_debugfs.h>
 
 static void kbasep_try_reset_gpu_early_locked(struct kbase_device *kbdev);
+static u64 kbasep_apply_limited_core_mask(const struct kbase_device *kbdev,
+				const u64 affinity, const u64 limited_core_mask);
 
 static u64 kbase_job_write_affinity(struct kbase_device *kbdev,
 				base_jd_core_req core_req,
-				int js)
+				int js, const u64 limited_core_mask)
 {
 	u64 affinity;
 
@@ -72,12 +74,19 @@ static u64 kbase_job_write_affinity(struct kbase_device *kbdev,
 		 */
 		if (js == 2 && num_core_groups > 1)
 			affinity &= coherency_info->group[1].core_mask;
-		else
+		else if (num_core_groups > 1)
 			affinity &= coherency_info->group[0].core_mask;
+		else
+			affinity &= kbdev->gpu_props.curr_config.shader_present;
 	} else {
 		/* Use all cores */
 		affinity = kbdev->pm.backend.shaders_avail &
 				kbdev->pm.debug_core_mask[js];
+	}
+
+	if (core_req & BASE_JD_REQ_LIMITED_CORE_MASK) {
+		/* Limiting affinity due to BASE_JD_REQ_LIMITED_CORE_MASK by applying the limited core mask. */
+		affinity = kbasep_apply_limited_core_mask(kbdev, affinity, limited_core_mask);
 	}
 
 	if (unlikely(!affinity)) {
@@ -89,6 +98,16 @@ static u64 kbase_job_write_affinity(struct kbase_device *kbdev,
 #endif
 
 		affinity = kbdev->pm.backend.shaders_avail;
+
+		if (core_req & BASE_JD_REQ_LIMITED_CORE_MASK) {
+			/* Limiting affinity again to make sure it only enables shader cores with backed TLS memory. */
+			affinity = kbasep_apply_limited_core_mask(kbdev, affinity, limited_core_mask);
+
+#ifdef CONFIG_MALI_DEBUG
+			/* affinity should never be 0 */
+			WARN_ON(!affinity);
+#endif
+		}
 	}
 
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_AFFINITY_NEXT_LO),
@@ -169,7 +188,7 @@ static u64 select_job_chain(struct kbase_jd_atom *katom)
 	}
 
 	dev_dbg(kctx->kbdev->dev,
-		"Selected job chain 0x%llx for end atom %p in state %d\n",
+		"Selected job chain 0x%llx for end atom %pK in state %d\n",
 		jc, (void *)katom, (int)rp->state);
 
 	katom->jc = jc;
@@ -193,7 +212,7 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 	/* Command register must be available */
 	KBASE_DEBUG_ASSERT(kbasep_jm_is_js_free(kbdev, js, kctx));
 
-	dev_dbg(kctx->kbdev->dev, "Write JS_HEAD_NEXT 0x%llx for atom %p\n",
+	dev_dbg(kctx->kbdev->dev, "Write JS_HEAD_NEXT 0x%llx for atom %pK\n",
 		jc_head, (void *)katom);
 
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_HEAD_NEXT_LO),
@@ -201,7 +220,8 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 	kbase_reg_write(kbdev, JOB_SLOT_REG(js, JS_HEAD_NEXT_HI),
 						jc_head >> 32);
 
-	affinity = kbase_job_write_affinity(kbdev, katom->core_req, js);
+	affinity = kbase_job_write_affinity(kbdev, katom->core_req, js,
+						kctx->limited_core_mask);
 
 	/* start MMU, medium priority, cache clean/flush on end, clean/flush on
 	 * start
@@ -257,7 +277,7 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 	katom->start_timestamp = ktime_get();
 
 	/* GO ! */
-	dev_dbg(kbdev->dev, "JS: Submitting atom %p from ctx %p to js[%d] with head=0x%llx",
+	dev_dbg(kbdev->dev, "JS: Submitting atom %pK from ctx %pK to js[%d] with head=0x%llx",
 				katom, kctx, js, jc_head);
 
 	KBASE_KTRACE_ADD_JM_SLOT_INFO(kbdev, JM_SUBMIT, kctx, katom, jc_head, js,
@@ -431,7 +451,9 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 				 */
 				if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_TTRX_3076)) {
 					if (completion_code == BASE_JD_EVENT_JOB_BUS_FAULT) {
-						if (kbase_prepare_to_reset_gpu_locked(kbdev))
+						if (kbase_prepare_to_reset_gpu_locked(
+							    kbdev,
+							    RESET_FLAGS_NONE))
 							kbase_reset_gpu_locked(kbdev);
 					}
 				}
@@ -789,7 +811,7 @@ static int softstop_start_rp_nolock(
 
 	if (!(katom->core_req & BASE_JD_REQ_START_RENDERPASS)) {
 		dev_dbg(kctx->kbdev->dev,
-			"Atom %p on job slot is not start RP\n", (void *)katom);
+			"Atom %pK on job slot is not start RP\n", (void *)katom);
 		return -EPERM;
 	}
 
@@ -802,13 +824,13 @@ static int softstop_start_rp_nolock(
 		rp->state != KBASE_JD_RP_RETRY))
 		return -EINVAL;
 
-	dev_dbg(kctx->kbdev->dev, "OOM in state %d with region %p\n",
+	dev_dbg(kctx->kbdev->dev, "OOM in state %d with region %pK\n",
 		(int)rp->state, (void *)reg);
 
 	if (WARN_ON(katom != rp->start_katom))
 		return -EINVAL;
 
-	dev_dbg(kctx->kbdev->dev, "Adding region %p to list %p\n",
+	dev_dbg(kctx->kbdev->dev, "Adding region %pK to list %pK\n",
 		(void *)reg, (void *)&rp->oom_reg_list);
 	list_move_tail(&reg->link, &rp->oom_reg_list);
 	dev_dbg(kctx->kbdev->dev, "Added region to list\n");
@@ -853,7 +875,7 @@ void kbase_jm_wait_for_zero_jobs(struct kbase_context *kctx)
 	if (timeout != 0)
 		goto exit;
 
-	if (kbase_prepare_to_reset_gpu(kbdev)) {
+	if (kbase_prepare_to_reset_gpu(kbdev, RESET_FLAGS_NONE)) {
 		dev_err(kbdev->dev,
 			"Issuing GPU soft-reset because jobs failed to be killed (within %d ms) as part of context termination (e.g. process exit)\n",
 			ZAP_TIMEOUT);
@@ -863,7 +885,7 @@ void kbase_jm_wait_for_zero_jobs(struct kbase_context *kctx)
 	/* Wait for the reset to complete */
 	kbase_reset_gpu_wait(kbdev);
 exit:
-	dev_dbg(kbdev->dev, "Zap: Finished Context %p", kctx);
+	dev_dbg(kbdev->dev, "Zap: Finished Context %pK", kctx);
 
 	/* Ensure that the signallers of the waitqs have finished */
 	mutex_lock(&kctx->jctx.lock);
@@ -924,7 +946,7 @@ KBASE_EXPORT_TEST_API(kbase_job_slot_term);
 void kbase_job_slot_softstop_swflags(struct kbase_device *kbdev, int js,
 			struct kbase_jd_atom *target_katom, u32 sw_flags)
 {
-	dev_dbg(kbdev->dev, "Soft-stop atom %p with flags 0x%x (s:%d)\n",
+	dev_dbg(kbdev->dev, "Soft-stop atom %pK with flags 0x%x (s:%d)\n",
 		target_katom, sw_flags, js);
 
 	KBASE_DEBUG_ASSERT(!(sw_flags & JS_COMMAND_MASK));
@@ -1337,6 +1359,7 @@ static void kbasep_try_reset_gpu_early(struct kbase_device *kbdev)
 /**
  * kbase_prepare_to_reset_gpu_locked - Prepare for resetting the GPU
  * @kbdev: kbase device
+ * @flags: Bitfield indicating impact of reset (see flag defines)
  *
  * This function just soft-stops all the slots to ensure that as many jobs as
  * possible are saved.
@@ -1347,10 +1370,12 @@ static void kbasep_try_reset_gpu_early(struct kbase_device *kbdev)
  *   false - Another thread is performing a reset, kbase_reset_gpu should
  *   not be called.
  */
-bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev)
+bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev,
+				       unsigned int flags)
 {
 	int i;
 
+	CSTD_UNUSED(flags);
 	KBASE_DEBUG_ASSERT(kbdev);
 
 #ifdef CONFIG_MALI_ARBITER_SUPPORT
@@ -1378,14 +1403,14 @@ bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev)
 	return true;
 }
 
-bool kbase_prepare_to_reset_gpu(struct kbase_device *kbdev)
+bool kbase_prepare_to_reset_gpu(struct kbase_device *kbdev, unsigned int flags)
 {
-	unsigned long flags;
+	unsigned long lock_flags;
 	bool ret;
 
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
-	ret = kbase_prepare_to_reset_gpu_locked(kbdev);
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+	spin_lock_irqsave(&kbdev->hwaccess_lock, lock_flags);
+	ret = kbase_prepare_to_reset_gpu_locked(kbdev, flags);
+	spin_unlock_irqrestore(&kbdev->hwaccess_lock, lock_flags);
 
 	return ret;
 }
@@ -1505,4 +1530,22 @@ int kbase_reset_gpu_init(struct kbase_device *kbdev)
 void kbase_reset_gpu_term(struct kbase_device *kbdev)
 {
 	destroy_workqueue(kbdev->hwaccess.backend.reset_workq);
+}
+
+static u64 kbasep_apply_limited_core_mask(const struct kbase_device *kbdev,
+				const u64 affinity, const u64 limited_core_mask)
+{
+	const u64 result = affinity & limited_core_mask;
+
+#ifdef CONFIG_MALI_DEBUG
+	dev_dbg(kbdev->dev,
+				"Limiting affinity due to BASE_JD_REQ_LIMITED_CORE_MASK from 0x%lx to 0x%lx (mask is 0x%lx)\n",
+				(unsigned long int)affinity,
+				(unsigned long int)result,
+				(unsigned long int)limited_core_mask);
+#else
+	CSTD_UNUSED(kbdev);
+#endif
+
+	return result;
 }

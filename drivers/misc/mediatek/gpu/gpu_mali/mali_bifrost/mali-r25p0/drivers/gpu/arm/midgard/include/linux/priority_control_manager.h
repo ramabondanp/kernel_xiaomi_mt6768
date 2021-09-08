@@ -53,7 +53,7 @@ struct priority_control_manager_ops {
 	 * Return: The priority that would actually be given, could be lower than requested_priority
 	 */
 	int (*pcm_scheduler_priority_check)(
-		struct priority_control_manager_device *mgm_dev,
+		struct priority_control_manager_device *pcm_dev,
 		struct task_struct *task, int requested_priority);
 };
 
@@ -62,6 +62,7 @@ struct priority_control_manager_ops {
  *                                          control manager
  *
  * @ops:   Callbacks associated with this device
+ * @data:  Pointer to device private data
  * @owner: Pointer to the module owner
  *
  * This structure should be registered with the platform device using
@@ -69,6 +70,7 @@ struct priority_control_manager_ops {
  */
 struct priority_control_manager_device {
 	struct priority_control_manager_ops ops;
+	void *data;
 	struct module *owner;
 };
 

@@ -53,7 +53,7 @@
 #include <mali_kbase_hwaccess_instr.h>
 #endif
 #include <mali_kbase_reset_gpu.h>
-#include "mali_kbase_ioctl.h"
+#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
 #if !MALI_USE_CSF
 #include "mali_kbase_kinstr_jm.h"
 #endif
@@ -1233,10 +1233,7 @@ static int kbase_api_mem_alias(struct kbase_context *kctx,
 	u64 flags;
 	int err;
 
-	if (alias->in.nents == 0 || alias->in.nents > 2048)
-		return -EINVAL;
-
-	if (alias->in.stride > (U64_MAX / 2048))
+	if (alias->in.nents == 0 || alias->in.nents > BASE_MEM_ALIAS_MAX_ENTS)
 		return -EINVAL;
 
 	ai = vmalloc(sizeof(*ai) * alias->in.nents);
@@ -1440,18 +1437,6 @@ static int kbase_api_sticky_resource_unmap(struct kbase_context *kctx,
 }
 
 #if MALI_UNIT_TEST
-static int kbase_api_tlstream_test(struct kbase_context *kctx,
-		struct kbase_ioctl_tlstream_test *test)
-{
-	kbase_timeline_test(
-			kctx->kbdev,
-			test->tpw_count,
-			test->msg_delay,
-			test->msg_count,
-			test->aux_msg);
-
-	return 0;
-}
 
 static int kbase_api_tlstream_stats(struct kbase_context *kctx,
 		struct kbase_ioctl_tlstream_stats *stats)
@@ -1591,14 +1576,11 @@ static int kbase_ioctl_cs_get_glb_iface(struct kbase_context *kctx,
 	}
 
 	if (!err) {
-		param->out.total_stream_num =
-			kbase_csf_firmware_get_glb_iface(kctx->kbdev,
-				group_data, max_group_num,
-				stream_data, max_total_stream_num,
-				&param->out.glb_version, &param->out.features,
-				&param->out.group_num, &param->out.prfcnt_size);
-
-		param->out.padding = 0;
+		param->out.total_stream_num = kbase_csf_firmware_get_glb_iface(
+			kctx->kbdev, group_data, max_group_num, stream_data,
+			max_total_stream_num, &param->out.glb_version,
+			&param->out.features, &param->out.group_num,
+			&param->out.prfcnt_size, &param->out.instr_features);
 
 		if (copy_to_user(user_groups, group_data,
 			MIN(max_group_num, param->out.group_num) *
@@ -1701,6 +1683,23 @@ static int kbasep_ioctl_context_priority_check(struct kbase_context *kctx,
 			#function);                                            \
 		return ret;                                                    \
 	} while (0)
+
+static int kbasep_ioctl_set_limited_core_count(struct kbase_context *kctx,
+			struct kbase_ioctl_set_limited_core_count *set_limited_core_count)
+{
+	const u64 shader_core_mask =
+		kbase_pm_get_present_cores(kctx->kbdev, KBASE_PM_CORE_SHADER);
+	const u64 limited_core_mask =
+		((u64)1 << (set_limited_core_count->max_core_count)) - 1;
+
+	if ((shader_core_mask & limited_core_mask) == 0) {
+		/* At least one shader core must be available after applying the mask */
+		return -EINVAL;
+	}
+
+	kctx->limited_core_mask = limited_core_mask;
+	return 0;
+}
 
 static long kbase_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
@@ -2063,12 +2062,6 @@ static long kbase_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 #endif /* MALI_USE_CSF */
 #if MALI_UNIT_TEST
-	case KBASE_IOCTL_TLSTREAM_TEST:
-		KBASE_HANDLE_IOCTL_IN(KBASE_IOCTL_TLSTREAM_TEST,
-				kbase_api_tlstream_test,
-				struct kbase_ioctl_tlstream_test,
-				kctx);
-		break;
 	case KBASE_IOCTL_TLSTREAM_STATS:
 		KBASE_HANDLE_IOCTL_OUT(KBASE_IOCTL_TLSTREAM_STATS,
 				kbase_api_tlstream_stats,
@@ -2080,6 +2073,12 @@ static long kbase_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		KBASE_HANDLE_IOCTL_INOUT(KBASE_IOCTL_CONTEXT_PRIORITY_CHECK,
 				kbasep_ioctl_context_priority_check,
 				struct kbase_ioctl_context_priority_check,
+				kctx);
+		break;
+	case KBASE_IOCTL_SET_LIMITED_CORE_COUNT:
+		KBASE_HANDLE_IOCTL_IN(KBASE_IOCTL_SET_LIMITED_CORE_COUNT,
+				kbasep_ioctl_set_limited_core_count,
+				struct kbase_ioctl_set_limited_core_count,
 				kctx);
 		break;
 	}
@@ -2198,7 +2197,7 @@ static unsigned int kbase_poll(struct file *filp, poll_table *wait)
 void kbase_event_wakeup(struct kbase_context *kctx)
 {
 	KBASE_DEBUG_ASSERT(kctx);
-	dev_dbg(kctx->kbdev->dev, "Waking event queue for context %p\n",
+	dev_dbg(kctx->kbdev->dev, "Waking event queue for context %pK\n",
 		(void *)kctx);
 	wake_up_interruptible(&kctx->event_queue);
 }
@@ -3169,7 +3168,7 @@ static ssize_t kbase_show_gpuinfo(struct device *dev,
 		{ .id = GPU_ID2_PRODUCT_TBEX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
 		  .name = "Mali-G78" },
 		{ .id = GPU_ID2_PRODUCT_TBAX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
-		  .name = "Mali-TBAX" },
+		  .name = "Mali-G78AE" },
 		{ .id = GPU_ID2_PRODUCT_LBEX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
 		  .name = "Mali-G68" },
 		{ .id = GPU_ID2_PRODUCT_TNAX >> GPU_ID_VERSION_PRODUCT_ID_SHIFT,
@@ -4177,21 +4176,28 @@ static void kbasep_protected_mode_hwcnt_disable_worker(struct work_struct *data)
 {
 	struct kbase_device *kbdev = container_of(data, struct kbase_device,
 		protected_mode_hwcnt_disable_work);
+	spinlock_t *backend_lock;
 	unsigned long flags;
 
 	bool do_disable;
 
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+#if MALI_USE_CSF
+	backend_lock = &kbdev->csf.scheduler.interrupt_lock;
+#else
+	backend_lock = &kbdev->hwaccess_lock;
+#endif
+
+	spin_lock_irqsave(backend_lock, flags);
 	do_disable = !kbdev->protected_mode_hwcnt_desired &&
 		!kbdev->protected_mode_hwcnt_disabled;
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+	spin_unlock_irqrestore(backend_lock, flags);
 
 	if (!do_disable)
 		return;
 
 	kbase_hwcnt_context_disable(kbdev->hwcnt_gpu_ctx);
 
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+	spin_lock_irqsave(backend_lock, flags);
 	do_disable = !kbdev->protected_mode_hwcnt_desired &&
 		!kbdev->protected_mode_hwcnt_disabled;
 
@@ -4211,9 +4217,10 @@ static void kbasep_protected_mode_hwcnt_disable_worker(struct work_struct *data)
 		kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
 	}
 
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+	spin_unlock_irqrestore(backend_lock, flags);
 }
 
+#ifndef PLATFORM_PROTECTED_CALLBACKS
 static int kbasep_protected_mode_enable(struct protected_mode_device *pdev)
 {
 	struct kbase_device *kbdev = pdev->data;
@@ -4233,7 +4240,6 @@ static const struct protected_mode_ops kbasep_native_protected_ops = {
 	.protected_mode_disable = kbasep_protected_mode_disable
 };
 
-#ifndef PLATFORM_PROTECTED_CALLBACKS
 #define PLATFORM_PROTECTED_CALLBACKS (&kbasep_native_protected_ops)
 #endif /* PLATFORM_PROTECTED_CALLBACKS */
 
@@ -4413,6 +4419,7 @@ int kbase_device_pm_init(struct kbase_device *kbdev)
 	u32 gpu_model_id;
 
 	if (kbase_is_pv_enabled(kbdev->dev->of_node)) {
+		dev_info(kbdev->dev, "Arbitration interface enabled\n");
 		if (kbase_is_pm_enabled(kbdev->dev->of_node)) {
 			/* Arbitration AND power management invalid */
 			dev_err(kbdev->dev, "Invalid combination of arbitration AND power management\n");
@@ -4436,7 +4443,8 @@ int kbase_device_pm_init(struct kbase_device *kbdev)
 			gpu_model_id = GPU_ID2_MODEL_MATCH_VALUE(product_id);
 
 			if (gpu_model_id != GPU_ID2_PRODUCT_TGOX
-				&& gpu_model_id != GPU_ID2_PRODUCT_TNOX) {
+				&& gpu_model_id != GPU_ID2_PRODUCT_TNOX
+				&& gpu_model_id != GPU_ID2_PRODUCT_TBAX) {
 				kbase_arbiter_pm_early_term(kbdev);
 				dev_err(kbdev->dev, "GPU platform not suitable for arbitration\n");
 				return -EPERM;
@@ -4625,7 +4633,7 @@ void power_control_term(struct kbase_device *kbdev)
 static void trigger_reset(struct kbase_device *kbdev)
 {
 	kbase_pm_context_active(kbdev);
-	if (kbase_prepare_to_reset_gpu(kbdev))
+	if (kbase_prepare_to_reset_gpu(kbdev, RESET_FLAGS_NONE))
 		kbase_reset_gpu(kbdev);
 	kbase_pm_context_idle(kbdev);
 }
@@ -4653,7 +4661,7 @@ DEFINE_SIMPLE_ATTRIBUTE(fops_##type##_quirks, type##_quirks_get,\
 MAKE_QUIRK_ACCESSORS(sc);
 MAKE_QUIRK_ACCESSORS(tiler);
 MAKE_QUIRK_ACCESSORS(mmu);
-MAKE_QUIRK_ACCESSORS(jm);
+MAKE_QUIRK_ACCESSORS(gpu);
 
 static ssize_t kbase_device_debugfs_reset_write(struct file *file,
 		const char __user *ubuf, size_t count, loff_t *ppos)
@@ -4774,7 +4782,9 @@ int kbase_device_debugfs_init(struct kbase_device *kbdev)
 	kbdev->mali_debugfs_directory = debugfs_create_dir(kbdev->devname,
 			NULL);
 	if (!kbdev->mali_debugfs_directory) {
-		dev_err(kbdev->dev, "Couldn't create mali debugfs directory\n");
+		dev_err(kbdev->dev,
+			"Couldn't create mali debugfs directory: %s\n",
+			kbdev->devname);
 		err = -ENOMEM;
 		goto out;
 	}
@@ -4829,9 +4839,8 @@ int kbase_device_debugfs_init(struct kbase_device *kbdev)
 	debugfs_create_file("quirks_mmu", 0644,
 			kbdev->mali_debugfs_directory, kbdev,
 			&fops_mmu_quirks);
-	debugfs_create_file("quirks_jm", 0644,
-			kbdev->mali_debugfs_directory, kbdev,
-			&fops_jm_quirks);
+	debugfs_create_file("quirks_gpu", 0644, kbdev->mali_debugfs_directory,
+			    kbdev, &fops_gpu_quirks);
 
 	debugfs_create_bool("infinite_cache", mode,
 			debugfs_ctx_defaults_directory,
@@ -4961,40 +4970,6 @@ int kbase_device_coherency_init(struct kbase_device *kbdev)
 	return 0;
 }
 
-#ifdef CONFIG_MALI_BUSLOG
-
-/* Callback used by the kbase bus logger client, to initiate a GPU reset
- * when the bus log is restarted.  GPU reset is used as reference point
- * in HW bus log analyses.
- */
-static void kbase_logging_started_cb(void *data)
-{
-	struct kbase_device *kbdev = (struct kbase_device *)data;
-
-	if (kbase_prepare_to_reset_gpu(kbdev))
-		kbase_reset_gpu(kbdev);
-	dev_info(kbdev->dev, "KBASE - Bus logger restarted\n");
-}
-
-int buslog_init(struct kbase_device *kbdev)
-{
-	int err = 0;
-
-	err = bl_core_client_register(kbdev->devname,
-					kbase_logging_started_cb,
-					kbdev, &kbdev->buslogger,
-					THIS_MODULE, NULL);
-	if (err == 0)
-		bl_core_set_threshold(kbdev->buslogger, 1024*1024*1024);
-
-	return err;
-}
-
-void buslog_term(struct kbase_device *kbdev)
-{
-	bl_core_client_unregister(kbdev->buslogger);
-}
-#endif
 
 #if MALI_USE_CSF
 /**
@@ -5318,7 +5293,8 @@ static int kbase_platform_device_probe(struct platform_device *pdev)
 
 	if (err) {
 		if (err == -EPROBE_DEFER)
-			dev_err(kbdev->dev, "Device initialization Deferred\n");
+			dev_info(kbdev->dev,
+				"Device initialization Deferred\n");
 		else
 			dev_err(kbdev->dev, "Device initialization failed\n");
 
@@ -5564,7 +5540,6 @@ static struct platform_driver kbase_platform_driver = {
 	.remove = kbase_platform_device_remove,
 	.driver = {
 		   .name = kbase_drv_name,
-		   .owner = THIS_MODULE,
 		   .pm = &kbase_pm_ops,
 		   .of_match_table = of_match_ptr(kbase_dt_ids),
 	},

@@ -849,7 +849,7 @@ bool kbase_has_exec_va_zone(struct kbase_context *kctx)
  *
  * Return: true if any allocs exist on any zone, false otherwise
  */
-bool kbase_region_tracker_has_allocs(struct kbase_context *kctx)
+static bool kbase_region_tracker_has_allocs(struct kbase_context *kctx)
 {
 	unsigned int zone_idx;
 
@@ -1393,7 +1393,7 @@ void kbase_free_alloced_region(struct kbase_va_region *reg)
 		if (WARN_ON(kbase_is_region_invalid(reg)))
 			return;
 
-		dev_dbg(kctx->kbdev->dev, "Freeing memory region %p\n",
+		dev_dbg(kctx->kbdev->dev, "Freeing memory region %pK\n",
 			(void *)reg);
 #if MALI_USE_CSF
 		if (reg->flags & KBASE_REG_CSF_EVENT)
@@ -1916,7 +1916,7 @@ int kbase_mem_free_region(struct kbase_context *kctx, struct kbase_va_region *re
 
 	KBASE_DEBUG_ASSERT(kctx != NULL);
 	KBASE_DEBUG_ASSERT(reg != NULL);
-	dev_dbg(kctx->kbdev->dev, "%s %p in kctx %p\n",
+	dev_dbg(kctx->kbdev->dev, "%s %pK in kctx %pK\n",
 		__func__, (void *)reg, (void *)kctx);
 	lockdep_assert_held(&kctx->reg_lock);
 
@@ -1975,7 +1975,7 @@ int kbase_mem_free(struct kbase_context *kctx, u64 gpu_addr)
 	struct kbase_va_region *reg;
 
 	KBASE_DEBUG_ASSERT(kctx != NULL);
-	dev_dbg(kctx->kbdev->dev, "%s 0x%llx in kctx %p\n",
+	dev_dbg(kctx->kbdev->dev, "%s 0x%llx in kctx %pK\n",
 		__func__, gpu_addr, (void *)kctx);
 
 	if ((gpu_addr & ~PAGE_MASK) && (gpu_addr >= PAGE_SIZE)) {
@@ -2772,6 +2772,7 @@ void kbase_free_phy_pages_helper_locked(struct kbase_mem_phy_alloc *alloc,
 		kbase_trace_gpu_mem_usage_dec(kctx->kbdev, kctx, freed);
 	}
 }
+KBASE_EXPORT_TEST_API(kbase_free_phy_pages_helper_locked);
 
 #if MALI_USE_CSF
 /**
@@ -4233,8 +4234,11 @@ void kbase_jit_free(struct kbase_context *kctx, struct kbase_va_region *reg)
 			div_u64(old_pages * (100 - kctx->trim_level), 100));
 		u64 delta = old_pages - new_size;
 
-		if (delta)
+		if (delta) {
+			mutex_lock(&kctx->reg_lock);
 			kbase_mem_shrink(kctx, reg, old_pages - delta);
+			mutex_unlock(&kctx->reg_lock);
+		}
 	}
 
 #if MALI_JIT_PRESSURE_LIMIT_BASE

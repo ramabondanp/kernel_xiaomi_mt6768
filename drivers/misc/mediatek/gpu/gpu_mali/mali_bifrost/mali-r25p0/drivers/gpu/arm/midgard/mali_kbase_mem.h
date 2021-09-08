@@ -31,7 +31,7 @@
 #endif
 
 #include <linux/kref.h>
-#include "mali_base_kernel.h"
+#include <uapi/gpu/arm/midgard/mali_base_kernel.h>
 #include <mali_kbase_hw.h>
 #include "mali_kbase_pm.h"
 #include "mali_kbase_defs.h"
@@ -549,7 +549,7 @@ static inline struct kbase_va_region *kbase_va_region_alloc_get(
 	WARN_ON(!region->va_refcnt);
 
 	/* non-atomic as kctx->reg_lock is held */
-	dev_dbg(kctx->kbdev->dev, "va_refcnt %d before get %p\n",
+	dev_dbg(kctx->kbdev->dev, "va_refcnt %d before get %pK\n",
 		region->va_refcnt, (void *)region);
 	region->va_refcnt++;
 
@@ -566,7 +566,7 @@ static inline struct kbase_va_region *kbase_va_region_alloc_put(
 
 	/* non-atomic as kctx->reg_lock is held */
 	region->va_refcnt--;
-	dev_dbg(kctx->kbdev->dev, "va_refcnt %d after put %p\n",
+	dev_dbg(kctx->kbdev->dev, "va_refcnt %d after put %pK\n",
 		region->va_refcnt, (void *)region);
 	if (!region->va_refcnt)
 		kbase_region_refcnt_free(region);

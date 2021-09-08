@@ -28,7 +28,7 @@
 #include <mali_kbase_gpuprops.h>
 #include <mali_kbase_hwaccess_gpuprops.h>
 #include <mali_kbase_config_defaults.h>
-#include "mali_kbase_ioctl.h"
+#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
 #include <linux/clk.h>
 #include <mali_kbase_pm_internal.h>
 #include <linux/of_platform.h>
@@ -101,6 +101,71 @@ static void kbase_gpuprops_construct_coherent_groups(
 		pr_warn("Too many coherent groups (keeping only %d groups).\n", BASE_MAX_COHERENT_GROUPS);
 
 	props->coherency_info.num_groups = num_groups;
+}
+
+/**
+ * kbase_gpuprops_get_curr_config_props - Get the current allocated resources
+ * @kbdev:       The &struct kbase_device structure for the device
+ * @curr_config: The &struct curr_config_props structure to receive the result
+ *
+ * Fill the &struct curr_config_props structure with values from the GPU
+ * configuration registers.
+ *
+ * Return: Zero on success, Linux error code on failure
+ */
+int kbase_gpuprops_get_curr_config_props(struct kbase_device *kbdev,
+	struct curr_config_props * const curr_config)
+{
+	struct kbase_current_config_regdump curr_config_regdump;
+	int err;
+
+	if (WARN_ON(!kbdev) || WARN_ON(!curr_config))
+		return -EINVAL;
+
+	/* If update not needed just return. */
+	if (!curr_config->update_needed)
+		return 0;
+
+	/* Dump relevant registers */
+	err = kbase_backend_gpuprops_get_curr_config(kbdev,
+						     &curr_config_regdump);
+	if (err)
+		return err;
+
+	curr_config->l2_slices =
+		KBASE_UBFX32(curr_config_regdump.mem_features, 8U, 4) + 1;
+
+	curr_config->l2_present =
+		((u64) curr_config_regdump.l2_present_hi << 32) +
+		curr_config_regdump.l2_present_lo;
+
+	curr_config->shader_present =
+		((u64) curr_config_regdump.shader_present_hi << 32) +
+		curr_config_regdump.shader_present_lo;
+
+	curr_config->num_cores = hweight64(curr_config->shader_present);
+
+	curr_config->update_needed = false;
+
+	return 0;
+}
+
+/**
+ * kbase_gpuprops_req_curr_config_update - Request Current Config Update
+ * @kbdev: The &struct kbase_device structure for the device
+ *
+ * Requests the current configuration to be updated next time the
+ * kbase_gpuprops_get_curr_config_props() is called.
+ *
+ * Return: Zero on success, Linux error code on failure
+ */
+int kbase_gpuprops_req_curr_config_update(struct kbase_device *kbdev)
+{
+	if (WARN_ON(!kbdev))
+		return -EINVAL;
+
+	kbdev->gpu_props.curr_config.update_needed = true;
+	return 0;
 }
 
 /**
@@ -180,6 +245,59 @@ void kbase_gpuprops_update_core_props_gpu_id(
 		KBASE_UBFX32(gpu_props->raw_props.gpu_id, 12U, 4);
 	gpu_props->core_props.product_id =
 		KBASE_UBFX32(gpu_props->raw_props.gpu_id, 16U, 16);
+}
+
+/**
+ * kbase_gpuprops_update_max_config_props - Updates the max config properties in
+ * the base_gpu_props.
+ * @base_props: The &struct base_gpu_props structure
+ * @kbdev:      The &struct kbase_device structure for the device
+ *
+ * Updates the &struct base_gpu_props structure with the max config properties.
+ */
+static void kbase_gpuprops_update_max_config_props(
+	struct base_gpu_props * const base_props, struct kbase_device *kbdev)
+{
+	int l2_n = 0;
+
+	if (WARN_ON(!kbdev) || WARN_ON(!base_props))
+		return;
+
+	/* return if the max_config is not set during arbif initialization */
+	if (kbdev->gpu_props.max_config.core_mask == 0)
+		return;
+
+	/*
+	 * Set the base_props with the maximum config values to ensure that the
+	 * user space will always be based on the maximum resources available.
+	 */
+	base_props->l2_props.num_l2_slices =
+		kbdev->gpu_props.max_config.l2_slices;
+	base_props->raw_props.shader_present =
+		kbdev->gpu_props.max_config.core_mask;
+	/*
+	 * Update l2_present in the raw data to be consistent with the
+	 * max_config.l2_slices number.
+	 */
+	base_props->raw_props.l2_present = 0;
+	for (l2_n = 0; l2_n < base_props->l2_props.num_l2_slices; l2_n++) {
+		base_props->raw_props.l2_present <<= 1;
+		base_props->raw_props.l2_present |= 0x1;
+	}
+	/*
+	 * Update the coherency_info data using just one core group. For
+	 * architectures where the max_config is provided by the arbiter it is
+	 * not necessary to split the shader core groups in different coherent
+	 * groups.
+	 */
+	base_props->coherency_info.coherency =
+		base_props->raw_props.mem_features;
+	base_props->coherency_info.num_core_groups = 1;
+	base_props->coherency_info.num_groups = 1;
+	base_props->coherency_info.group[0].core_mask =
+		kbdev->gpu_props.max_config.core_mask;
+	base_props->coherency_info.group[0].num_cores =
+		hweight32(kbdev->gpu_props.max_config.core_mask);
 }
 
 /**
@@ -297,8 +415,30 @@ static void kbase_gpuprops_calculate_props(
 		gpu_props->thread_props.max_task_queue = THREAD_MTQ_DEFAULT;
 		gpu_props->thread_props.max_thread_group_split = THREAD_MTGS_DEFAULT;
 	}
-	/* Initialize the coherent_group structure for each group */
-	kbase_gpuprops_construct_coherent_groups(gpu_props);
+
+	/*
+	 * If the maximum resources allocated information is available it is
+	 * necessary to update the base_gpu_props with the max_config info to
+	 * the userspace. This is applicable to systems that receive this
+	 * information from the arbiter.
+	 */
+	if (kbdev->gpu_props.max_config.core_mask)
+		/* Update the max config properties in the base_gpu_props */
+		kbase_gpuprops_update_max_config_props(gpu_props,
+						       kbdev);
+	else
+		/* Initialize the coherent_group structure for each group */
+		kbase_gpuprops_construct_coherent_groups(gpu_props);
+}
+
+void kbase_gpuprops_set_max_config(struct kbase_device *kbdev,
+	const struct max_config_props *max_config)
+{
+	if (WARN_ON(!kbdev) || WARN_ON(!max_config))
+		return;
+
+	kbdev->gpu_props.max_config.l2_slices = max_config->l2_slices;
+	kbdev->gpu_props.max_config.core_mask = max_config->core_mask;
 }
 
 void kbase_gpuprops_set(struct kbase_device *kbdev)
@@ -306,7 +446,8 @@ void kbase_gpuprops_set(struct kbase_device *kbdev)
 	struct kbase_gpu_props *gpu_props;
 	struct gpu_raw_gpu_props *raw;
 
-	KBASE_DEBUG_ASSERT(kbdev != NULL);
+	if (WARN_ON(!kbdev))
+		return;
 	gpu_props = &kbdev->gpu_props;
 	raw = &gpu_props->props.raw_props;
 
@@ -326,9 +467,19 @@ void kbase_gpuprops_set(struct kbase_device *kbdev)
 	gpu_props->mmu.pa_bits = KBASE_UBFX32(raw->mmu_features, 8U, 8);
 
 	gpu_props->num_cores = hweight64(raw->shader_present);
-	gpu_props->num_core_groups = hweight64(raw->l2_present);
+	gpu_props->num_core_groups =
+		gpu_props->props.coherency_info.num_core_groups;
 	gpu_props->num_address_spaces = hweight32(raw->as_present);
 	gpu_props->num_job_slots = hweight32(raw->js_present);
+
+	/*
+	 * Current configuration is used on HW interactions so that the maximum
+	 * config is just used for user space avoiding interactions with parts
+	 * of the hardware that might not be allocated to the kbase instance at
+	 * that moment.
+	 */
+	kbase_gpuprops_req_curr_config_update(kbdev);
+	kbase_gpuprops_get_curr_config_props(kbdev, &gpu_props->curr_config);
 }
 
 int kbase_gpuprops_set_features(struct kbase_device *kbdev)
@@ -494,7 +645,10 @@ int kbase_gpuprops_update_l2_features(struct kbase_device *kbdev)
 			goto exit;
 
 		dev_info(kbdev->dev, "Reflected L2_FEATURES is 0x%x\n",
-				regdump.l2_features);
+			 regdump.l2_features);
+		dev_info(kbdev->dev, "Reflected L2_CONFIG is 0x%08x\n",
+			 regdump.l2_config);
+
 
 		/* Update gpuprops with reflected L2_FEATURES */
 		gpu_props->raw_props.l2_features = regdump.l2_features;

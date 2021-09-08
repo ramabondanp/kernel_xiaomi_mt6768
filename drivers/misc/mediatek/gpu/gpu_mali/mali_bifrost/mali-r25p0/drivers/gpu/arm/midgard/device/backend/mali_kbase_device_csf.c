@@ -23,6 +23,7 @@
 #include "../mali_kbase_device.h"
 
 #include <mali_kbase_hwaccess_backend.h>
+#include <mali_kbase_hwcnt_backend_csf_if_fw.h>
 #include <mali_kbase_ctx_sched.h>
 #include <mali_kbase_reset_gpu.h>
 #include <csf/mali_kbase_csf.h>
@@ -170,6 +171,77 @@ static void kbase_backend_late_term(struct kbase_device *kbdev)
 	kbase_hwaccess_pm_term(kbdev);
 }
 
+/**
+ * kbase_device_hwcnt_backend_csf_if_init - Create hardware counter backend
+ *                                          firmware interface.
+ * @kbdev:	Device pointer
+ */
+static int kbase_device_hwcnt_backend_csf_if_init(struct kbase_device *kbdev)
+{
+	return kbase_hwcnt_backend_csf_if_fw_create(
+		kbdev, &kbdev->hwcnt_backend_csf_if_fw);
+}
+
+/**
+ * kbase_device_hwcnt_backend_csf_if_term - Terminate hardware counter backend
+ *                                          firmware interface.
+ * @kbdev:	Device pointer
+ */
+static void kbase_device_hwcnt_backend_csf_if_term(struct kbase_device *kbdev)
+{
+	kbase_hwcnt_backend_csf_if_fw_destroy(&kbdev->hwcnt_backend_csf_if_fw);
+}
+
+/**
+ * kbase_device_hwcnt_backend_csf_init - Create hardware counter backend.
+ * @kbdev:	Device pointer
+ */
+
+static int kbase_device_hwcnt_backend_csf_init(struct kbase_device *kbdev)
+{
+	return kbase_hwcnt_backend_csf_create(
+		&kbdev->hwcnt_backend_csf_if_fw,
+		KBASE_HWCNT_BACKEND_CSF_RING_BUFFER_COUNT,
+		&kbdev->hwcnt_gpu_iface);
+}
+
+/**
+ * kbase_device_hwcnt_backend_csf_term - Terminate hardware counter backend.
+ * @kbdev:	Device pointer
+ */
+static void kbase_device_hwcnt_backend_csf_term(struct kbase_device *kbdev)
+{
+	kbase_hwcnt_backend_csf_destroy(&kbdev->hwcnt_gpu_iface);
+}
+
+/**
+ * kbase_device_hwcnt_backend_csf_metadata_init - Initialize hardware counter
+ *                                                metadata.
+ * @kbdev:	Device pointer
+ */
+static int
+kbase_device_hwcnt_backend_csf_metadata_init(struct kbase_device *kbdev)
+{
+	/* For CSF GPUs, HWC metadata needs to query information from CSF
+	 * firmware, so the initialization of HWC metadata only can be called
+	 * after firmware initialized, but firmware initialization depends on
+	 * HWC backend initialization, so we need to separate HWC backend
+	 * metadata initialization from HWC backend initialization.
+	 */
+	return kbase_hwcnt_backend_csf_metadata_init(&kbdev->hwcnt_gpu_iface);
+}
+
+/**
+ * kbase_device_hwcnt_backend_csf_metadata_term - Terminate hardware counter
+ *                                                metadata.
+ * @kbdev:	Device pointer
+ */
+static void
+kbase_device_hwcnt_backend_csf_metadata_term(struct kbase_device *kbdev)
+{
+	kbase_hwcnt_backend_csf_metadata_term(&kbdev->hwcnt_gpu_iface);
+}
+
 static const struct kbase_device_init dev_init[] = {
 #ifdef CONFIG_MALI_NO_MALI
 	{kbase_gpu_device_create, kbase_gpu_device_destroy,
@@ -244,12 +316,10 @@ static const struct kbase_device_init dev_init[] = {
 	 * paragraph that starts with "Word of warning", currently the
 	 * second-last paragraph.
 	 */
-	{kbase_sysfs_init, kbase_sysfs_term, "SysFS group creation failed"},
+	{kbase_sysfs_init, kbase_sysfs_term,
+			"SysFS group creation failed"},
 	{kbase_device_misc_register, kbase_device_misc_deregister,
 			"Misc device registration failed"},
-#ifdef CONFIG_MALI_BUSLOG
-	{buslog_init, buslog_term, "Bus log client registration failed"},
-#endif
 	{kbase_gpuprops_populate_user_buffer, kbase_gpuprops_free_user_buffer,
 			"GPU property population failed"},
 #endif

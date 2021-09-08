@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -74,6 +74,38 @@ static void gpu_clk_rate_notify_all(
 	}
 }
 
+/**
+ * get_clk_rate_trace_callbacks() - Returns pointer to clk trace ops.
+ * @kbdev: Pointer to kbase device, used to check if arbitration is enabled
+ *         when compiled with arbiter support.
+ * Return: Pointer to clk trace ops if supported or NULL.
+ */
+static struct kbase_clk_rate_trace_op_conf *
+get_clk_rate_trace_callbacks(struct kbase_device *kbdev __maybe_unused)
+{
+	/* base case */
+	struct kbase_clk_rate_trace_op_conf *callbacks =
+		(struct kbase_clk_rate_trace_op_conf *)CLK_RATE_TRACE_OPS;
+#if defined(CONFIG_MALI_ARBITER_SUPPORT) && defined(CONFIG_OF)
+	const void *arbiter_if_node;
+
+	if (WARN_ON(!kbdev) || WARN_ON(!kbdev->dev))
+		return callbacks;
+
+	arbiter_if_node =
+		of_get_property(kbdev->dev->of_node, "arbiter_if", NULL);
+	/* Arbitration enabled, override the callback pointer.*/
+	if (arbiter_if_node)
+		callbacks = &arb_clk_rate_trace_ops;
+	else
+		dev_dbg(kbdev->dev,
+			"Arbitration supported but disabled by platform. Leaving clk rate callbacks as default.\n");
+
+#endif
+
+	return callbacks;
+}
+
 static int gpu_clk_rate_change_notifier(struct notifier_block *nb,
 			unsigned long event, void *data)
 {
@@ -104,11 +136,12 @@ static int gpu_clk_rate_change_notifier(struct notifier_block *nb,
 static int gpu_clk_data_init(struct kbase_device *kbdev,
 		void *gpu_clk_handle, unsigned int index)
 {
-	struct kbase_clk_rate_trace_op_conf *callbacks =
-		(struct kbase_clk_rate_trace_op_conf *)CLK_RATE_TRACE_OPS;
+	struct kbase_clk_rate_trace_op_conf *callbacks;
 	struct kbase_clk_data *clk_data;
 	struct kbase_clk_rate_trace_manager *clk_rtm = &kbdev->pm.clk_rtm;
 	int ret = 0;
+
+	callbacks = get_clk_rate_trace_callbacks(kbdev);
 
 	if (WARN_ON(!callbacks) ||
 	    WARN_ON(!gpu_clk_handle) ||
@@ -142,8 +175,9 @@ static int gpu_clk_data_init(struct kbase_device *kbdev,
 	clk_data->clk_rate_change_nb.notifier_call =
 			gpu_clk_rate_change_notifier;
 
-	ret = callbacks->gpu_clk_notifier_register(kbdev, gpu_clk_handle,
-			&clk_data->clk_rate_change_nb);
+	if (callbacks->gpu_clk_notifier_register)
+		ret = callbacks->gpu_clk_notifier_register(kbdev,
+				gpu_clk_handle, &clk_data->clk_rate_change_nb);
 	if (ret) {
 		dev_err(kbdev->dev, "Failed to register notifier for clock enumerated at index %u", index);
 		kfree(clk_data);
@@ -154,11 +188,12 @@ static int gpu_clk_data_init(struct kbase_device *kbdev,
 
 int kbase_clk_rate_trace_manager_init(struct kbase_device *kbdev)
 {
-	struct kbase_clk_rate_trace_op_conf *callbacks =
-		(struct kbase_clk_rate_trace_op_conf *)CLK_RATE_TRACE_OPS;
+	struct kbase_clk_rate_trace_op_conf *callbacks;
 	struct kbase_clk_rate_trace_manager *clk_rtm = &kbdev->pm.clk_rtm;
 	unsigned int i;
 	int ret = 0;
+
+	callbacks = get_clk_rate_trace_callbacks(kbdev);
 
 	spin_lock_init(&clk_rtm->lock);
 	INIT_LIST_HEAD(&clk_rtm->listeners);
@@ -220,9 +255,10 @@ void kbase_clk_rate_trace_manager_term(struct kbase_device *kbdev)
 		if (!clk_rtm->clks[i])
 			break;
 
-		clk_rtm->clk_rate_trace_ops->gpu_clk_notifier_unregister(
-				kbdev, clk_rtm->clks[i]->gpu_clk_handle,
-				&clk_rtm->clks[i]->clk_rate_change_nb);
+		if (clk_rtm->clk_rate_trace_ops->gpu_clk_notifier_unregister)
+			clk_rtm->clk_rate_trace_ops->gpu_clk_notifier_unregister
+			(kbdev, clk_rtm->clks[i]->gpu_clk_handle,
+			&clk_rtm->clks[i]->clk_rate_change_nb);
 		kfree(clk_rtm->clks[i]);
 	}
 

@@ -257,7 +257,7 @@ static int kbase_kcpu_jit_allocate_process(
 				 * No prior JIT_FREE command is active. Roll
 				 * back previous allocations and fail.
 				 */
-				dev_warn_ratelimited(kctx->kbdev->dev, "JIT alloc command failed: %p\n", cmd);
+				dev_warn_ratelimited(kctx->kbdev->dev, "JIT alloc command failed: %pK\n", cmd);
 				ret = -ENOMEM;
 				goto fail;
 			}
@@ -858,10 +858,7 @@ static void kbase_kcpu_cqs_set_process(struct kbase_device *kbdev,
 				"Sync memory %llx already freed", cqs_set->objs[i].addr);
 			queue->has_error = true;
 		} else {
-			if (cqs_set->propagate_flags & (1 << i))
-				evt[BASEP_EVENT_ERR_INDEX] = queue->has_error;
-			else
-				evt[BASEP_EVENT_ERR_INDEX] = false;
+			evt[BASEP_EVENT_ERR_INDEX] = queue->has_error;
 			/* Set to signaled */
 			evt[BASEP_EVENT_VAL_INDEX]++;
 			kbase_phy_alloc_mapping_put(queue->kctx, mapping);
@@ -908,8 +905,267 @@ static int kbase_kcpu_cqs_set_prepare(
 	current_command->type = BASE_KCPU_COMMAND_TYPE_CQS_SET;
 	current_command->info.cqs_set.nr_objs = nr_objs;
 	current_command->info.cqs_set.objs = objs;
-	current_command->info.cqs_set.propagate_flags =
-					cqs_set_info->propagate_flags;
+
+	return 0;
+}
+
+static void cleanup_cqs_wait_operation(struct kbase_kcpu_command_queue *queue,
+		struct kbase_kcpu_command_cqs_wait_operation_info *cqs_wait_operation)
+{
+	WARN_ON(!cqs_wait_operation->nr_objs);
+	WARN_ON(!cqs_wait_operation->objs);
+	WARN_ON(!cqs_wait_operation->signaled);
+	WARN_ON(!queue->cqs_wait_count);
+
+	if (--queue->cqs_wait_count == 0) {
+		kbase_csf_event_wait_remove(queue->kctx,
+				event_cqs_callback, queue);
+	}
+
+	kfree(cqs_wait_operation->signaled);
+	kfree(cqs_wait_operation->objs);
+	cqs_wait_operation->signaled = NULL;
+	cqs_wait_operation->objs = NULL;
+}
+
+static int kbase_kcpu_cqs_wait_operation_process(struct kbase_device *kbdev,
+		struct kbase_kcpu_command_queue *queue,
+		struct kbase_kcpu_command_cqs_wait_operation_info *cqs_wait_operation)
+{
+	u32 i;
+
+	lockdep_assert_held(&queue->kctx->csf.kcpu_queues.lock);
+
+	if (WARN_ON(!cqs_wait_operation->objs))
+		return -EINVAL;
+
+	/* Skip the CQS waits that have already been signaled when processing */
+	for (i = find_first_zero_bit(cqs_wait_operation->signaled, cqs_wait_operation->nr_objs); i < cqs_wait_operation->nr_objs; i++) {
+		if (!test_bit(i, cqs_wait_operation->signaled)) {
+			struct kbase_vmap_struct *mapping;
+			bool sig_set;
+			u64 *evt = (u64 *)kbase_phy_alloc_mapping_get(queue->kctx,
+						cqs_wait_operation->objs[i].addr, &mapping);
+
+			/* GPUCORE-28172 RDT to review */
+			if (!queue->command_started)
+				queue->command_started = true;
+
+			if (!evt) {
+				dev_warn(kbdev->dev,
+					"Sync memory %llx already freed", cqs_wait_operation->objs[i].addr);
+				queue->has_error = true;
+				return -EINVAL;
+			}
+
+			switch (cqs_wait_operation->objs[i].operation) {
+			case BASEP_CQS_WAIT_OPERATION_LE:
+				sig_set = *evt <= cqs_wait_operation->objs[i].val;
+				break;
+			case BASEP_CQS_WAIT_OPERATION_GT:
+				sig_set = *evt > cqs_wait_operation->objs[i].val;
+				break;
+			default:
+				dev_warn(kbdev->dev,
+					"Unsupported CQS wait operation %d", cqs_wait_operation->objs[i].operation);
+
+				kbase_phy_alloc_mapping_put(queue->kctx, mapping);
+				queue->has_error = true;
+
+				return -EINVAL;
+			}
+
+			/* Increment evt up to the error_state value depending on the CQS data type */
+			switch (cqs_wait_operation->objs[i].data_type) {
+			default:
+				dev_warn(kbdev->dev, "Unreachable data_type=%d", cqs_wait_operation->objs[i].data_type);
+			/* Fallthrough - hint to compiler that there's really only 2 options at present */
+			case BASEP_CQS_DATA_TYPE_U32:
+				evt = (u64 *)((u8 *)evt + sizeof(u32));
+				break;
+			case BASEP_CQS_DATA_TYPE_U64:
+				evt = (u64 *)((u8 *)evt + sizeof(u64));
+				break;
+			}
+
+			if (sig_set) {
+				bitmap_set(cqs_wait_operation->signaled, i, 1);
+				if ((cqs_wait_operation->inherit_err_flags & (1U << i)) &&
+				    *evt > 0) {
+					queue->has_error = true;
+				}
+
+				/* GPUCORE-28172 RDT to review */
+
+				queue->command_started = false;
+			}
+
+			kbase_phy_alloc_mapping_put(queue->kctx, mapping);
+
+			if (!sig_set)
+				break;
+		}
+	}
+
+	/* For the queue to progress further, all cqs objects should get
+	 * signaled.
+	 */
+	return bitmap_full(cqs_wait_operation->signaled, cqs_wait_operation->nr_objs);
+}
+
+static int kbase_kcpu_cqs_wait_operation_prepare(struct kbase_kcpu_command_queue *queue,
+		struct base_kcpu_command_cqs_wait_operation_info *cqs_wait_operation_info,
+		struct kbase_kcpu_command *current_command)
+{
+	struct base_cqs_wait_operation_info *objs;
+	unsigned int nr_objs = cqs_wait_operation_info->nr_objs;
+
+	lockdep_assert_held(&queue->kctx->csf.kcpu_queues.lock);
+
+	if (nr_objs > BASEP_KCPU_CQS_MAX_NUM_OBJS)
+		return -EINVAL;
+
+	if (!nr_objs)
+		return -EINVAL;
+
+	objs = kcalloc(nr_objs, sizeof(*objs), GFP_KERNEL);
+	if (!objs)
+		return -ENOMEM;
+
+	if (copy_from_user(objs, u64_to_user_ptr(cqs_wait_operation_info->objs),
+			nr_objs * sizeof(*objs))) {
+		kfree(objs);
+		return -ENOMEM;
+	}
+
+	if (++queue->cqs_wait_count == 1) {
+		if (kbase_csf_event_wait_add(queue->kctx,
+				event_cqs_callback, queue)) {
+			kfree(objs);
+			queue->cqs_wait_count--;
+			return -ENOMEM;
+		}
+	}
+
+	current_command->type = BASE_KCPU_COMMAND_TYPE_CQS_WAIT_OPERATION;
+	current_command->info.cqs_wait_operation.nr_objs = nr_objs;
+	current_command->info.cqs_wait_operation.objs = objs;
+	current_command->info.cqs_wait_operation.inherit_err_flags =
+					cqs_wait_operation_info->inherit_err_flags;
+
+	current_command->info.cqs_wait_operation.signaled = kcalloc(BITS_TO_LONGS(nr_objs),
+		sizeof(*current_command->info.cqs_wait_operation.signaled), GFP_KERNEL);
+	if (!current_command->info.cqs_wait_operation.signaled) {
+		if (--queue->cqs_wait_count == 0) {
+			kbase_csf_event_wait_remove(queue->kctx,
+				event_cqs_callback, queue);
+		}
+
+		kfree(objs);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void kbase_kcpu_cqs_set_operation_process(
+		struct kbase_device *kbdev,
+		struct kbase_kcpu_command_queue *queue,
+		struct kbase_kcpu_command_cqs_set_operation_info *cqs_set_operation)
+{
+	unsigned int i;
+
+	lockdep_assert_held(&queue->kctx->csf.kcpu_queues.lock);
+
+	if (WARN_ON(!cqs_set_operation->objs))
+		return;
+
+	for (i = 0; i < cqs_set_operation->nr_objs; i++) {
+		struct kbase_vmap_struct *mapping;
+		u64 *evt;
+
+		evt = (u64 *)kbase_phy_alloc_mapping_get(
+			queue->kctx, cqs_set_operation->objs[i].addr, &mapping);
+
+		/* GPUCORE-28172 RDT to review */
+
+		if (!evt) {
+			dev_warn(kbdev->dev,
+				"Sync memory %llx already freed", cqs_set_operation->objs[i].addr);
+			queue->has_error = true;
+		} else {
+			switch (cqs_set_operation->objs[i].operation) {
+			case BASEP_CQS_SET_OPERATION_ADD:
+				*evt += cqs_set_operation->objs[i].val;
+				break;
+			case BASEP_CQS_SET_OPERATION_SET:
+				*evt = cqs_set_operation->objs[i].val;
+				break;
+			default:
+				dev_warn(kbdev->dev,
+					"Unsupported CQS set operation %d", cqs_set_operation->objs[i].operation);
+				queue->has_error = true;
+				break;
+			}
+
+			/* Increment evt up to the error_state value depending on the CQS data type */
+			switch (cqs_set_operation->objs[i].data_type) {
+			default:
+				dev_warn(kbdev->dev, "Unreachable data_type=%d", cqs_set_operation->objs[i].data_type);
+			/* Fallthrough - hint to compiler that there's really only 2 options at present */
+			case BASEP_CQS_DATA_TYPE_U32:
+				evt = (u64 *)((u8 *)evt + sizeof(u32));
+				break;
+			case BASEP_CQS_DATA_TYPE_U64:
+				evt = (u64 *)((u8 *)evt + sizeof(u64));
+				break;
+			}
+
+			/* GPUCORE-28172 RDT to review */
+
+			/* Always propagate errors */
+			*evt = queue->has_error;
+
+			kbase_phy_alloc_mapping_put(queue->kctx, mapping);
+		}
+	}
+
+	kbase_csf_event_signal_notify_gpu(queue->kctx);
+
+	kfree(cqs_set_operation->objs);
+	cqs_set_operation->objs = NULL;
+}
+
+static int kbase_kcpu_cqs_set_operation_prepare(
+		struct kbase_kcpu_command_queue *kcpu_queue,
+		struct base_kcpu_command_cqs_set_operation_info *cqs_set_operation_info,
+		struct kbase_kcpu_command *current_command)
+{
+	struct kbase_context *const kctx = kcpu_queue->kctx;
+	struct base_cqs_set_operation_info *objs;
+	unsigned int nr_objs = cqs_set_operation_info->nr_objs;
+
+	lockdep_assert_held(&kctx->csf.kcpu_queues.lock);
+
+	if (nr_objs > BASEP_KCPU_CQS_MAX_NUM_OBJS)
+		return -EINVAL;
+
+	if (!nr_objs)
+		return -EINVAL;
+
+	objs = kcalloc(nr_objs, sizeof(*objs), GFP_KERNEL);
+	if (!objs)
+		return -ENOMEM;
+
+	if (copy_from_user(objs, u64_to_user_ptr(cqs_set_operation_info->objs),
+			nr_objs * sizeof(*objs))) {
+		kfree(objs);
+		return -ENOMEM;
+	}
+
+	current_command->type = BASE_KCPU_COMMAND_TYPE_CQS_SET_OPERATION;
+	current_command->info.cqs_set_operation.nr_objs = nr_objs;
+	current_command->info.cqs_set_operation.objs = objs;
 
 	return 0;
 }
@@ -1365,6 +1621,28 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 				&cmd->info.cqs_set);
 
 			break;
+		case BASE_KCPU_COMMAND_TYPE_CQS_WAIT_OPERATION:
+			status = kbase_kcpu_cqs_wait_operation_process(kbdev, queue,
+						&cmd->info.cqs_wait_operation);
+
+			if (!status && !ignore_waits) {
+				process_next = false;
+			} else {
+				/* Either all CQS objects were signaled or
+				 * there was an error or the queue itself is
+				 * being deleted.
+				 * In all cases can move to the next command.
+				 * TBD: handle the error
+				 */
+				cleanup_cqs_wait_operation(queue,	&cmd->info.cqs_wait_operation);
+			}
+
+			break;
+		case BASE_KCPU_COMMAND_TYPE_CQS_SET_OPERATION:
+			kbase_kcpu_cqs_set_operation_process(kbdev, queue,
+				&cmd->info.cqs_set_operation);
+
+			break;
 		case BASE_KCPU_COMMAND_TYPE_ERROR_BARRIER:
 			/* Clear the queue's error state */
 			queue->has_error = false;
@@ -1404,7 +1682,7 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 				queue->kctx, NULL, cmd->info.import.gpu_va);
 			kbase_gpu_vm_unlock(queue->kctx);
 
-			if (ret == false) {
+			if (!ret) {
 				queue->has_error = true;
 				dev_warn(kbdev->dev,
 						"failed to release the reference. resource not found\n");
@@ -1425,7 +1703,7 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 				queue->kctx, NULL, cmd->info.import.gpu_va);
 			kbase_gpu_vm_unlock(queue->kctx);
 
-			if (ret == false) {
+			if (!ret) {
 				queue->has_error = true;
 				dev_warn(kbdev->dev,
 						"failed to release the reference. resource not found\n");
@@ -1589,6 +1867,16 @@ static void KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_COMMAND(
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_ENQUEUE_CQS_SET(
 				kbdev, queue, sets[i].addr);
 		}
+		break;
+	}
+	case BASE_KCPU_COMMAND_TYPE_CQS_WAIT_OPERATION:
+	{
+		/* GPUCORE-28172 RDT to review */
+		break;
+	}
+	case BASE_KCPU_COMMAND_TYPE_CQS_SET_OPERATION:
+	{
+		/* GPUCORE-28172 RDT to review */
 		break;
 	}
 	case BASE_KCPU_COMMAND_TYPE_ERROR_BARRIER:
@@ -1757,6 +2045,14 @@ int kbase_csf_kcpu_queue_enqueue(struct kbase_context *kctx,
 		case BASE_KCPU_COMMAND_TYPE_CQS_SET:
 			ret = kbase_kcpu_cqs_set_prepare(queue,
 					&command.info.cqs_set, kcpu_cmd);
+			break;
+		case BASE_KCPU_COMMAND_TYPE_CQS_WAIT_OPERATION:
+			ret = kbase_kcpu_cqs_wait_operation_prepare(queue,
+					&command.info.cqs_wait_operation, kcpu_cmd);
+			break;
+		case BASE_KCPU_COMMAND_TYPE_CQS_SET_OPERATION:
+			ret = kbase_kcpu_cqs_set_operation_prepare(queue,
+					&command.info.cqs_set_operation, kcpu_cmd);
 			break;
 		case BASE_KCPU_COMMAND_TYPE_ERROR_BARRIER:
 			kcpu_cmd->type = BASE_KCPU_COMMAND_TYPE_ERROR_BARRIER;

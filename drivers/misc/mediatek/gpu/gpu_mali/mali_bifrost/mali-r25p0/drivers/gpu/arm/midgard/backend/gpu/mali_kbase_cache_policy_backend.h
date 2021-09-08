@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT 2014-2016, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2016, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -23,7 +23,7 @@
 #define _KBASE_CACHE_POLICY_BACKEND_H_
 
 #include "mali_kbase.h"
-#include "mali_base_kernel.h"
+#include <uapi/gpu/arm/midgard/mali_base_kernel.h>
 
 /**
   * kbase_cache_set_coherency_mode() - Sets the system coherency mode

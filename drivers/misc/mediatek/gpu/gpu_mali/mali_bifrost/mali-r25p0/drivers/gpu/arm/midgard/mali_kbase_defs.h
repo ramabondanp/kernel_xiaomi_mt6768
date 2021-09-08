@@ -48,9 +48,6 @@
 #include <linux/file.h>
 #include <linux/sizes.h>
 
-#ifdef CONFIG_MALI_BUSLOG
-#include <linux/bus_logger.h>
-#endif
 
 #if defined(CONFIG_SYNC)
 #include <sync.h>
@@ -555,7 +552,6 @@ struct kbase_mmu_mode {
 	unsigned long flags;
 };
 
-struct kbase_mmu_mode const *kbase_mmu_mode_get_lpae(void);
 struct kbase_mmu_mode const *kbase_mmu_mode_get_aarch64(void);
 
 #define DEVNAME_SIZE	16
@@ -640,8 +636,8 @@ struct kbase_process {
  *                         issues present in the GPU.
  * @hw_quirks_mmu:         Configuration to be used for the MMU as per the HW
  *                         issues present in the GPU.
- * @hw_quirks_jm:          Configuration to be used for the Job Manager as per
- *                         the HW issues present in the GPU.
+ * @hw_quirks_gpu:         Configuration to be used for the Job Manager or CSF/MCU
+ *                         subsystems as per the HW issues present in the GPU.
  * @entry:                 Links the device instance to the global list of GPU
  *                         devices. The list would have as many entries as there
  *                         are GPU device instances.
@@ -726,6 +722,8 @@ struct kbase_process {
  * @nr_hw_address_spaces:  Number of address spaces actually available in the
  *                         GPU, remains constant after driver initialisation.
  * @nr_user_address_spaces: Number of address spaces available to user contexts
+ * @hwcnt_backend_csf_if_fw: Firmware interface to access CSF GPU performance
+ *                         counters.
  * @hwcnt:                  Structure used for instrumentation and HW counters
  *                         dumping
  * @hwcnt.lock:            The lock should be used when accessing any of the
@@ -770,6 +768,8 @@ struct kbase_process {
  *                         including any contexts that might be created for
  *                         hardware counters.
  * @kctx_list_lock:        Lock protecting concurrent accesses to @kctx_list.
+ * @group_max_uid_in_devices: Max value of any queue group UID in any kernel
+ *                            context in the kbase device.
  * @devfreq_profile:       Describes devfreq profile for the Mali GPU device, passed
  *                         to devfreq_add_device() to add devfreq feature to Mali
  *                         GPU device.
@@ -934,7 +934,7 @@ struct kbase_device {
 	u32 hw_quirks_sc;
 	u32 hw_quirks_tiler;
 	u32 hw_quirks_mmu;
-	u32 hw_quirks_jm;
+	u32 hw_quirks_gpu;
 
 	struct list_head entry;
 	struct device *dev;
@@ -1032,6 +1032,7 @@ struct kbase_device {
 
 	struct list_head        kctx_list;
 	struct mutex            kctx_list_lock;
+	atomic_t                group_max_uid_in_devices;
 
 #ifdef CONFIG_MALI_DEVFREQ
 	struct devfreq_dev_profile devfreq_profile;
@@ -1136,9 +1137,6 @@ struct kbase_device {
 
 	struct work_struct protected_mode_hwcnt_disable_work;
 
-#ifdef CONFIG_MALI_BUSLOG
-	struct bus_logger_client *buslogger;
-#endif
 
 	bool irq_reset_flush;
 
@@ -1247,7 +1245,92 @@ struct kbase_file {
 	unsigned long         api_version;
 	atomic_t              setup_state;
 };
-
+#if MALI_JIT_PRESSURE_LIMIT_BASE
+/**
+ * enum kbase_context_flags - Flags for kbase contexts
+ *
+ * @KCTX_COMPAT: Set when the context process is a compat process, 32-bit
+ * process on a 64-bit kernel.
+ *
+ * @KCTX_RUNNABLE_REF: Set when context is counted in
+ * kbdev->js_data.nr_contexts_runnable. Must hold queue_mutex when accessing.
+ *
+ * @KCTX_ACTIVE: Set when the context is active.
+ *
+ * @KCTX_PULLED: Set when last kick() caused atoms to be pulled from this
+ * context.
+ *
+ * @KCTX_MEM_PROFILE_INITIALIZED: Set when the context's memory profile has been
+ * initialized.
+ *
+ * @KCTX_INFINITE_CACHE: Set when infinite cache is to be enabled for new
+ * allocations. Existing allocations will not change.
+ *
+ * @KCTX_SUBMIT_DISABLED: Set to prevent context from submitting any jobs.
+ *
+ * @KCTX_PRIVILEGED:Set if the context uses an address space and should be kept
+ * scheduled in.
+ *
+ * @KCTX_SCHEDULED: Set when the context is scheduled on the Run Pool.
+ * This is only ever updated whilst the jsctx_mutex is held.
+ *
+ * @KCTX_DYING: Set when the context process is in the process of being evicted.
+ *
+ * @KCTX_NO_IMPLICIT_SYNC: Set when explicit Android fences are in use on this
+ * context, to disable use of implicit dma-buf fences. This is used to avoid
+ * potential synchronization deadlocks.
+ *
+ * @KCTX_FORCE_SAME_VA: Set when BASE_MEM_SAME_VA should be forced on memory
+ * allocations. For 64-bit clients it is enabled by default, and disabled by
+ * default on 32-bit clients. Being able to clear this flag is only used for
+ * testing purposes of the custom zone allocation on 64-bit user-space builds,
+ * where we also require more control than is available through e.g. the JIT
+ * allocation mechanism. However, the 64-bit user-space client must still
+ * reserve a JIT region using KBASE_IOCTL_MEM_JIT_INIT
+ *
+ * @KCTX_PULLED_SINCE_ACTIVE_JS0: Set when the context has had an atom pulled
+ * from it for job slot 0. This is reset when the context first goes active or
+ * is re-activated on that slot.
+ *
+ * @KCTX_PULLED_SINCE_ACTIVE_JS1: Set when the context has had an atom pulled
+ * from it for job slot 1. This is reset when the context first goes active or
+ * is re-activated on that slot.
+ *
+ * @KCTX_PULLED_SINCE_ACTIVE_JS2: Set when the context has had an atom pulled
+ * from it for job slot 2. This is reset when the context first goes active or
+ * is re-activated on that slot.
+ *
+ * @KCTX_AS_DISABLED_ON_FAULT: Set when the GPU address space is disabled for
+ * the context due to unhandled page(or bus) fault. It is cleared when the
+ * refcount for the context drops to 0 or on when the address spaces are
+ * re-enabled on GPU reset or power cycle.
+ *
+ * @KCTX_JPL_ENABLED: Set when JIT physical page limit is less than JIT virtual
+ * address page limit, so we must take care to not exceed the physical limit
+ *
+ * All members need to be separate bits. This enum is intended for use in a
+ * bitmask where multiple values get OR-ed together.
+ */
+enum kbase_context_flags {
+	KCTX_COMPAT = 1U << 0,
+	KCTX_RUNNABLE_REF = 1U << 1,
+	KCTX_ACTIVE = 1U << 2,
+	KCTX_PULLED = 1U << 3,
+	KCTX_MEM_PROFILE_INITIALIZED = 1U << 4,
+	KCTX_INFINITE_CACHE = 1U << 5,
+	KCTX_SUBMIT_DISABLED = 1U << 6,
+	KCTX_PRIVILEGED = 1U << 7,
+	KCTX_SCHEDULED = 1U << 8,
+	KCTX_DYING = 1U << 9,
+	KCTX_NO_IMPLICIT_SYNC = 1U << 10,
+	KCTX_FORCE_SAME_VA = 1U << 11,
+	KCTX_PULLED_SINCE_ACTIVE_JS0 = 1U << 12,
+	KCTX_PULLED_SINCE_ACTIVE_JS1 = 1U << 13,
+	KCTX_PULLED_SINCE_ACTIVE_JS2 = 1U << 14,
+	KCTX_AS_DISABLED_ON_FAULT = 1U << 15,
+	KCTX_JPL_ENABLED = 1U << 16,
+};
+#else
 /**
  * enum kbase_context_flags - Flags for kbase contexts
  *
@@ -1327,38 +1410,8 @@ enum kbase_context_flags {
 	KCTX_PULLED_SINCE_ACTIVE_JS1 = 1U << 13,
 	KCTX_PULLED_SINCE_ACTIVE_JS2 = 1U << 14,
 	KCTX_AS_DISABLED_ON_FAULT = 1U << 15,
-#if MALI_JIT_PRESSURE_LIMIT_BASE
-	/*
-	 * Set when JIT physical page limit is less than JIT virtual address
-	 * page limit, so we must take care to not exceed the physical limit
-	 */
-	KCTX_JPL_ENABLED = 1U << 16,
-#endif /* !MALI_JIT_PRESSURE_LIMIT_BASE */
 };
-
-#if MALI_USE_CSF
-/**
- * enum kbase_ctx_mmu_flush_pending_state - State for the pending mmu flush
- *                                          operation for a kbase context.
- *
- * @KCTX_MMU_FLUSH_NOT_PEND: Set when there is no MMU flush operation pending
- *                           for a kbase context or deferred flush operation
- *                           is performed.
- *
- * @KCTX_MMU_FLUSH_PEND_NO_SYNC: Set when the MMU flush operation is deferred
- *                               for a kbase context when it is inactive and
- *                               the sync flag passed is 0.
- *
- * @KCTX_MMU_FLUSH_PEND_SYNC: Set when the MMU flush operation is deferred
- *                            for a kbase context when it is inactive and
- *                            the sync flag passed is 1.
- */
-enum kbase_ctx_mmu_flush_pending_state {
-	KCTX_MMU_FLUSH_NOT_PEND,
-	KCTX_MMU_FLUSH_PEND_NO_SYNC,
-	KCTX_MMU_FLUSH_PEND_SYNC,
-};
-#endif
+#endif /* MALI_JIT_PRESSURE_LIMIT_BASE */
 
 struct kbase_sub_alloc {
 	struct list_head link;
@@ -1638,12 +1691,8 @@ struct kbase_reg_zone {
  * @kinstr_jm:            Kernel job manager instrumentation context handle
  * @tl_kctx_list_node:    List item into the device timeline's list of
  *                        contexts, for timeline summarization.
- * @mmu_flush_pend_state: Tracks if the MMU flush operations are pending for the
- *                        context. The flush required due to unmap is also
- *                        tracked. It is supposed to be in
- *                        KCTX_MMU_FLUSH_NOT_PEND state whilst a context is
- *                        active and shall be updated with mmu_hw_mutex lock
- *                        held.
+ * @limited_core_mask:    The mask that is applied to the affinity in case of atoms
+ *                        marked with BASE_JD_REQ_LIMITED_CORE_MASK.
  *
  * A kernel base context is an entity among which the GPU is scheduled.
  * Each context has its own GPU address space.
@@ -1791,9 +1840,7 @@ struct kbase_context {
 #endif
 	struct list_head tl_kctx_list_node;
 
-#if MALI_USE_CSF
-	enum kbase_ctx_mmu_flush_pending_state mmu_flush_pend_state;
-#endif
+	u64 limited_core_mask;
 };
 
 #ifdef CONFIG_MALI_CINSTR_GWT

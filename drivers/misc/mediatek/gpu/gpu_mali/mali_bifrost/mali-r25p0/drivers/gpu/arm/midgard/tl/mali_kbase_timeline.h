@@ -107,32 +107,6 @@ void kbase_timeline_pre_kbase_context_destroy(struct kbase_context *kctx);
 void kbase_timeline_post_kbase_context_destroy(struct kbase_context *kctx);
 
 #if MALI_UNIT_TEST
-/**
- * kbase_timeline_test - start timeline stream data generator
- * @kbdev:     Kernel common context
- * @tpw_count: Number of trace point writers in each context
- * @msg_delay: Time delay in milliseconds between trace points written by one
- *             writer
- * @msg_count: Number of trace points written by one writer
- * @aux_msg:   If non-zero aux messages will be included
- *
- * This test starts a requested number of asynchronous writers in both IRQ and
- * thread context. Each writer will generate required number of test
- * tracepoints (tracepoints with embedded information about writer that
- * should be verified by user space reader). Tracepoints will be emitted in
- * all timeline body streams. If aux_msg is non-zero writer will also
- * generate not testable tracepoints (tracepoints without information about
- * writer). These tracepoints are used to check correctness of remaining
- * timeline message generating functions. Writer will wait requested time
- * between generating another set of messages. This call blocks until all
- * writers finish.
- */
-void kbase_timeline_test(
-	struct kbase_device *kbdev,
-	unsigned int tpw_count,
-	unsigned int msg_delay,
-	unsigned int msg_count,
-	int          aux_msg);
 
 /**
  * kbase_timeline_stats - read timeline stream statistics

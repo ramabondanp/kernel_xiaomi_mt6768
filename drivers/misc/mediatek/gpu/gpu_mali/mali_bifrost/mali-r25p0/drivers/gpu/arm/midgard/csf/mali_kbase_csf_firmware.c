@@ -48,9 +48,16 @@
 
 #define MALI_MAX_FIRMWARE_NAME_LEN ((size_t)20)
 
+
 static char fw_name[MALI_MAX_FIRMWARE_NAME_LEN] = "mali_csffw.bin";
 module_param_string(fw_name, fw_name, sizeof(fw_name), 0644);
 MODULE_PARM_DESC(fw_name, "firmware image");
+
+/* The waiting time for firmware to boot */
+static unsigned int csf_firmware_boot_timeout_ms = 500;
+module_param(csf_firmware_boot_timeout_ms, uint, 0444);
+MODULE_PARM_DESC(csf_firmware_boot_timeout_ms,
+		 "Maximum time to wait for firmware to boot.");
 
 #ifdef CONFIG_MALI_DEBUG
 /* Makes Driver wait indefinitely for an acknowledgment for the different
@@ -93,7 +100,6 @@ MODULE_PARM_DESC(fw_debug,
 
 #define TL_METADATA_ENTRY_NAME_OFFSET (0x8)
 
-#define CSF_FIRMWARE_BOOT_TIMEOUT_MS     (500)
 #define CSF_MAX_FW_STOP_LOOPS            (100000)
 
 #define CSF_GLB_REQ_CFG_MASK                                                   \
@@ -232,7 +238,7 @@ static void stop_csf_firmware(struct kbase_device *kbdev)
 static void wait_for_firmware_boot(struct kbase_device *kbdev)
 {
 	const long wait_timeout =
-		kbase_csf_timeout_in_jiffies(CSF_FIRMWARE_BOOT_TIMEOUT_MS);
+		kbase_csf_timeout_in_jiffies(csf_firmware_boot_timeout_ms);
 	long remaining;
 
 	/* Firmware will generate a global interface interrupt once booting
@@ -987,6 +993,7 @@ static int parse_capabilities(struct kbase_device *kbdev)
 
 	iface->group_stride = shared_info[GLB_GROUP_STRIDE/4];
 	iface->prfcnt_size = shared_info[GLB_PRFCNT_SIZE/4];
+	iface->instr_features = shared_info[GLB_INSTR_FEATURES / 4];
 
 	if ((GROUP_CONTROL_0 +
 		(unsigned long)iface->group_num * iface->group_stride) >
@@ -1239,14 +1246,8 @@ static void handle_internal_firmware_fatal(struct kbase_device *const kbdev)
 		kbase_ctx_sched_release_ctx_lock(kctx);
 	}
 
-	/* Internal FW error could mean hardware counters will stop working.
-	 * Put the backend into the unrecoverable error state to cause
-	 * current and subsequent counter operations to immediately
-	 * fail, avoiding the risk of a hang.
-	 */
-	kbase_hwcnt_backend_csf_on_unrecoverable_error(&kbdev->hwcnt_gpu_iface);
-
-	if (kbase_prepare_to_reset_gpu(kbdev))
+	if (kbase_prepare_to_reset_gpu(kbdev,
+				       RESET_FLAGS_HWC_UNRECOVERABLE_ERROR))
 		kbase_reset_gpu(kbdev);
 }
 
@@ -1669,6 +1670,7 @@ u32 kbase_csf_firmware_set_mcu_core_pwroff_time(struct kbase_device *kbdev, u32 
 	return pwroff;
 }
 
+
 int kbase_csf_firmware_init(struct kbase_device *kbdev)
 {
 	const struct firmware *firmware;
@@ -1836,6 +1838,7 @@ int kbase_csf_firmware_init(struct kbase_device *kbdev)
 	if (ret != 0)
 		goto error;
 
+
 	/* Firmware loaded successfully */
 	release_firmware(firmware);
 	KBASE_KTRACE_ADD(kbdev, FIRMWARE_BOOT, NULL,
@@ -1987,7 +1990,7 @@ void kbase_csf_firmware_disable_gpu_idle_timer(struct kbase_device *kbdev)
 	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
 }
 
-int kbase_csf_firmware_ping(struct kbase_device *const kbdev)
+void kbase_csf_firmware_ping(struct kbase_device *const kbdev)
 {
 	const struct kbase_csf_global_iface *const global_iface =
 		&kbdev->csf.global_iface;
@@ -1997,7 +2000,11 @@ int kbase_csf_firmware_ping(struct kbase_device *const kbdev)
 	set_global_request(global_iface, GLB_REQ_PING_MASK);
 	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
 	kbase_csf_scheduler_spin_unlock(kbdev, flags);
+}
 
+int kbase_csf_firmware_ping_wait(struct kbase_device *const kbdev)
+{
+	kbase_csf_firmware_ping(kbdev);
 	return wait_for_global_request(kbdev, GLB_REQ_PING_MASK);
 }
 
@@ -2040,11 +2047,17 @@ void kbase_csf_enter_protected_mode(struct kbase_device *kbdev)
 	err = wait_for_global_request(kbdev, GLB_REQ_PROTM_ENTER_MASK);
 
 	if (!err) {
+		unsigned long irq_flags;
+
 		spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 		kbdev->protected_mode = true;
 		kbase_ipa_protection_mode_switch_event(kbdev);
 		kbase_ipa_control_protm_entered(kbdev);
+
+		kbase_csf_scheduler_spin_lock(kbdev, &irq_flags);
 		kbase_hwcnt_backend_csf_protm_entered(&kbdev->hwcnt_gpu_iface);
+		kbase_csf_scheduler_spin_unlock(kbdev, irq_flags);
+
 		spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 	}
 }
@@ -2139,26 +2152,28 @@ static u32 copy_grp_and_stm(
 	return total_stream_num;
 }
 
-u32 kbase_csf_firmware_get_glb_iface(struct kbase_device *kbdev,
+u32 kbase_csf_firmware_get_glb_iface(
+	struct kbase_device *kbdev,
 	struct basep_cs_group_control *const group_data,
 	u32 const max_group_num,
 	struct basep_cs_stream_control *const stream_data,
 	u32 const max_total_stream_num, u32 *const glb_version,
-	u32 *const features, u32 *const group_num, u32 *const prfcnt_size)
+	u32 *const features, u32 *const group_num, u32 *const prfcnt_size,
+	u32 *instr_features)
 {
 	const struct kbase_csf_global_iface * const iface =
 		&kbdev->csf.global_iface;
 
-	if (WARN_ON(!glb_version) ||
-		WARN_ON(!features) ||
-		WARN_ON(!group_num) ||
-		WARN_ON(!prfcnt_size))
+	if (WARN_ON(!glb_version) || WARN_ON(!features) ||
+	    WARN_ON(!group_num) || WARN_ON(!prfcnt_size) ||
+	    WARN_ON(!instr_features))
 		return 0;
 
 	*glb_version = iface->version;
 	*features = iface->features;
 	*group_num = iface->group_num;
 	*prfcnt_size = iface->prfcnt_size;
+	*instr_features = iface->instr_features;
 
 	return copy_grp_and_stm(iface, group_data, max_group_num,
 		stream_data, max_total_stream_num);
@@ -2237,9 +2252,9 @@ int kbase_csf_firmware_mcu_shared_mapping_init(
 	mutex_lock(&kbdev->csf.reg_lock);
 	ret = kbase_add_va_region_rbtree(kbdev, va_reg, 0, num_pages, 1);
 	va_reg->flags &= ~KBASE_REG_FREE;
-	mutex_unlock(&kbdev->csf.reg_lock);
 	if (ret)
 		goto va_region_add_error;
+	mutex_unlock(&kbdev->csf.reg_lock);
 
 	gpu_map_properties &= (KBASE_REG_GPU_RD | KBASE_REG_GPU_WR);
 	gpu_map_properties |= gpu_map_prot;
@@ -2261,9 +2276,9 @@ int kbase_csf_firmware_mcu_shared_mapping_init(
 mmu_insert_pages_error:
 	mutex_lock(&kbdev->csf.reg_lock);
 	kbase_remove_va_region(va_reg);
-	mutex_unlock(&kbdev->csf.reg_lock);
 va_region_add_error:
 	kbase_free_alloced_region(va_reg);
+	mutex_unlock(&kbdev->csf.reg_lock);
 va_region_alloc_error:
 	vunmap(cpu_addr);
 vmap_error:
@@ -2293,8 +2308,8 @@ void kbase_csf_firmware_mcu_shared_mapping_term(
 	if (csf_mapping->va_reg) {
 		mutex_lock(&kbdev->csf.reg_lock);
 		kbase_remove_va_region(csf_mapping->va_reg);
-		mutex_unlock(&kbdev->csf.reg_lock);
 		kbase_free_alloced_region(csf_mapping->va_reg);
+		mutex_unlock(&kbdev->csf.reg_lock);
 	}
 
 	if (csf_mapping->phys) {

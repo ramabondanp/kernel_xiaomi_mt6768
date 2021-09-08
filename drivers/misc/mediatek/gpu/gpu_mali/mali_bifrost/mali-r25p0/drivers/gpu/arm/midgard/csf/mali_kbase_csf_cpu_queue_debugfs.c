@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -154,8 +154,7 @@ int kbase_csf_cpu_queue_dump(struct kbase_context *kctx,
 
 	mutex_lock(&kctx->csf.lock);
 
-	if (kctx->csf.cpu_queue.buffer)
-		kfree(kctx->csf.cpu_queue.buffer);
+	kfree(kctx->csf.cpu_queue.buffer);
 
 	if (atomic_read(&kctx->csf.cpu_queue.dump_req_status) ==
 			BASE_CSF_CPU_QUEUE_DUMP_PENDING) {

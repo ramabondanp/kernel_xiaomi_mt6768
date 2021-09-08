@@ -61,24 +61,9 @@ enum kbase_pm_core_type {
 	KBASE_PM_CORE_STACK = STACK_PRESENT_LO
 };
 
-/**
+/*
  * enum kbase_l2_core_state - The states used for the L2 cache & tiler power
  *                            state machine.
- *
- * @KBASE_L2_OFF: The L2 cache and tiler are off
- * @KBASE_L2_PEND_ON: The L2 cache and tiler are powering on
- * @KBASE_L2_RESTORE_CLOCKS: The GPU clock is restored. Conditionally used.
- * @KBASE_L2_ON_HWCNT_ENABLE: The L2 cache and tiler are on, and hwcnt is being
- *                            enabled
- * @KBASE_L2_ON: The L2 cache and tiler are on, and hwcnt is enabled
- * @KBASE_L2_ON_HWCNT_DISABLE: The L2 cache and tiler are on, and hwcnt is being
- *                             disabled
- * @KBASE_L2_SLOW_DOWN_CLOCKS: The GPU clock is set to appropriate or lowest
- *                             clock. Conditionally used.
- * @KBASE_L2_POWER_DOWN: The L2 cache and tiler are about to be powered off
- * @KBASE_L2_PEND_OFF: The L2 cache and tiler are powering off
- * @KBASE_L2_RESET_WAIT: The GPU is resetting, L2 cache and tiler power state
- *                       are unknown
  */
 enum kbase_l2_core_state {
 #define KBASEP_L2_STATE(n) KBASE_L2_ ## n,
@@ -87,26 +72,8 @@ enum kbase_l2_core_state {
 };
 
 #if MALI_USE_CSF
-/**
+/*
  * enum kbase_mcu_state - The states used for the MCU state machine.
- *
- * @KBASE_MCU_OFF:            The MCU is powered off.
- * @KBASE_MCU_PEND_ON_RELOAD: The warm boot of MCU or cold boot of MCU (with
- *                            firmware reloading) is in progress.
- * @KBASE_MCU_ON_GLB_REINIT_PEND: The MCU is enabled and Global configuration
- *                                requests have been sent to the firmware.
- * @KBASE_MCU_ON_HWCNT_ENABLE: The Global requests have completed and MCU is
- *                             now ready for use and hwcnt is being enabled.
- * @KBASE_MCU_ON:             The MCU is active and hwcnt has been enabled.
- * @KBASE_MCU_ON_CORE_MASK_UPDATE_PEND: The MCU is active and mask of enabled
- *                                      shader cores is being updated.
- * @KBASE_MCU_ON_HWCNT_DISABLE: The MCU is on and hwcnt is being disabled.
- * @KBASE_MCU_ON_HALT:        The MCU is on and hwcnt has been disabled,
- *                            MCU halt would be triggered.
- * @KBASE_MCU_ON_PEND_HALT:   MCU halt in progress, confirmation pending.
- * @KBASE_MCU_POWER_DOWN:     MCU halted operations, pending being disabled.
- * @KBASE_MCU_PEND_OFF:       MCU is being disabled, pending on powering off.
- * @KBASE_MCU_RESET_WAIT:     The GPU is resetting, MCU state is unknown.
  */
 enum kbase_mcu_state {
 #define KBASEP_MCU_STATE(n) KBASE_MCU_ ## n,
@@ -115,45 +82,8 @@ enum kbase_mcu_state {
 };
 #endif
 
-/**
+/*
  * enum kbase_shader_core_state - The states used for the shaders' state machine.
- *
- * @KBASE_SHADERS_OFF_CORESTACK_OFF: The shaders and core stacks are off
- * @KBASE_SHADERS_OFF_CORESTACK_PEND_ON: The shaders are off, core stacks have
- *                                       been requested to power on and hwcnt
- *                                       is being disabled
- * @KBASE_SHADERS_PEND_ON_CORESTACK_ON: Core stacks are on, shaders have been
- *                                      requested to power on. Or after doing
- *                                      partial shader on/off, checking whether
- *                                      it's the desired state.
- * @KBASE_SHADERS_ON_CORESTACK_ON: The shaders and core stacks are on, and hwcnt
- *					already enabled.
- * @KBASE_SHADERS_ON_CORESTACK_ON_RECHECK: The shaders and core stacks
- *                                      are on, hwcnt disabled, and checks
- *                                      to powering down or re-enabling
- *                                      hwcnt.
- * @KBASE_SHADERS_WAIT_OFF_CORESTACK_ON: The shaders have been requested to
- *                                       power off, but they remain on for the
- *                                       duration of the hysteresis timer
- * @KBASE_SHADERS_WAIT_GPU_IDLE: The shaders partial poweroff needs to reach
- *                               a state where jobs on the GPU are finished
- *                               including jobs currently running and in the
- *                               GPU queue because of GPU2017-861
- * @KBASE_SHADERS_WAIT_FINISHED_CORESTACK_ON: The hysteresis timer has expired
- * @KBASE_SHADERS_L2_FLUSHING_CORESTACK_ON: The core stacks are on and the
- *                                          level 2 cache is being flushed.
- * @KBASE_SHADERS_READY_OFF_CORESTACK_ON: The core stacks are on and the shaders
- *                                        are ready to be powered off.
- * @KBASE_SHADERS_PEND_OFF_CORESTACK_ON: The core stacks are on, and the shaders
- *                                       have been requested to power off
- * @KBASE_SHADERS_OFF_CORESTACK_PEND_OFF: The shaders are off, and the core stacks
- *                                        have been requested to power off
- * @KBASE_SHADERS_OFF_CORESTACK_OFF_TIMER_PEND_OFF: Shaders and corestacks are
- *                                                  off, but the tick timer
- *                                                  cancellation is still
- *                                                  pending.
- * @KBASE_SHADERS_RESET_WAIT: The GPU is resetting, shader and core stack power
- *                            states are unknown
  */
 enum kbase_shader_core_state {
 #define KBASEP_SHADER_STATE(n) KBASE_SHADERS_ ## n,

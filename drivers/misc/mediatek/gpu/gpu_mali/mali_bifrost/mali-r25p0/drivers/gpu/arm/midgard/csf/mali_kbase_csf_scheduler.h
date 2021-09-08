@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -125,7 +125,7 @@ struct kbase_queue_group *kbase_csf_scheduler_get_group_on_slot(
  * kbase_csf_scheduler_group_deschedule() - Deschedule a GPU command queue
  *                                          group from the firmware.
  *
- * @group: Pointer to the queue group to be scheduled.
+ * @group: Pointer to the queue group to be descheduled.
  *
  * This function would disable the scheduling of GPU command queue group on
  * firmware.
@@ -174,7 +174,7 @@ int kbase_csf_scheduler_context_init(struct kbase_context *kctx);
 int kbase_csf_scheduler_init(struct kbase_device *kbdev);
 
 /**
- * kbase_csf_scheduler_context_init() - Terminate the context-specific part
+ * kbase_csf_scheduler_context_term() - Terminate the context-specific part
  *                                      for CSF scheduler.
  *
  * @kctx: Pointer to kbase context that is being terminated.

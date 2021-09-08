@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 #
-# (C) COPYRIGHT 2018, 2020-2021 ARM Limited. All rights reserved.
+# (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
 #
 # This program is free software and is provided to you under the terms of the
 # GNU General Public License version 2 as published by the Free Software
@@ -40,6 +40,10 @@ config BUILD_CSF_TESTS
 
 config BUILD_ARBIF_TESTS
 	bool
-	default y if UNIT_TEST_KERNEL_MODULES && MALI_ARBITER_SUPPORT
+	default y if UNIT_TEST_CODE && MALI_ARBITER_SUPPORT
 	default n
 
+config BUILD_ARBIF_KERNEL_TESTS
+	bool
+	default y if BUILD_KERNEL_MODULES && BUILD_ARBIF_TESTS
+	default n

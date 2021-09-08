@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -24,6 +24,24 @@
  * The function-like macro KBASEP_MCU_STATE() must be defined before including
  * this header file. This header file can be included multiple times in the
  * same compilation unit with different definitions of KBASEP_MCU_STATE().
+ *
+ * @OFF:                      The MCU is powered off.
+ * @PEND_ON_RELOAD:           The warm boot of MCU or cold boot of MCU (with
+ *                            firmware reloading) is in progress.
+ * @ON_GLB_REINIT_PEND:       The MCU is enabled and Global configuration
+ *                            requests have been sent to the firmware.
+ * @ON_HWCNT_ENABLE:          The Global requests have completed and MCU is now
+ *                            ready for use and hwcnt is being enabled.
+ * @ON:                       The MCU is active and hwcnt has been enabled.
+ * @ON_CORE_ATTR_UPDATE_PEND: The MCU is active and mask of enabled shader cores
+ *                            is being updated.
+ * @ON_HWCNT_DISABLE:         The MCU is on and hwcnt is being disabled.
+ * @ON_HALT:                  The MCU is on and hwcnt has been disabled, MCU
+ *                            halt would be triggered.
+ * @ON_PEND_HALT:             MCU halt in progress, confirmation pending.
+ * @POWER_DOWN:               MCU halted operations, pending being disabled.
+ * @PEND_OFF:                 MCU is being disabled, pending on powering off.
+ * @RESET_WAIT:               The GPU is resetting, MCU state is unknown.
  */
 KBASEP_MCU_STATE(OFF)
 KBASEP_MCU_STATE(PEND_ON_RELOAD)

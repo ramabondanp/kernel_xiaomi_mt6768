@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2016,2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2016,2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -42,7 +42,7 @@ static struct base_jd_udata kbase_event_process(struct kbase_context *kctx, stru
 	KBASE_TLSTREAM_TL_DEL_ATOM(kbdev, katom);
 
 	katom->status = KBASE_JD_ATOM_STATE_UNUSED;
-	dev_dbg(kbdev->dev, "Atom %p status to unused\n", (void *)katom);
+	dev_dbg(kbdev->dev, "Atom %pK status to unused\n", (void *)katom);
 	wake_up(&katom->completed);
 
 	return data;
@@ -79,7 +79,7 @@ int kbase_event_dequeue(struct kbase_context *ctx, struct base_jd_event_v2 *ueve
 
 	mutex_unlock(&ctx->event_mutex);
 
-	dev_dbg(ctx->kbdev->dev, "event dequeuing %p\n", (void *)atom);
+	dev_dbg(ctx->kbdev->dev, "event dequeuing %pK\n", (void *)atom);
 	uevent->event_code = atom->event_code;
 
 	uevent->atom_number = (atom - ctx->jctx.atoms);
@@ -164,11 +164,11 @@ void kbase_event_post(struct kbase_context *ctx, struct kbase_jd_atom *atom)
 {
 	struct kbase_device *kbdev = ctx->kbdev;
 
-	dev_dbg(kbdev->dev, "Posting event for atom %p\n", (void *)atom);
+	dev_dbg(kbdev->dev, "Posting event for atom %pK\n", (void *)atom);
 
 	if (WARN_ON(atom->status != KBASE_JD_ATOM_STATE_COMPLETED)) {
 		dev_warn(kbdev->dev,
-				"%s: Atom %d (%p) not completed (status %d)\n",
+				"%s: Atom %d (%pK) not completed (status %d)\n",
 				__func__,
 				kbase_jd_atom_id(atom->kctx, atom),
 				atom->kctx,

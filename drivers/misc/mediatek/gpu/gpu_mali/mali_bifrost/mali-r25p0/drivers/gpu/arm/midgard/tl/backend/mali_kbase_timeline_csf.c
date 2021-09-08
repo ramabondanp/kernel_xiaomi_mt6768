@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -159,7 +159,7 @@ void kbase_create_timeline_objects(struct kbase_device *kbdev)
 		 * this iteration of the loop, so will start to correctly update
 		 * the object model state.
 		 */
-	};
+	}
 
 	mutex_unlock(&timeline->tl_kctx_list_lock);
 

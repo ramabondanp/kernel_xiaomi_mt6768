@@ -23,11 +23,11 @@ include $(src)/platform/mtk_platform_common/Kbuild
 
 
 # Driver version string which is returned to userspace via an ioctl
-MALI_RELEASE_NAME ?= "r30p0-01eac0"
+MALI_RELEASE_NAME ?= '"r31p0-01eac0"'
 
 # Paths required for build
 
-# make $(src) as absolute path if it isn't already, by prefixing $(srctree)
+# make $(src) as absolute path if it is not already, by prefixing $(srctree)
 src:=$(if $(patsubst /%,,$(src)),$(srctree)/$(src),$(src))
 KBASE_PATH = $(src)
 KBASE_PLATFORM_PATH = $(KBASE_PATH)/platform_dummy
@@ -68,7 +68,7 @@ DEFINES = \
 	-DMALI_KERNEL_TEST_API=$(MALI_KERNEL_TEST_API) \
 	-DMALI_UNIT_TEST=$(MALI_UNIT_TEST) \
 	-DMALI_COVERAGE=$(MALI_COVERAGE) \
-	-DMALI_RELEASE_NAME=\"$(MALI_RELEASE_NAME)\" \
+	-DMALI_RELEASE_NAME=$(MALI_RELEASE_NAME) \
 	-DMALI_JIT_PRESSURE_LIMIT_BASE=$(MALI_JIT_PRESSURE_LIMIT_BASE) \
 	-DMALI_INCREMENTAL_RENDERING=$(MALI_INCREMENTAL_RENDERING)
 
@@ -121,7 +121,6 @@ SRC := \
 	mali_kbase_mem_profile_debugfs.c \
 	mmu/mali_kbase_mmu.c \
 	mmu/mali_kbase_mmu_hw_direct.c \
-	mmu/mali_kbase_mmu_mode_lpae.c \
 	mmu/mali_kbase_mmu_mode_aarch64.c \
 	mali_kbase_disjoint_events.c \
 	mali_kbase_gator_api.c \
@@ -178,9 +177,6 @@ ifeq ($(CONFIG_MALI_CINSTR_GWT),y)
 	SRC += mali_kbase_gwt.c
 endif
 
-ifeq ($(MALI_UNIT_TEST),1)
-	SRC += tl/mali_kbase_timeline_test.c
-endif
 
 ifeq ($(MALI_CUSTOMER_RELEASE),0)
 	SRC += mali_kbase_regs_dump_debugfs.c

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -121,6 +121,32 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev,
 		return -EIO;
 }
 
+int kbase_backend_gpuprops_get_curr_config(struct kbase_device *kbdev,
+		struct kbase_current_config_regdump *curr_config_regdump)
+{
+	if (WARN_ON(!kbdev) || WARN_ON(!curr_config_regdump))
+		return -EINVAL;
+
+	curr_config_regdump->mem_features = kbase_reg_read(kbdev,
+					GPU_CONTROL_REG(MEM_FEATURES));
+
+	curr_config_regdump->shader_present_lo = kbase_reg_read(kbdev,
+					GPU_CONTROL_REG(SHADER_PRESENT_LO));
+	curr_config_regdump->shader_present_hi = kbase_reg_read(kbdev,
+					GPU_CONTROL_REG(SHADER_PRESENT_HI));
+
+	curr_config_regdump->l2_present_lo = kbase_reg_read(kbdev,
+					GPU_CONTROL_REG(L2_PRESENT_LO));
+	curr_config_regdump->l2_present_hi = kbase_reg_read(kbdev,
+					GPU_CONTROL_REG(L2_PRESENT_HI));
+
+	if (WARN_ON(kbase_is_gpu_removed(kbdev)))
+		return -EIO;
+
+	return 0;
+
+}
+
 int kbase_backend_gpuprops_get_features(struct kbase_device *kbdev,
 					struct kbase_gpuprops_regdump *regdump)
 {
@@ -156,11 +182,15 @@ int kbase_backend_gpuprops_get_l2_features(struct kbase_device *kbdev,
 	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_L2_CONFIG)) {
 		u32 l2_features = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(L2_FEATURES));
+		u32 l2_config =
+			kbase_reg_read(kbdev, GPU_CONTROL_REG(L2_CONFIG));
+
 
 		if (kbase_is_gpu_removed(kbdev))
 			return -EIO;
 
 		regdump->l2_features = l2_features;
+		regdump->l2_config = l2_config;
 	}
 
 	return 0;

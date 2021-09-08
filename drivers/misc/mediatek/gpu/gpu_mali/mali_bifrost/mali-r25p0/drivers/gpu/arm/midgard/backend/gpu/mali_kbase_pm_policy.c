@@ -405,7 +405,7 @@ void kbase_pm_set_policy(struct kbase_device *kbdev,
 	/* Reverse the suspension done */
 	if (reset_gpu) {
 		dev_warn(kbdev->dev, "Resorting to GPU reset for policy change\n");
-		if (kbase_prepare_to_reset_gpu(kbdev))
+		if (kbase_prepare_to_reset_gpu(kbdev, RESET_FLAGS_NONE))
 			kbase_reset_gpu(kbdev);
 		kbase_reset_gpu_wait(kbdev);
 	} else if (sched_suspend)

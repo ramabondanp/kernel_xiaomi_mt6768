@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2011-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2011-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -434,9 +434,9 @@ KBASE_EXPORT_TEST_API(kbasep_get_cl_js1_utilization);
 void kbase_pm_get_dvfs_action(struct kbase_device *kbdev)
 {
 	int utilisation;
-	int busy;
 	struct kbasep_pm_metrics *diff;
 #if !MALI_USE_CSF
+	int busy;
 	int util_gl_share;
 	int util_cl_share[2];
 #endif
@@ -451,9 +451,9 @@ void kbase_pm_get_dvfs_action(struct kbase_device *kbdev)
 	utilisation = (100 * diff->time_busy) /
 			max(diff->time_busy + diff->time_idle, 1u);
 
+#if !MALI_USE_CSF
 	busy = max(diff->busy_gl + diff->busy_cl[0] + diff->busy_cl[1], 1u);
 
-#if !MALI_USE_CSF
 	util_gl_share = (100 * diff->busy_gl) / busy;
 	util_cl_share[0] = (100 * diff->busy_cl[0]) / busy;
 	util_cl_share[1] = (100 * diff->busy_cl[1]) / busy;

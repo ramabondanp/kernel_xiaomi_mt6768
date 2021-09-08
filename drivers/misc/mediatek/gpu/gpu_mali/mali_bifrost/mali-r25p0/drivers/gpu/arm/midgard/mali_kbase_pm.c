@@ -256,9 +256,15 @@ void kbase_pm_driver_resume(struct kbase_device *kbdev, bool arb_gpu_start)
 	kbase_pm_context_idle(kbdev);
 
 	/* Re-enable GPU hardware counters */
+#if MALI_USE_CSF
+	kbase_csf_scheduler_spin_lock(kbdev, &flags);
+	kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
+	kbase_csf_scheduler_spin_unlock(kbdev, flags);
+#else
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 	kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+#endif
 
 	/* Resume vinstr */
 	kbase_vinstr_resume(kbdev->vinstr_ctx);

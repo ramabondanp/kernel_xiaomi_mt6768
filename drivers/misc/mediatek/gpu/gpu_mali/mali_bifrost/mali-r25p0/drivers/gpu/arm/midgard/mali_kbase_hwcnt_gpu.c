@@ -242,6 +242,13 @@ int kbase_hwcnt_jm_metadata_create(
 	if (!gpu_info || !out_metadata || !out_dump_bytes)
 		return -EINVAL;
 
+	/*
+	 * For architectures where a max_config interface is available
+	 * from the arbiter, the v5 dump bytes and the metadata v5 are
+	 * based on the maximum possible allocation of the HW in the
+	 * GPU cause it needs to be prepared for the worst case where
+	 * all the available L2 cache and Shader cores are allocated.
+	 */
 	dump_bytes = kbasep_hwcnt_backend_jm_dump_bytes(gpu_info);
 	errcode = kbasep_hwcnt_backend_gpu_metadata_create(
 		gpu_info, false, counter_set, &metadata);
@@ -260,8 +267,7 @@ int kbase_hwcnt_jm_metadata_create(
 	return 0;
 }
 
-void kbase_hwcnt_jm_metadata_destroy(
-	const struct kbase_hwcnt_metadata *metadata)
+void kbase_hwcnt_jm_metadata_destroy(const struct kbase_hwcnt_metadata *metadata)
 {
 	if (!metadata)
 		return;
@@ -318,14 +324,40 @@ static bool is_block_type_shader(
 	return is_shader;
 }
 
+static bool is_block_type_l2_cache(
+	const u64 grp_type,
+	const u64 blk_type)
+{
+	bool is_l2_cache = false;
+
+	switch (grp_type) {
+	case KBASE_HWCNT_GPU_GROUP_TYPE_V5:
+		if (blk_type == KBASE_HWCNT_GPU_V5_BLOCK_TYPE_PERF_MEMSYS ||
+		    blk_type == KBASE_HWCNT_GPU_V5_BLOCK_TYPE_PERF_MEMSYS2)
+			is_l2_cache = true;
+		break;
+	default:
+		/* Warn on unknown group type */
+		WARN_ON(true);
+	}
+
+	return is_l2_cache;
+}
+
 int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
 			    const struct kbase_hwcnt_enable_map *dst_enable_map,
-			    u64 pm_core_mask, bool accumulate)
+			    u64 pm_core_mask,
+			    const struct kbase_hwcnt_curr_config *curr_config,
+			    bool accumulate)
 {
 	const struct kbase_hwcnt_metadata *metadata;
 	const u32 *dump_src;
 	size_t src_offset, grp, blk, blk_inst;
 	u64 core_mask = pm_core_mask;
+
+	/* Variables to deal with the current configuration */
+	int l2_count = 0;
+	bool hw_res_available = true;
 
 	if (!dst || !src || !dst_enable_map ||
 	    (dst_enable_map->metadata != dst->metadata))
@@ -348,15 +380,43 @@ int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
 		const bool is_shader_core = is_block_type_shader(
 			kbase_hwcnt_metadata_group_type(metadata, grp),
 			blk_type, blk);
+		const bool is_l2_cache = is_block_type_l2_cache(
+			kbase_hwcnt_metadata_group_type(metadata, grp),
+			blk_type);
 
-		/* Early out if no values in the dest block are enabled */
+		/*
+		 * If l2 blocks is greater than the current allocated number of
+		 * L2 slices, there is no hw allocated to that block.
+		 */
+		if (is_l2_cache) {
+			l2_count++;
+			if (l2_count > curr_config->num_l2_slices)
+				hw_res_available = false;
+			else
+				hw_res_available = true;
+		}
+		/*
+		 * For the shader cores, the current shader_mask allocated is
+		 * always a subgroup of the maximum shader_mask, so after
+		 * jumping any L2 cache not available the available shader cores
+		 * will always have a matching set of blk instances available to
+		 * accumulate them.
+		 */
+		else {
+			hw_res_available = true;
+		}
+
+		/*
+		 * Early out if no values in the dest block are enabled or if
+		 * the resource target of the block is not available in the HW.
+		 */
 		if (kbase_hwcnt_enable_map_block_enabled(
 			dst_enable_map, grp, blk, blk_inst)) {
 			u32 *dst_blk = kbase_hwcnt_dump_buffer_block_instance(
 				dst, grp, blk, blk_inst);
 			const u32 *src_blk = dump_src + src_offset;
 
-			if (!is_shader_core || (core_mask & 1)) {
+			if ((!is_shader_core || (core_mask & 1)) && hw_res_available) {
 				if (accumulate) {
 					kbase_hwcnt_dump_buffer_block_accumulate(
 						dst_blk, src_blk, hdr_cnt,
@@ -372,7 +432,9 @@ int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
 			}
 		}
 
-		src_offset += (hdr_cnt + ctr_cnt);
+		/* Just increase the src_offset if the HW is available */
+		if (hw_res_available)
+			src_offset += (hdr_cnt + ctr_cnt);
 		if (is_shader_core)
 			core_mask = core_mask >> 1;
 	}
@@ -380,10 +442,9 @@ int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
 	return 0;
 }
 
-int kbase_hwcnt_csf_dump_get(
-	struct kbase_hwcnt_dump_buffer *dst, void *src,
-	const struct kbase_hwcnt_enable_map *dst_enable_map,
-	bool accumulate)
+int kbase_hwcnt_csf_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
+			     const struct kbase_hwcnt_enable_map *dst_enable_map,
+			     bool accumulate)
 {
 	const struct kbase_hwcnt_metadata *metadata;
 	const u32 *dump_src;

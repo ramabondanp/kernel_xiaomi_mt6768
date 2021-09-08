@@ -40,9 +40,6 @@
 
 #include <tl/mali_kbase_timeline.h>
 #include "mali_kbase_vinstr.h"
-#if MALI_USE_CSF
-#include <mali_kbase_hwcnt_backend_csf_if_fw.h>
-#endif
 #include "mali_kbase_hwcnt_context.h"
 #include "mali_kbase_hwcnt_virtualizer.h"
 
@@ -227,10 +224,6 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 	if (err)
 		goto dma_set_mask_failed;
 
-#if !MALI_USE_CSF
-	spin_lock_init(&kbdev->hwcnt.lock);
-#endif
-
 	err = kbase_ktrace_init(kbdev);
 	if (err)
 		goto term_as;
@@ -241,20 +234,11 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 
 	atomic_set(&kbdev->ctx_num, 0);
 
-#if !MALI_USE_CSF
-	err = kbase_instr_backend_init(kbdev);
-	if (err)
-		goto term_trace;
-#endif
-
 	kbdev->pm.dvfs_period = DEFAULT_PM_DVFS_PERIOD;
 
 	kbdev->reset_timeout_ms = DEFAULT_RESET_TIMEOUT_MS;
 
-	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_AARCH64_MMU))
-		kbdev->mmu_mode = kbase_mmu_mode_get_aarch64();
-	else
-		kbdev->mmu_mode = kbase_mmu_mode_get_lpae();
+	kbdev->mmu_mode = kbase_mmu_mode_get_aarch64();
 
 	mutex_init(&kbdev->kctx_list_lock);
 	INIT_LIST_HEAD(&kbdev->kctx_list);
@@ -262,11 +246,6 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 	spin_lock_init(&kbdev->hwaccess_lock);
 
 	return 0;
-
-#if !MALI_USE_CSF
-term_trace:
-	kbase_ktrace_term(kbdev);
-#endif
 
 term_as:
 	kbase_device_all_as_term(kbdev);
@@ -283,10 +262,6 @@ void kbase_device_misc_term(struct kbase_device *kbdev)
 
 #if KBASE_KTRACE_ENABLE
 	kbase_debug_assert_register_hook(NULL, NULL);
-#endif
-
-#if !MALI_USE_CSF
-	kbase_instr_backend_term(kbdev);
 #endif
 
 	kbase_ktrace_term(kbdev);
@@ -310,60 +285,6 @@ void kbase_increment_device_id(void)
 {
 	kbase_dev_nr++;
 }
-
-#if MALI_USE_CSF
-
-int kbase_device_hwcnt_backend_csf_if_init(struct kbase_device *kbdev)
-{
-	return kbase_hwcnt_backend_csf_if_fw_create(
-		kbdev, &kbdev->hwcnt_backend_csf_if_fw);
-}
-
-void kbase_device_hwcnt_backend_csf_if_term(struct kbase_device *kbdev)
-{
-	kbase_hwcnt_backend_csf_if_fw_destroy(&kbdev->hwcnt_backend_csf_if_fw);
-}
-
-int kbase_device_hwcnt_backend_csf_init(struct kbase_device *kbdev)
-{
-	return kbase_hwcnt_backend_csf_create(
-		&kbdev->hwcnt_backend_csf_if_fw,
-		KBASE_HWCNT_BACKEND_CSF_RING_BUFFER_COUNT,
-		&kbdev->hwcnt_gpu_iface);
-}
-
-void kbase_device_hwcnt_backend_csf_term(struct kbase_device *kbdev)
-{
-	kbase_hwcnt_backend_csf_destroy(&kbdev->hwcnt_gpu_iface);
-}
-
-int kbase_device_hwcnt_backend_csf_metadata_init(struct kbase_device *kbdev)
-{
-	/* For CSF GPUs, HWC metadata needs to query informatoin from CSF
-	 * firmware, so the initialization of HWC metadata only can be called
-	 * after firmware initialised, but firmware initialization depends on
-	 * HWC backend initialization, so we need to separate HWC backend
-	 * metadata initialization from HWC backend initialization.
-	 */
-	return kbase_hwcnt_backend_csf_metadata_init(&kbdev->hwcnt_gpu_iface);
-}
-
-void kbase_device_hwcnt_backend_csf_metadata_term(struct kbase_device *kbdev)
-{
-	kbase_hwcnt_backend_csf_metadata_term(&kbdev->hwcnt_gpu_iface);
-}
-#else
-
-int kbase_device_hwcnt_backend_jm_init(struct kbase_device *kbdev)
-{
-	return kbase_hwcnt_backend_jm_create(kbdev, &kbdev->hwcnt_gpu_iface);
-}
-
-void kbase_device_hwcnt_backend_jm_term(struct kbase_device *kbdev)
-{
-	kbase_hwcnt_backend_jm_destroy(&kbdev->hwcnt_gpu_iface);
-}
-#endif /* MALI_USE_CSF */
 
 int kbase_device_hwcnt_context_init(struct kbase_device *kbdev)
 {
@@ -484,7 +405,14 @@ int kbase_device_early_init(struct kbase_device *kbdev)
 	/* We're done accessing the GPU registers for now. */
 	kbase_pm_register_access_disable(kbdev);
 
+#ifdef CONFIG_MALI_ARBITER_SUPPORT
+	if (kbdev->arb.arb_if)
+		err = kbase_arbiter_pm_install_interrupts(kbdev);
+	else
+		err = kbase_install_interrupts(kbdev);
+#else
 	err = kbase_install_interrupts(kbdev);
+#endif
 	if (err)
 		goto fail_interrupts;
 

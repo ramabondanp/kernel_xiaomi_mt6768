@@ -102,10 +102,18 @@ u64 kbase_pm_ca_get_core_mask(struct kbase_device *kbdev)
 	lockdep_assert_held(&kbdev->hwaccess_lock);
 
 #ifdef CONFIG_MALI_DEVFREQ
-	return kbdev->pm.backend.ca_cores_enabled & debug_core_mask;
+	/*
+	 * Although in the init we let the pm_backend->ca_cores_enabled to be
+	 * the max config (it uses the base_gpu_props), at this function we need
+	 * to limit it to be a subgroup of the curr config, otherwise the
+	 * shaders state machine on the PM does not evolve.
+	 */
+	return kbdev->gpu_props.curr_config.shader_present &
+			kbdev->pm.backend.ca_cores_enabled &
+			debug_core_mask;
 #else
-	return kbdev->gpu_props.props.raw_props.shader_present &
-	       debug_core_mask;
+	return kbdev->gpu_props.curr_config.shader_present &
+		debug_core_mask;
 #endif
 }
 

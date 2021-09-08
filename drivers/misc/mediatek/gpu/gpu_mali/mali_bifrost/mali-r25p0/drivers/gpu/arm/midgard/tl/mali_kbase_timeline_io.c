@@ -24,6 +24,7 @@
 #include "mali_kbase_tracepoints.h"
 #include "mali_kbase_timeline.h"
 
+#include <linux/delay.h>
 #include <linux/poll.h>
 
 /* The timeline stream file operations functions. */
@@ -46,7 +47,8 @@ const struct file_operations kbasep_tlstream_fops = {
 
 /**
  * kbasep_timeline_io_packet_pending - check timeline streams for pending
- *packets
+ *                                     packets
+ *
  * @timeline:      Timeline instance
  * @ready_stream:  Pointer to variable where stream will be placed
  * @rb_idx_raw:    Pointer to variable where read buffer index will be placed
@@ -86,8 +88,8 @@ kbasep_timeline_io_packet_pending(struct kbase_timeline *timeline,
 }
 
 /**
- * kbasep_timeline_has_header_data() -
- *	check timeline headers for pending packets
+ * kbasep_timeline_has_header_data() - check timeline headers for pending
+ *                                     packets
  *
  * @timeline:      Timeline instance
  *
@@ -139,6 +141,7 @@ static inline int copy_stream_header(char __user *buffer, size_t size,
 
 /**
  * kbasep_timeline_copy_header - copy timeline headers to the user
+ *
  * @timeline:    Timeline instance
  * @buffer:      Pointer to the buffer provided by user
  * @size:        Maximum amount of data that can be stored in the buffer
@@ -174,6 +177,7 @@ static inline int kbasep_timeline_copy_headers(struct kbase_timeline *timeline,
 
 /**
  * kbasep_timeline_io_read - copy data from streams to buffer provided by user
+ *
  * @filp:   Pointer to file structure
  * @buffer: Pointer to the buffer provided by user
  * @size:   Maximum amount of data that can be stored in the buffer
@@ -198,7 +202,7 @@ static ssize_t kbasep_timeline_io_read(struct file *filp, char __user *buffer,
 	if (!buffer)
 		return -EINVAL;
 
-	if ((*f_pos < 0) || (size < PACKET_SIZE))
+	if (*f_pos < 0)
 		return -EINVAL;
 
 	mutex_lock(&timeline->reader_lock);
@@ -217,10 +221,10 @@ static ssize_t kbasep_timeline_io_read(struct file *filp, char __user *buffer,
 		}
 
 		/* If we already read some packets and there is no
-     * packet pending then return back to user.
-     * If we don't have any data yet, wait for packet to be
-     * submitted.
-     */
+		 * packet pending then return back to user.
+		 * If we don't have any data yet, wait for packet to be
+		 * submitted.
+		 */
 		if (copy_len > 0) {
 			if (!kbasep_timeline_io_packet_pending(
 				    timeline, &stream, &rb_idx_raw))
@@ -241,8 +245,8 @@ static ssize_t kbasep_timeline_io_read(struct file *filp, char __user *buffer,
 		}
 
 		/* Check if this packet fits into the user buffer.
-     * If so copy its content.
-     */
+		 * If so copy its content.
+		 */
 		rb_idx = rb_idx_raw % PACKET_COUNT;
 		rb_size = atomic_read(&stream->buffer[rb_idx].size);
 		if (rb_size > size - copy_len)
@@ -254,10 +258,10 @@ static ssize_t kbasep_timeline_io_read(struct file *filp, char __user *buffer,
 		}
 
 		/* If the distance between read buffer index and write
-     * buffer index became more than PACKET_COUNT, then overflow
-     * happened and we need to ignore the last portion of bytes
-     * that we have just sent to user.
-     */
+		 * buffer index became more than PACKET_COUNT, then overflow
+		 * happened and we need to ignore the last portion of bytes
+		 * that we have just sent to user.
+		 */
 		smp_rmb();
 		wb_idx_raw = atomic_read(&stream->wbi);
 
@@ -321,6 +325,8 @@ static unsigned int kbasep_timeline_io_poll(struct file *filp, poll_table *wait)
 static int kbasep_timeline_io_release(struct inode *inode, struct file *filp)
 {
 	struct kbase_timeline *timeline;
+	ktime_t elapsed_time;
+	s64 elapsed_time_ms, time_to_sleep;
 
 	KBASE_DEBUG_ASSERT(inode);
 	KBASE_DEBUG_ASSERT(filp);
@@ -329,6 +335,18 @@ static int kbasep_timeline_io_release(struct inode *inode, struct file *filp)
 	CSTD_UNUSED(inode);
 
 	timeline = (struct kbase_timeline *)filp->private_data;
+
+	/* Get the amount of time passed since the timeline was acquired and ensure
+	 * we sleep for long enough such that it has been at least
+	 * TIMELINE_HYSTERESIS_TIMEOUT_MS amount of time between acquire and release.
+	 * This prevents userspace from spamming acquire and release too quickly.
+	 */
+	elapsed_time = ktime_sub(ktime_get(), timeline->last_acquire_time);
+	elapsed_time_ms = ktime_to_ms(elapsed_time);
+	time_to_sleep = MIN(TIMELINE_HYSTERESIS_TIMEOUT_MS,
+	                    TIMELINE_HYSTERESIS_TIMEOUT_MS - elapsed_time_ms);
+	if (time_to_sleep > 0)
+		msleep(time_to_sleep);
 
 #if MALI_USE_CSF
 	kbase_csf_tl_reader_stop(&timeline->csf_tl_reader);

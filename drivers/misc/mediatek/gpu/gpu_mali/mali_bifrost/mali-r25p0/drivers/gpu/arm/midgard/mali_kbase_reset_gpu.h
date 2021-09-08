@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -143,8 +143,16 @@ void kbase_reset_gpu_assert_prevented(struct kbase_device *kbdev);
 void kbase_reset_gpu_assert_failed_or_prevented(struct kbase_device *kbdev);
 
 /**
+ * Flags for kbase_prepare_to_reset_gpu
+ */
+#define RESET_FLAGS_NONE ((unsigned int)0)
+/* This reset should be treated as an unrecoverable error by HW counter logic */
+#define RESET_FLAGS_HWC_UNRECOVERABLE_ERROR ((unsigned int)(1 << 0))
+
+/**
  * kbase_prepare_to_reset_gpu_locked - Prepare for resetting the GPU.
  * @kbdev: Device pointer
+ * @flags: Bitfield indicating impact of reset (see flag defines)
  *
  * Caller is expected to hold the kbdev->hwaccess_lock.
  *
@@ -153,18 +161,20 @@ void kbase_reset_gpu_assert_failed_or_prevented(struct kbase_device *kbdev);
  * - false - Another thread is performing a reset, kbase_reset_gpu should
  *           not be called.
  */
-bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev);
+bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev,
+				       unsigned int flags);
 
 /**
  * kbase_prepare_to_reset_gpu - Prepare for resetting the GPU.
  * @kbdev: Device pointer
- *
+ * @flags: Bitfield indicating impact of reset (see flag defines)
+
  * Return: a boolean which should be interpreted as follows:
  * - true  - Prepared for reset, kbase_reset_gpu should be called.
  * - false - Another thread is performing a reset, kbase_reset_gpu should
  *           not be called.
  */
-bool kbase_prepare_to_reset_gpu(struct kbase_device *kbdev);
+bool kbase_prepare_to_reset_gpu(struct kbase_device *kbdev, unsigned int flags);
 
 /**
  * kbase_reset_gpu - Reset the GPU

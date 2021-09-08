@@ -186,7 +186,7 @@ static void kbase_tlstream_current_devfreq_target(struct kbase_device *kbdev)
 
 int kbase_timeline_io_acquire(struct kbase_device *kbdev, u32 flags)
 {
-	int ret;
+	int ret = 0;
 	u32 timeline_flags = TLSTREAM_ENABLED | flags;
 	struct kbase_timeline *timeline = kbdev->timeline;
 
@@ -261,6 +261,9 @@ int kbase_timeline_io_acquire(struct kbase_device *kbdev, u32 flags)
 	} else {
 		ret = -EBUSY;
 	}
+
+	if (ret >= 0)
+		timeline->last_acquire_time = ktime_get();
 
 	return ret;
 }

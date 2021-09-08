@@ -115,4 +115,38 @@ int kbase_device_populate_max_freq(struct kbase_device *kbdev);
 void kbase_gpuprops_update_core_props_gpu_id(
 	struct base_gpu_props * const gpu_props);
 
+/**
+ * kbase_gpuprops_set_max_config - Set the max config information
+ * @kbdev:       Device pointer
+ * @max_config:  Maximum configuration data to be updated
+ *
+ * This function sets max_config in the kbase_gpu_props.
+ */
+void kbase_gpuprops_set_max_config(struct kbase_device *kbdev,
+	const struct max_config_props *max_config);
+
+/**
+ * kbase_gpuprops_get_curr_config_props - Get the current allocated resources
+ * @kbdev: The &struct kbase_device structure for the device
+ * @curr_config: The &struct curr_config_props structure to receive the result
+ *
+ * Fill the &struct curr_config_props structure with values from the GPU
+ * configuration registers.
+ *
+ * Return: Zero on success, Linux error code on failure
+ */
+int kbase_gpuprops_get_curr_config_props(struct kbase_device *kbdev,
+	struct curr_config_props * const curr_config);
+
+/**
+ * kbase_gpuprops_req_curr_config_update - Request Current Config Update
+ * @kbdev: The &struct kbase_device structure for the device
+ *
+ * Requests the current configuration to be updated next time the
+ * kbase_gpuprops_get_curr_config_props() is called.
+ *
+ * Return: Zero on success, Linux error code on failure
+ */
+int kbase_gpuprops_req_curr_config_update(struct kbase_device *kbdev);
+
 #endif				/* _KBASE_GPUPROPS_H_ */

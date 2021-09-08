@@ -69,13 +69,10 @@ struct kbase_kcpu_command_fence_info {
  * @objs:	Array of structures which define CQS objects to be used by
  *		the kcpu command.
  * @nr_objs:	Number of CQS objects in the array.
- * @propagate_flags:  Bit-pattern for the CQSs in the array that are set
- *		      to propagate queue error-state to the flagged CQSs.
  */
 struct kbase_kcpu_command_cqs_set_info {
 	struct base_cqs_set *objs;
 	unsigned int nr_objs;
-	u32 propagate_flags;
 };
 
 /**
@@ -93,6 +90,36 @@ struct kbase_kcpu_command_cqs_set_info {
  */
 struct kbase_kcpu_command_cqs_wait_info {
 	struct base_cqs_wait_info *objs;
+	unsigned long *signaled;
+	unsigned int nr_objs;
+	u32 inherit_err_flags;
+};
+
+/**
+ * struct kbase_kcpu_command_cqs_set_operation_info - Structure which holds information
+ *				about CQS objects for the kcpu CQS timeline set command
+ *
+ * @objs:	Array of structures which define CQS timeline objects to be used by
+ *		the kcpu command.
+ * @nr_objs:	Number of CQS objects in the array.
+ */
+struct kbase_kcpu_command_cqs_set_operation_info {
+	struct base_cqs_set_operation_info *objs;
+	unsigned int nr_objs;
+};
+
+/**
+ * struct kbase_kcpu_command_cqs_wait_operation_info - Structure which holds information
+ *				about CQS objects for the kcpu CQS timeline wait command
+ *
+ * @objs:	Array of structures which define CQS timeline objects to be used by
+ *		the kcpu command.
+ * @signaled:	Bit array used to report the status of the CQS wait objects.
+ *              1 is signaled, 0 otherwise.
+ * @nr_objs:	Number of CQS objects in the array.
+ */
+struct kbase_kcpu_command_cqs_wait_operation_info {
+	struct base_cqs_wait_operation_info *objs;
 	unsigned long *signaled;
 	unsigned int nr_objs;
 	u32 inherit_err_flags;
@@ -200,6 +227,8 @@ struct kbase_kcpu_command {
 		struct kbase_kcpu_command_fence_info fence;
 		struct kbase_kcpu_command_cqs_wait_info cqs_wait;
 		struct kbase_kcpu_command_cqs_set_info cqs_set;
+		struct kbase_kcpu_command_cqs_wait_operation_info cqs_wait_operation;
+		struct kbase_kcpu_command_cqs_set_operation_info cqs_set_operation;
 		struct kbase_kcpu_command_import_info import;
 		struct kbase_kcpu_command_jit_alloc_info jit_alloc;
 		struct kbase_kcpu_command_jit_free_info jit_free;

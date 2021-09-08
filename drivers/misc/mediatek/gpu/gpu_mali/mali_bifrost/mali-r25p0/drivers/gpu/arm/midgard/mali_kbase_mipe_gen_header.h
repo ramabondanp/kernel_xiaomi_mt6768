@@ -39,14 +39,14 @@
  * defined. See documentation below:
  */
 
-/**
+/*
  * The name of the variable where the result BLOB will be stored.
  */
 #if !defined(MIPE_HEADER_BLOB_VAR_NAME)
 #error "MIPE_HEADER_BLOB_VAR_NAME must be defined!"
 #endif
 
-/**
+/*
  * A compiler attribute for the BLOB variable.
  *
  * e.g. __attribute__((section("my_section")))
@@ -77,7 +77,7 @@
 #error "MIPE_HEADER_STREAM_ID must be defined!"
 #endif
 
-/**
+/*
  * MIPE packet class.
  *
  * See enum tl_packet_class.
@@ -86,7 +86,7 @@
 #error "MIPE_HEADER_PKT_CLASS must be defined!"
 #endif
 
-/**
+/*
  * The list of tracepoints to process.
  *
  * It should be defined as follows:
@@ -105,14 +105,14 @@
 #error "MIPE_HEADER_TRACEPOINT_LIST must be defined!"
 #endif
 
-/**
+/*
  * The number of entries in MIPE_HEADER_TRACEPOINT_LIST.
  */
 #if !defined(MIPE_HEADER_TRACEPOINT_LIST_SIZE)
 #error "MIPE_HEADER_TRACEPOINT_LIST_SIZE must be defined!"
 #endif
 
-/**
+/*
  * The list of enums to process.
  *
  * It should be defined as follows:
@@ -129,7 +129,7 @@
  */
 #if defined(MIPE_HEADER_ENUM_LIST)
 
-/**
+/*
  * Tracepoint message ID used for enums declaration.
  */
 #if !defined(MIPE_HEADER_ENUM_MSG_ID)

@@ -30,6 +30,66 @@
 #include <linux/of_platform.h>
 #include "mali_kbase_arbiter_interface.h"
 
+/* Arbiter interface version against which was implemented this module */
+#define MALI_REQUIRED_KBASE_ARBITER_INTERFACE_VERSION 5
+#if MALI_REQUIRED_KBASE_ARBITER_INTERFACE_VERSION != \
+			MALI_KBASE_ARBITER_INTERFACE_VERSION
+#error "Unsupported Mali Arbiter interface version."
+#endif
+
+static void on_max_config(struct device *dev, uint32_t max_l2_slices,
+			  uint32_t max_core_mask)
+{
+	struct kbase_device *kbdev;
+
+	if (!dev) {
+		pr_err("%s(): dev is NULL", __func__);
+		return;
+	}
+
+	kbdev = dev_get_drvdata(dev);
+	if (!kbdev) {
+		dev_err(dev, "%s(): kbdev is NULL", __func__);
+		return;
+	}
+
+	if (!max_l2_slices || !max_core_mask) {
+		dev_dbg(dev,
+			"%s(): max_config ignored as one of the fields is zero",
+			__func__);
+		return;
+	}
+
+	/* set the max config info in the kbase device */
+	kbase_arbiter_set_max_config(kbdev, max_l2_slices, max_core_mask);
+}
+
+/**
+ * on_update_freq() - Updates GPU clock frequency
+ * @dev: arbiter interface device handle
+ * @freq: GPU clock frequency value reported from arbiter
+ *
+ * call back function to update GPU clock frequency with
+ * new value from arbiter
+ */
+static void on_update_freq(struct device *dev, uint32_t freq)
+{
+	struct kbase_device *kbdev;
+
+	if (!dev) {
+		pr_err("%s(): dev is NULL", __func__);
+		return;
+	}
+
+	kbdev = dev_get_drvdata(dev);
+	if (!kbdev) {
+		dev_err(dev, "%s(): kbdev is NULL", __func__);
+		return;
+	}
+
+	kbase_arbiter_pm_update_gpu_freq(&kbdev->arb.arb_freq, freq);
+}
+
 /**
  * on_gpu_stop() - sends KBASE_VM_GPU_STOP_EVT event on VM stop
  * @dev: arbiter interface device handle
@@ -38,7 +98,18 @@
  */
 static void on_gpu_stop(struct device *dev)
 {
-	struct kbase_device *kbdev = dev_get_drvdata(dev);
+	struct kbase_device *kbdev;
+
+	if (!dev) {
+		pr_err("%s(): dev is NULL", __func__);
+		return;
+	}
+
+	kbdev = dev_get_drvdata(dev);
+	if (!kbdev) {
+		dev_err(dev, "%s(): kbdev is NULL", __func__);
+		return;
+	}
 
 	KBASE_TLSTREAM_TL_ARBITER_STOP_REQUESTED(kbdev, kbdev);
 	kbase_arbiter_pm_vm_event(kbdev, KBASE_VM_GPU_STOP_EVT);
@@ -52,7 +123,18 @@ static void on_gpu_stop(struct device *dev)
  */
 static void on_gpu_granted(struct device *dev)
 {
-	struct kbase_device *kbdev = dev_get_drvdata(dev);
+	struct kbase_device *kbdev;
+
+	if (!dev) {
+		pr_err("%s(): dev is NULL", __func__);
+		return;
+	}
+
+	kbdev = dev_get_drvdata(dev);
+	if (!kbdev) {
+		dev_err(dev, "%s(): kbdev is NULL", __func__);
+		return;
+	}
 
 	KBASE_TLSTREAM_TL_ARBITER_GRANTED(kbdev, kbdev);
 	kbase_arbiter_pm_vm_event(kbdev, KBASE_VM_GPU_GRANTED_EVT);
@@ -66,7 +148,18 @@ static void on_gpu_granted(struct device *dev)
  */
 static void on_gpu_lost(struct device *dev)
 {
-	struct kbase_device *kbdev = dev_get_drvdata(dev);
+	struct kbase_device *kbdev;
+
+	if (!dev) {
+		pr_err("%s(): dev is NULL", __func__);
+		return;
+	}
+
+	kbdev = dev_get_drvdata(dev);
+	if (!kbdev) {
+		dev_err(dev, "%s(): kbdev is NULL", __func__);
+		return;
+	}
 
 	kbase_arbiter_pm_vm_event(kbdev, KBASE_VM_GPU_LOST_EVT);
 }
@@ -122,6 +215,12 @@ int kbase_arbif_init(struct kbase_device *kbdev)
 	ops.arb_vm_gpu_stop = on_gpu_stop;
 	ops.arb_vm_gpu_granted = on_gpu_granted;
 	ops.arb_vm_gpu_lost = on_gpu_lost;
+	ops.arb_vm_max_config = on_max_config;
+	ops.arb_vm_update_freq = on_update_freq;
+
+
+	kbdev->arb.arb_freq.arb_freq = 0;
+	mutex_init(&kbdev->arb.arb_freq.arb_freq_lock);
 
 	/* register kbase arbiter_if callbacks */
 	if (arb_if->vm_ops.vm_arb_register_dev) {
@@ -133,6 +232,7 @@ int kbase_arbif_init(struct kbase_device *kbdev)
 			return err;
 		}
 	}
+
 #else /* CONFIG_OF */
 	dev_dbg(kbdev->dev, "No arbiter without Device Tree support\n");
 	kbdev->arb.arb_dev = NULL;
@@ -162,6 +262,22 @@ void kbase_arbif_destroy(struct kbase_device *kbdev)
 }
 
 /**
+ * kbase_arbif_get_max_config() - Request max config info
+ * @kbdev: The kbase device structure for the device (must be a valid pointer)
+ *
+ * call back function from arb interface to arbiter requesting max config info
+ */
+void kbase_arbif_get_max_config(struct kbase_device *kbdev)
+{
+	struct arbiter_if_dev *arb_if = kbdev->arb.arb_if;
+
+	if (arb_if && arb_if->vm_ops.vm_arb_get_max_config) {
+		dev_dbg(kbdev->dev, "%s\n", __func__);
+		arb_if->vm_ops.vm_arb_get_max_config(arb_if);
+	}
+}
+
+/**
  * kbase_arbif_gpu_request() - Request GPU from
  * @kbdev: The kbase device structure for the device (must be a valid pointer)
  *
@@ -173,6 +289,7 @@ void kbase_arbif_gpu_request(struct kbase_device *kbdev)
 
 	if (arb_if && arb_if->vm_ops.vm_arb_gpu_request) {
 		dev_dbg(kbdev->dev, "%s\n", __func__);
+		KBASE_TLSTREAM_TL_ARBITER_REQUESTED(kbdev, kbdev);
 		arb_if->vm_ops.vm_arb_gpu_request(arb_if);
 	}
 }

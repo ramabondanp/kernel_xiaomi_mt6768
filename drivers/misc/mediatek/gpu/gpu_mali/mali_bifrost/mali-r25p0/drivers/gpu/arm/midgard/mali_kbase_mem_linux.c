@@ -42,7 +42,7 @@
 #include <mali_kbase.h>
 #include <mali_kbase_mem_linux.h>
 #include <tl/mali_kbase_tracepoints.h>
-#include <mali_kbase_ioctl.h>
+#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
 #include <mmu/mali_kbase_mmu.h>
 #include <mali_kbase_caps.h>
 #include <mali_kbase_trace_gpu_mem.h>
@@ -1104,7 +1104,7 @@ int kbase_mem_do_sync_imported(struct kbase_context *kctx,
 				dir);
 #endif /* KBASE_MEM_ION_SYNC_WORKAROUND */
 		break;
-	};
+	}
 
 	if (unlikely(ret))
 		dev_warn(kctx->kbdev->dev,
@@ -2718,7 +2718,7 @@ int kbase_context_mmap(struct kbase_context *const kctx,
 {
 	struct kbase_va_region *reg = NULL;
 	void *kaddr = NULL;
-	size_t nr_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	size_t nr_pages = vma_pages(vma);
 	int err = 0;
 	int free_on_close = 0;
 	struct device *dev = kctx->kbdev->dev;
@@ -3333,7 +3333,7 @@ static int kbase_csf_cpu_mmap_user_io_pages(struct kbase_context *kctx,
 {
 	unsigned long cookie =
 		vma->vm_pgoff - PFN_DOWN(BASEP_MEM_CSF_USER_IO_PAGES_HANDLE);
-	size_t nr_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	size_t nr_pages = vma_pages(vma);
 	struct kbase_queue *queue;
 	int err = 0;
 

@@ -307,6 +307,31 @@ static void kbase_csf_dump_firmware_trace_buffer(struct kbase_device *kbdev)
 	kfree(buf);
 }
 
+/**
+ * kbase_csf_hwcnt_on_reset_error() - Sets HWCNT to appropriate state in the
+ *                                    event of an error during GPU reset.
+ * @kbdev: Pointer to KBase device
+ */
+static void kbase_csf_hwcnt_on_reset_error(struct kbase_device *kbdev)
+{
+	unsigned long flags;
+
+	/* Treat this as an unrecoverable error for HWCNT */
+	kbase_hwcnt_backend_csf_on_unrecoverable_error(&kbdev->hwcnt_gpu_iface);
+
+	/* Re-enable counters to ensure matching enable/disable pair.
+	 * This might reduce the hwcnt disable count to 0, and therefore
+	 * trigger actual re-enabling of hwcnt.
+	 * However, as the backend is now in the unrecoverable error state,
+	 * re-enabling will immediately fail and put the context into the error
+	 * state, preventing the hardware from being touched (which could have
+	 * risked a hang).
+	 */
+	kbase_csf_scheduler_spin_lock(kbdev, &flags);
+	kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
+	kbase_csf_scheduler_spin_unlock(kbdev, flags);
+}
+
 static int kbase_csf_reset_gpu_now(struct kbase_device *kbdev,
 				   bool firmware_inited, bool silent)
 {
@@ -396,8 +421,10 @@ static int kbase_csf_reset_gpu_now(struct kbase_device *kbdev,
 
 	mutex_unlock(&kbdev->pm.lock);
 
-	if (WARN_ON(err))
-		goto error;
+	if (WARN_ON(err)) {
+		kbase_csf_hwcnt_on_reset_error(kbdev);
+		return err;
+	}
 
 	mutex_lock(&kbdev->mmu_hw_mutex);
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
@@ -414,40 +441,20 @@ static int kbase_csf_reset_gpu_now(struct kbase_device *kbdev,
 	err = kbase_pm_wait_for_desired_state(kbdev);
 	mutex_unlock(&kbdev->pm.lock);
 
-	if (err)
-		goto error;
+	if (WARN_ON(err)) {
+		kbase_csf_hwcnt_on_reset_error(kbdev);
+		return err;
+	}
 
 	/* Re-enable GPU hardware counters */
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+	kbase_csf_scheduler_spin_lock(kbdev, &flags);
 	kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+	kbase_csf_scheduler_spin_unlock(kbdev, flags);
 
 	if (!silent)
 		dev_err(kbdev->dev, "Reset complete");
 
 	return 0;
-error:
-	WARN_ON(!err);
-
-	/* If hardware init failed, we assume hardware counters will
-	 * not work and put the backend into the unrecoverable error
-	 * state.
-	 */
-	kbase_hwcnt_backend_csf_on_unrecoverable_error(&kbdev->hwcnt_gpu_iface);
-
-	/* Re-enable counters to ensure matching enable/disable pair.
-	 * This might reduce the hwcnt disable count to 0, and therefore
-	 * trigger actual re-enabling of hwcnt.
-	 * However, as the backend is now in the unrecoverable error state,
-	 * re-enabling will immediately fail and put the context into the error
-	 * state, preventing the hardware from being touched (which could have
-	 * risked a hang).
-	 */
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
-	kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
-
-	return err;
 }
 
 static void kbase_csf_reset_gpu_worker(struct work_struct *data)
@@ -484,25 +491,29 @@ static void kbase_csf_reset_gpu_worker(struct work_struct *data)
 	kbase_csf_reset_end_hw_access(kbdev, err, firmware_inited);
 }
 
-bool kbase_prepare_to_reset_gpu(struct kbase_device *kbdev)
+bool kbase_prepare_to_reset_gpu(struct kbase_device *kbdev, unsigned int flags)
 {
+	if (flags & RESET_FLAGS_HWC_UNRECOVERABLE_ERROR)
+		kbase_hwcnt_backend_csf_on_unrecoverable_error(
+			&kbdev->hwcnt_gpu_iface);
+
 	if (atomic_cmpxchg(&kbdev->csf.reset.state,
 			KBASE_CSF_RESET_GPU_NOT_PENDING,
 			KBASE_CSF_RESET_GPU_PREPARED) !=
-			KBASE_CSF_RESET_GPU_NOT_PENDING) {
+			KBASE_CSF_RESET_GPU_NOT_PENDING)
 		/* Some other thread is already resetting the GPU */
 		return false;
-	}
 
 	return true;
 }
 KBASE_EXPORT_TEST_API(kbase_prepare_to_reset_gpu);
 
-bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev)
+bool kbase_prepare_to_reset_gpu_locked(struct kbase_device *kbdev,
+				       unsigned int flags)
 {
 	lockdep_assert_held(&kbdev->hwaccess_lock);
 
-	return kbase_prepare_to_reset_gpu(kbdev);
+	return kbase_prepare_to_reset_gpu(kbdev, flags);
 }
 
 void kbase_reset_gpu(struct kbase_device *kbdev)

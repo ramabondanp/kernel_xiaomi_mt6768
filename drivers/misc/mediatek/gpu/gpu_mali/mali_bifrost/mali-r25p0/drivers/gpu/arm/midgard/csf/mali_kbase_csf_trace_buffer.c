@@ -289,10 +289,6 @@ int kbase_csf_firmware_parse_trace_buffer_entry(struct kbase_device *kbdev,
 			trace_buffer->trace_enable_entry_count = entry[6];
 			trace_buffer->num_pages = trace_buffer_data[i].size;
 
-			/* Temporary workaround until handled by GPUCORE-27330 */
-			if (!strcmp(trace_buffer_data[i].name, "timeline"))
-				trace_buffer->updatable = 0;
-
 			for (j = 0; j < CSF_FIRMWARE_TRACE_ENABLE_INIT_MASK_MAX; j++) {
 				trace_buffer->trace_enable_init_mask[j] =
 					trace_buffer_data[i].trace_enable_init_mask[j];
@@ -456,6 +452,7 @@ int kbase_csf_firmware_trace_buffer_update_trace_enable_bit(
 			dev_warn(
 				kbdev->dev,
 				"GPU reset already in progress when enabling firmware timeline.");
+			spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 			return -EAGAIN;
 		}
 	}

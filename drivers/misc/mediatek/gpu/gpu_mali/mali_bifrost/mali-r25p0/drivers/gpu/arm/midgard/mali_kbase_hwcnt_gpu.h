@@ -128,6 +128,50 @@ struct kbase_hwcnt_gpu_info {
 };
 
 /**
+ * struct kbase_hwcnt_curr_config - Current Configuration of HW allocated to the
+ *                                  GPU.
+ * @num_l2_slices:  Current number of L2 slices allocated to the GPU.
+ * @shader_present: Current shader present bitmap that is allocated to the GPU.
+ *
+ * For architectures with the max_config interface available from the Arbiter,
+ * the current resources allocated may change during runtime due to a
+ * re-partitioning (possible with partition manager). Thus, the HWC needs to be
+ * prepared to report any possible set of counters. For this reason the memory
+ * layout in the userspace is based on the maximum possible allocation. On the
+ * other hand, each partition has just the view of its currently allocated
+ * resources. Therefore, it is necessary to correctly map the dumped HWC values
+ * from the registers into this maximum memory layout so that it can be exposed
+ * to the userspace side correctly.
+ *
+ * For L2 cache just the number is enough once the allocated ones will be
+ * accumulated on the first L2 slots available in the destination buffer.
+ *
+ * For the correct mapping of the shader cores it is necessary to jump all the
+ * L2 cache slots in the destination buffer that are not allocated. But, it is
+ * not necessary to add any logic to map the shader cores bitmap into the memory
+ * layout because the shader_present allocated will always be a subset of the
+ * maximum shader_present. It is possible because:
+ * 1 - Partitions are made of slices and they are always ordered from the ones
+ *     with more shader cores to the ones with less.
+ * 2 - The shader cores in a slice are always contiguous.
+ * 3 - A partition can only have a contiguous set of slices allocated to it.
+ * So, for example, if 4 slices are available in total, 1 with 4 cores, 2 with
+ * 3 cores and 1 with 2 cores. The maximum possible shader_present would be:
+ * 0x0011|0111|0111|1111 -> note the order and that the shader cores are
+ *                          contiguous in any slice.
+ * Supposing that a partition takes the two slices in the middle, the current
+ * config shader_present for this partition would be:
+ * 0x0111|0111 -> note that this is a subset of the maximum above and the slices
+ *                are contiguous.
+ * Therefore, by directly copying any subset of the maximum possible
+ * shader_present the mapping is already achieved.
+ */
+struct kbase_hwcnt_curr_config {
+	size_t num_l2_slices;
+	u64 shader_present;
+};
+
+/**
  * kbase_hwcnt_jm_metadata_create() - Create hardware counter metadata for the
  *                                    JM GPUs.
  * @info:           Non-NULL pointer to info struct.
@@ -186,6 +230,8 @@ void kbase_hwcnt_csf_metadata_destroy(
  *                  kbase_hwcnt_jm_metadata_create.
  * @dst_enable_map: Non-NULL pointer to enable map specifying enabled values.
  * @pm_core_mask:   PM state synchronized shaders core mask with the dump.
+ * @curr_config:    Current allocated hardware resources to correctly map the
+ *                  src raw dump buffer to the dst dump buffer.
  * @accumulate:     True if counters in src should be accumulated into dst,
  *                  rather than copied.
  *
@@ -197,7 +243,9 @@ void kbase_hwcnt_csf_metadata_destroy(
  */
 int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
 			    const struct kbase_hwcnt_enable_map *dst_enable_map,
-			    const u64 pm_core_mask, bool accumulate);
+			    const u64 pm_core_mask,
+			    const struct kbase_hwcnt_curr_config *curr_config,
+			    bool accumulate);
 
 /**
  * kbase_hwcnt_csf_dump_get() - Copy or accumulate enabled counters from the raw
@@ -217,10 +265,9 @@ int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
  *
  * Return: 0 on success, else error code.
  */
-int kbase_hwcnt_csf_dump_get(
-	struct kbase_hwcnt_dump_buffer *dst, void *src,
-	const struct kbase_hwcnt_enable_map *dst_enable_map,
-	bool accumulate);
+int kbase_hwcnt_csf_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
+			     const struct kbase_hwcnt_enable_map *dst_enable_map,
+			     bool accumulate);
 
 /**
  * kbase_hwcnt_gpu_enable_map_to_physical() - Convert an enable map abstraction

@@ -237,6 +237,9 @@ static int invent_capabilities(struct kbase_device *kbdev)
 	iface->kbdev = kbdev;
 	iface->features = 0;
 	iface->prfcnt_size = 64;
+	iface->instr_features =
+		0x81; /* update rate=1, max event size = 1<<8 = 256 */
+
 	iface->group_num = ARRAY_SIZE(interface->csg);
 	iface->group_stride = 0;
 
@@ -463,14 +466,8 @@ static void handle_internal_firmware_fatal(struct kbase_device *const kbdev)
 		kbase_ctx_sched_release_ctx_lock(kctx);
 	}
 
-	/* Internal FW error could mean hardware counters will stop working.
-	 * Put the backend into the unrecoverable error state to cause
-	 * current and subsequent counter operations to immediately
-	 * fail, avoiding the risk of a hang.
-	 */
-	kbase_hwcnt_backend_csf_on_unrecoverable_error(&kbdev->hwcnt_gpu_iface);
-
-	if (kbase_prepare_to_reset_gpu(kbdev))
+	if (kbase_prepare_to_reset_gpu(kbdev,
+				       RESET_FLAGS_HWC_UNRECOVERABLE_ERROR))
 		kbase_reset_gpu(kbdev);
 }
 
@@ -1032,7 +1029,7 @@ void kbase_csf_firmware_disable_gpu_idle_timer(struct kbase_device *kbdev)
 	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
 }
 
-int kbase_csf_firmware_ping(struct kbase_device *const kbdev)
+void kbase_csf_firmware_ping(struct kbase_device *const kbdev)
 {
 	const struct kbase_csf_global_iface *const global_iface =
 		&kbdev->csf.global_iface;
@@ -1042,7 +1039,11 @@ int kbase_csf_firmware_ping(struct kbase_device *const kbdev)
 	set_global_request(global_iface, GLB_REQ_PING_MASK);
 	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
 	kbase_csf_scheduler_spin_unlock(kbdev, flags);
+}
 
+int kbase_csf_firmware_ping_wait(struct kbase_device *const kbdev)
+{
+	kbase_csf_firmware_ping(kbdev);
 	return wait_for_global_request(kbdev, GLB_REQ_PING_MASK);
 }
 
@@ -1170,26 +1171,28 @@ static u32 copy_grp_and_stm(
 	return total_stream_num;
 }
 
-u32 kbase_csf_firmware_get_glb_iface(struct kbase_device *kbdev,
+u32 kbase_csf_firmware_get_glb_iface(
+	struct kbase_device *kbdev,
 	struct basep_cs_group_control *const group_data,
 	u32 const max_group_num,
 	struct basep_cs_stream_control *const stream_data,
 	u32 const max_total_stream_num, u32 *const glb_version,
-	u32 *const features, u32 *const group_num, u32 *const prfcnt_size)
+	u32 *const features, u32 *const group_num, u32 *const prfcnt_size,
+	u32 *const instr_features)
 {
 	const struct kbase_csf_global_iface * const iface =
 		&kbdev->csf.global_iface;
 
-	if (WARN_ON(!glb_version) ||
-		WARN_ON(!features) ||
-		WARN_ON(!group_num) ||
-		WARN_ON(!prfcnt_size))
+	if (WARN_ON(!glb_version) || WARN_ON(!features) ||
+	    WARN_ON(!group_num) || WARN_ON(!prfcnt_size) ||
+	    WARN_ON(!instr_features))
 		return 0;
 
 	*glb_version = iface->version;
 	*features = iface->features;
 	*group_num = iface->group_num;
 	*prfcnt_size = iface->prfcnt_size;
+	*instr_features = iface->instr_features;
 
 	return copy_grp_and_stm(iface, group_data, max_group_num,
 		stream_data, max_total_stream_num);
@@ -1269,9 +1272,9 @@ int kbase_csf_firmware_mcu_shared_mapping_init(
 	mutex_lock(&kbdev->csf.reg_lock);
 	ret = kbase_add_va_region_rbtree(kbdev, va_reg, 0, num_pages, 1);
 	va_reg->flags &= ~KBASE_REG_FREE;
-	mutex_unlock(&kbdev->csf.reg_lock);
 	if (ret)
 		goto va_region_add_error;
+	mutex_unlock(&kbdev->csf.reg_lock);
 
 	gpu_map_properties &= (KBASE_REG_GPU_RD | KBASE_REG_GPU_WR);
 	gpu_map_properties |= gpu_map_prot;
@@ -1293,9 +1296,9 @@ int kbase_csf_firmware_mcu_shared_mapping_init(
 mmu_insert_pages_error:
 	mutex_lock(&kbdev->csf.reg_lock);
 	kbase_remove_va_region(va_reg);
-	mutex_unlock(&kbdev->csf.reg_lock);
 va_region_add_error:
 	kbase_free_alloced_region(va_reg);
+	mutex_unlock(&kbdev->csf.reg_lock);
 va_region_alloc_error:
 	vunmap(cpu_addr);
 vmap_error:
@@ -1325,8 +1328,8 @@ void kbase_csf_firmware_mcu_shared_mapping_term(
 	if (csf_mapping->va_reg) {
 		mutex_lock(&kbdev->csf.reg_lock);
 		kbase_remove_va_region(csf_mapping->va_reg);
-		mutex_unlock(&kbdev->csf.reg_lock);
 		kbase_free_alloced_region(csf_mapping->va_reg);
+		mutex_unlock(&kbdev->csf.reg_lock);
 	}
 
 	if (csf_mapping->phys) {

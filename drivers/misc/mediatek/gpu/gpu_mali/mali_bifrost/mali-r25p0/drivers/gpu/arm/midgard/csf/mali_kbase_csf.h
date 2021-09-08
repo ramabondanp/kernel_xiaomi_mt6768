@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -364,19 +364,6 @@ int kbase_csf_queue_group_suspend(struct kbase_context *kctx,
 void kbase_csf_add_group_fatal_error(
 	struct kbase_queue_group *const group,
 	struct base_gpu_queue_group_error const *const err_payload);
-
-/**
- * kbase_csf_add_queue_fatal_error - Report a fatal queue error to userspace
- *
- * @queue:         Pointer to queue for which fatal event was received.
- * @cs_fatal:      Fault information
- * @cs_fatal_info: Additional fault information
- *
- * If a queue has already been in fatal error status,
- * subsequent fatal error on the queue should never take place.
- */
-void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
-				     u32 cs_fatal, u64 cs_fatal_info);
 
 /**
  * kbase_csf_interrupt - Handle interrupts issued by CSF firmware.

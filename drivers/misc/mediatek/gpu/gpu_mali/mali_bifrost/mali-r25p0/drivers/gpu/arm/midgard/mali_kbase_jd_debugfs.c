@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -28,7 +28,7 @@
 #if defined(CONFIG_SYNC) || defined(CONFIG_SYNC_FILE)
 #include <mali_kbase_sync.h>
 #endif
-#include <mali_kbase_ioctl.h>
+#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
 
 struct kbase_jd_debugfs_depinfo {
 	u8 id;
@@ -46,13 +46,13 @@ static void kbase_jd_debugfs_fence_info(struct kbase_jd_atom *atom,
 	case BASE_JD_REQ_SOFT_FENCE_TRIGGER:
 		res = kbase_sync_fence_out_info_get(atom, &info);
 		if (res == 0)
-			seq_printf(sfile, "Sa([%p]%d) ",
+			seq_printf(sfile, "Sa([%pK]%d) ",
 				   info.fence, info.status);
 		break;
 	case BASE_JD_REQ_SOFT_FENCE_WAIT:
 		res = kbase_sync_fence_in_info_get(atom, &info);
 		if (res == 0)
-			seq_printf(sfile, "Wa([%p]%d) ",
+			seq_printf(sfile, "Wa([%pK]%d) ",
 				   info.fence, info.status);
 		break;
 	default:

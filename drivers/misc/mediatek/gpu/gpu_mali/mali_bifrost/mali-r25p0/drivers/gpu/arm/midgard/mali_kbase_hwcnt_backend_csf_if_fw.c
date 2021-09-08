@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -28,7 +28,7 @@
 #include <device/mali_kbase_device.h>
 #include "mali_kbase_hwcnt_gpu.h"
 #include "mali_kbase_hwcnt_types.h"
-#include "csf/mali_gpu_csf_registers.h"
+#include <uapi/gpu/arm/midgard/csf/mali_gpu_csf_registers.h>
 
 #include "csf/mali_kbase_csf_firmware.h"
 #include "mali_kbase_hwcnt_backend_csf_if_fw.h"
@@ -87,6 +87,50 @@ struct kbase_hwcnt_backend_csf_if_fw_ctx {
 	struct kbase_clk_rate_listener rate_listener;
 	struct kbase_ccswe ccswe_shader_cores;
 };
+
+static void kbasep_hwcnt_backend_csf_if_fw_assert_lock_held(
+	struct kbase_hwcnt_backend_csf_if_ctx *ctx)
+{
+	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx;
+	struct kbase_device *kbdev;
+
+	WARN_ON(!ctx);
+
+	fw_ctx = (struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
+	kbdev = fw_ctx->kbdev;
+
+	kbase_csf_scheduler_spin_lock_assert_held(kbdev);
+}
+
+static void
+kbasep_hwcnt_backend_csf_if_fw_lock(struct kbase_hwcnt_backend_csf_if_ctx *ctx,
+				    unsigned long *flags)
+{
+	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx;
+	struct kbase_device *kbdev;
+
+	WARN_ON(!ctx);
+
+	fw_ctx = (struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
+	kbdev = fw_ctx->kbdev;
+
+	kbase_csf_scheduler_spin_lock(kbdev, flags);
+}
+
+static void kbasep_hwcnt_backend_csf_if_fw_unlock(
+	struct kbase_hwcnt_backend_csf_if_ctx *ctx, unsigned long flags)
+{
+	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx;
+	struct kbase_device *kbdev;
+
+	WARN_ON(!ctx);
+
+	fw_ctx = (struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
+	kbdev = fw_ctx->kbdev;
+
+	kbase_csf_scheduler_spin_lock_assert_held(kbdev);
+	kbase_csf_scheduler_spin_unlock(kbdev, flags);
+}
 
 /**
  * kbasep_hwcnt_backend_csf_if_fw_on_freq_change() - On freq change callback
@@ -170,16 +214,18 @@ static void kbasep_hwcnt_backend_csf_if_fw_cc_disable(
 			rtm, &fw_ctx->rate_listener);
 }
 
-static void kbasep_hwcnt_backend_csf_if_fw_get_gpu_info(
-	struct kbase_hwcnt_backend_csf_if_ctx *ctx, size_t *dump_size,
-	size_t *l2_count, u64 *core_mask, u8 *clk_cnt)
+static void kbasep_hwcnt_backend_csf_if_fw_get_prfcnt_info(
+	struct kbase_hwcnt_backend_csf_if_ctx *ctx,
+	struct kbase_hwcnt_backend_csf_if_prfcnt_info *prfcnt_info)
 {
 #ifdef CONFIG_MALI_NO_MALI
-	*l2_count = KBASE_DUMMY_MODEL_MAX_MEMSYS_BLOCKS;
-	*core_mask = (1ull << KBASE_DUMMY_MODEL_MAX_SHADER_CORES) - 1;
-	*dump_size = KBASE_DUMMY_MODEL_MAX_NUM_PERF_BLOCKS *
-		     KBASE_DUMMY_MODEL_BLOCK_SIZE;
-	*clk_cnt = 1;
+	prfcnt_info->l2_count = KBASE_DUMMY_MODEL_MAX_MEMSYS_BLOCKS;
+	prfcnt_info->core_mask =
+		(1ull << KBASE_DUMMY_MODEL_MAX_SHADER_CORES) - 1;
+	prfcnt_info->dump_bytes = KBASE_DUMMY_MODEL_MAX_NUM_PERF_BLOCKS *
+				  KBASE_DUMMY_MODEL_BLOCK_SIZE;
+	prfcnt_info->clk_cnt = 1;
+	prfcnt_info->clearing_samples = false;
 #else
 	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx;
 	struct kbase_device *kbdev;
@@ -188,10 +234,7 @@ static void kbasep_hwcnt_backend_csf_if_fw_get_gpu_info(
 	u32 prfcnt_fw_size = 0;
 
 	WARN_ON(!ctx);
-	WARN_ON(!dump_size);
-	WARN_ON(!l2_count);
-	WARN_ON(!core_mask);
-	WARN_ON(!clk_cnt);
+	WARN_ON(!prfcnt_info);
 
 	fw_ctx = (struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
 	kbdev = fw_ctx->kbdev;
@@ -199,12 +242,14 @@ static void kbasep_hwcnt_backend_csf_if_fw_get_gpu_info(
 	prfcnt_hw_size = (prfcnt_size & 0xFF) << 8;
 	prfcnt_fw_size = (prfcnt_size >> 16) << 8;
 	fw_ctx->buf_bytes = prfcnt_hw_size + prfcnt_fw_size;
-	*dump_size = fw_ctx->buf_bytes;
+	prfcnt_info->dump_bytes = fw_ctx->buf_bytes;
 
-	*l2_count = kbdev->gpu_props.props.l2_props.num_l2_slices;
-	*core_mask = kbdev->gpu_props.props.coherency_info.group[0].core_mask;
+	prfcnt_info->l2_count = kbdev->gpu_props.props.l2_props.num_l2_slices;
+	prfcnt_info->core_mask =
+		kbdev->gpu_props.props.coherency_info.group[0].core_mask;
 
-	*clk_cnt = fw_ctx->clk_cnt;
+	prfcnt_info->clk_cnt = fw_ctx->clk_cnt;
+	prfcnt_info->clearing_samples = true;
 #endif
 }
 
@@ -331,9 +376,14 @@ static void kbasep_hwcnt_backend_csf_if_fw_ring_buf_sync(
 	WARN_ON(!ctx);
 	WARN_ON(!ring_buf);
 
-	/* Get the buffer indexes in the ring buffer. */
+	/* The index arguments for this function form an inclusive, exclusive
+	 * range.
+	 * However, when masking back to the available buffers we will make this
+	 * inclusive at both ends so full flushes are not 0 -> 0.
+	 */
 	ring_buf_index_first = buf_index_first & (fw_ring_buf->buf_count - 1);
-	ring_buf_index_last = buf_index_last & (fw_ring_buf->buf_count - 1);
+	ring_buf_index_last =
+		(buf_index_last - 1) & (fw_ring_buf->buf_count - 1);
 
 	/* The start address is the offset of the first buffer. */
 	start_address = fw_ctx->buf_bytes * ring_buf_index_first;
@@ -348,6 +398,7 @@ static void kbasep_hwcnt_backend_csf_if_fw_ring_buf_sync(
 		/* sync the first part to the end of ring buffer. */
 		for (i = pg_first; i < fw_ring_buf->num_pages; i++) {
 			struct page *pg = as_page(fw_ring_buf->phys[i]);
+
 			if (for_cpu) {
 				kbase_sync_single_for_cpu(fw_ctx->kbdev,
 							  kbase_dma_addr(pg),
@@ -367,6 +418,7 @@ static void kbasep_hwcnt_backend_csf_if_fw_ring_buf_sync(
 
 	for (i = pg_first; i <= pg_last; i++) {
 		struct page *pg = as_page(fw_ring_buf->phys[i]);
+
 		if (for_cpu) {
 			kbase_sync_single_for_cpu(fw_ctx->kbdev,
 						  kbase_dma_addr(pg), PAGE_SIZE,
@@ -420,12 +472,11 @@ static void kbasep_hwcnt_backend_csf_if_fw_ring_buf_free(
 	}
 }
 
-static void kbasep_hwcnt_backend_csf_if_fw_dump_enable_nolock(
+static void kbasep_hwcnt_backend_csf_if_fw_dump_enable(
 	struct kbase_hwcnt_backend_csf_if_ctx *ctx,
 	struct kbase_hwcnt_backend_csf_if_ring_buf *ring_buf,
 	struct kbase_hwcnt_backend_csf_if_enable *enable)
 {
-	unsigned long flags;
 	u32 prfcnt_config;
 	struct kbase_device *kbdev;
 	struct kbase_csf_global_iface *global_iface;
@@ -437,17 +488,14 @@ static void kbasep_hwcnt_backend_csf_if_fw_dump_enable_nolock(
 	WARN_ON(!ctx);
 	WARN_ON(!ring_buf);
 	WARN_ON(!enable);
+	kbasep_hwcnt_backend_csf_if_fw_assert_lock_held(ctx);
 
 	kbdev = fw_ctx->kbdev;
 	global_iface = &kbdev->csf.global_iface;
 
-	lockdep_assert_held(&kbdev->hwaccess_lock);
-
 	/* Configure */
 	prfcnt_config = fw_ring_buf->buf_count;
 	prfcnt_config |= enable->counter_set << PRFCNT_CONFIG_SETSELECT_SHIFT;
-
-	kbase_csf_scheduler_spin_lock(kbdev, &flags);
 
 	/* Configure the ring buffer base address */
 	kbase_csf_firmware_global_input(global_iface, GLB_PRFCNT_JASID,
@@ -503,52 +551,25 @@ static void kbasep_hwcnt_backend_csf_if_fw_dump_enable_nolock(
 	prfcnt_config = kbase_csf_firmware_global_input_read(global_iface,
 							     GLB_PRFCNT_CONFIG);
 
-	kbase_csf_scheduler_spin_unlock(kbdev, flags);
-
 	kbasep_hwcnt_backend_csf_if_fw_cc_enable(fw_ctx,
 						 enable->clk_enable_map);
-}
-
-static void kbasep_hwcnt_backend_csf_if_fw_dump_enable(
-	struct kbase_hwcnt_backend_csf_if_ctx *ctx,
-	struct kbase_hwcnt_backend_csf_if_ring_buf *ring_buf,
-	struct kbase_hwcnt_backend_csf_if_enable *enable)
-{
-	unsigned long flags;
-	struct kbase_device *kbdev;
-	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx =
-		(struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
-
-	WARN_ON(!ctx);
-	WARN_ON(!ring_buf);
-	WARN_ON(!enable);
-
-	kbdev = fw_ctx->kbdev;
-
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
-
-	kbasep_hwcnt_backend_csf_if_fw_dump_enable_nolock(ctx, ring_buf,
-							  enable);
-
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 }
 
 static void kbasep_hwcnt_backend_csf_if_fw_dump_disable(
 	struct kbase_hwcnt_backend_csf_if_ctx *ctx)
 {
-	unsigned long flags;
 	struct kbase_device *kbdev;
 	struct kbase_csf_global_iface *global_iface;
 	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx =
 		(struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
 
 	WARN_ON(!ctx);
+	kbasep_hwcnt_backend_csf_if_fw_assert_lock_held(ctx);
 
 	kbdev = fw_ctx->kbdev;
 	global_iface = &kbdev->csf.global_iface;
 
 	/* Disable the HWC */
-	kbase_csf_scheduler_spin_lock(kbdev, &flags);
 	kbdev->csf.hwcnt.enable_pending = true;
 	kbase_csf_firmware_global_input_mask(global_iface, GLB_REQ, 0,
 					     GLB_REQ_PRFCNT_ENABLE_MASK);
@@ -569,7 +590,6 @@ static void kbasep_hwcnt_backend_csf_if_fw_dump_disable(
 	 * happens.
 	 */
 	kbdev->csf.hwcnt.request_pending = false;
-	kbase_csf_scheduler_spin_unlock(kbdev, flags);
 
 	kbasep_hwcnt_backend_csf_if_fw_cc_disable(fw_ctx);
 }
@@ -577,7 +597,6 @@ static void kbasep_hwcnt_backend_csf_if_fw_dump_disable(
 static void kbasep_hwcnt_backend_csf_if_fw_dump_request(
 	struct kbase_hwcnt_backend_csf_if_ctx *ctx)
 {
-	unsigned long flags;
 	u32 glb_req;
 	struct kbase_device *kbdev;
 	struct kbase_csf_global_iface *global_iface;
@@ -585,57 +604,52 @@ static void kbasep_hwcnt_backend_csf_if_fw_dump_request(
 		(struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
 
 	WARN_ON(!ctx);
+	kbasep_hwcnt_backend_csf_if_fw_assert_lock_held(ctx);
 
 	kbdev = fw_ctx->kbdev;
 	global_iface = &kbdev->csf.global_iface;
 
 	/* Trigger dumping */
-	kbase_csf_scheduler_spin_lock(kbdev, &flags);
 	kbdev->csf.hwcnt.request_pending = true;
 	glb_req = kbase_csf_firmware_global_input_read(global_iface, GLB_REQ);
 	glb_req ^= GLB_REQ_PRFCNT_SAMPLE_MASK;
 	kbase_csf_firmware_global_input_mask(global_iface, GLB_REQ, glb_req,
 					     GLB_REQ_PRFCNT_SAMPLE_MASK);
 	kbase_csf_ring_doorbell(kbdev, CSF_KERNEL_DOORBELL_NR);
-	kbase_csf_scheduler_spin_unlock(kbdev, flags);
 }
 
 static void kbasep_hwcnt_backend_csf_if_fw_get_indexes(
 	struct kbase_hwcnt_backend_csf_if_ctx *ctx, u32 *extract_index,
 	u32 *insert_index)
 {
-	unsigned long flags;
 	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx =
 		(struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
 
 	WARN_ON(!ctx);
 	WARN_ON(!extract_index);
 	WARN_ON(!insert_index);
+	kbasep_hwcnt_backend_csf_if_fw_assert_lock_held(ctx);
 
-	kbase_csf_scheduler_spin_lock(fw_ctx->kbdev, &flags);
 	*extract_index = kbase_csf_firmware_global_input_read(
 		&fw_ctx->kbdev->csf.global_iface, GLB_PRFCNT_EXTRACT);
 	*insert_index = kbase_csf_firmware_global_output(
 		&fw_ctx->kbdev->csf.global_iface, GLB_PRFCNT_INSERT);
-	kbase_csf_scheduler_spin_unlock(fw_ctx->kbdev, flags);
 }
 
 static void kbasep_hwcnt_backend_csf_if_fw_set_extract_index(
 	struct kbase_hwcnt_backend_csf_if_ctx *ctx, u32 extract_idx)
 {
-	unsigned long flags;
 	struct kbase_hwcnt_backend_csf_if_fw_ctx *fw_ctx =
 		(struct kbase_hwcnt_backend_csf_if_fw_ctx *)ctx;
 
 	WARN_ON(!ctx);
+	kbasep_hwcnt_backend_csf_if_fw_assert_lock_held(ctx);
 
 	/* Set the raw extract index to release the buffer back to the ring
 	 * buffer.
 	 */
-	kbase_csf_scheduler_spin_lock(fw_ctx->kbdev, &flags);
 	kbase_csf_firmware_global_input(&fw_ctx->kbdev->csf.global_iface,
 					GLB_PRFCNT_EXTRACT, extract_idx);
-	kbase_csf_scheduler_spin_unlock(fw_ctx->kbdev, flags);
 }
 
 static void kbasep_hwcnt_backend_csf_if_fw_get_gpu_cycle_count(
@@ -649,6 +663,7 @@ static void kbasep_hwcnt_backend_csf_if_fw_get_gpu_cycle_count(
 
 	WARN_ON(!ctx);
 	WARN_ON(!cycle_counts);
+	kbasep_hwcnt_backend_csf_if_fw_assert_lock_held(ctx);
 
 	for (clk = 0; clk < fw_ctx->clk_cnt; clk++) {
 		if (!(clk_enable_map & (1ull << clk)))
@@ -749,14 +764,16 @@ int kbase_hwcnt_backend_csf_if_fw_create(
 		return errcode;
 
 	if_fw->ctx = (struct kbase_hwcnt_backend_csf_if_ctx *)ctx;
-	if_fw->get_gpu_info = kbasep_hwcnt_backend_csf_if_fw_get_gpu_info;
+	if_fw->assert_lock_held =
+		kbasep_hwcnt_backend_csf_if_fw_assert_lock_held;
+	if_fw->lock = kbasep_hwcnt_backend_csf_if_fw_lock;
+	if_fw->unlock = kbasep_hwcnt_backend_csf_if_fw_unlock;
+	if_fw->get_prfcnt_info = kbasep_hwcnt_backend_csf_if_fw_get_prfcnt_info;
 	if_fw->ring_buf_alloc = kbasep_hwcnt_backend_csf_if_fw_ring_buf_alloc;
 	if_fw->ring_buf_sync = kbasep_hwcnt_backend_csf_if_fw_ring_buf_sync;
 	if_fw->ring_buf_free = kbasep_hwcnt_backend_csf_if_fw_ring_buf_free;
 	if_fw->timestamp_ns = kbasep_hwcnt_backend_csf_if_fw_timestamp_ns;
 	if_fw->dump_enable = kbasep_hwcnt_backend_csf_if_fw_dump_enable;
-	if_fw->dump_enable_nolock =
-		kbasep_hwcnt_backend_csf_if_fw_dump_enable_nolock;
 	if_fw->dump_disable = kbasep_hwcnt_backend_csf_if_fw_dump_disable;
 	if_fw->dump_request = kbasep_hwcnt_backend_csf_if_fw_dump_request;
 	if_fw->get_gpu_cycle_count =

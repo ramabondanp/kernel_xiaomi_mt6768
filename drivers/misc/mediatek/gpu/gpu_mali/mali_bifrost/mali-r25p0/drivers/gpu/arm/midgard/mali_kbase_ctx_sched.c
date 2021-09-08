@@ -365,8 +365,7 @@ void kbase_ctx_sched_release_ctx_lock(struct kbase_context *kctx)
 }
 
 #if MALI_USE_CSF
-bool kbase_ctx_sched_refcount_mmu_flush(struct kbase_context *kctx,
-					bool sync)
+bool kbase_ctx_sched_inc_refcount_if_as_valid(struct kbase_context *kctx)
 {
 	struct kbase_device *kbdev;
 	bool added_ref = false;
@@ -383,20 +382,16 @@ bool kbase_ctx_sched_refcount_mmu_flush(struct kbase_context *kctx,
 	mutex_lock(&kbdev->mmu_hw_mutex);
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 
-	added_ref = kbase_ctx_sched_inc_refcount_nolock(kctx);
+	if ((kctx->as_nr != KBASEP_AS_NR_INVALID) &&
+	    (kctx == kbdev->as_to_kctx[kctx->as_nr])) {
+		atomic_inc(&kctx->refcount);
 
-	WARN_ON(added_ref &&
-		(kctx->mmu_flush_pend_state != KCTX_MMU_FLUSH_NOT_PEND));
+		if (kbdev->as_free & (1u << kctx->as_nr))
+			kbdev->as_free &= ~(1u << kctx->as_nr);
 
-	if (!added_ref && (kctx->as_nr != KBASEP_AS_NR_INVALID)) {
-		enum kbase_ctx_mmu_flush_pending_state new_state =
-					sync ? KCTX_MMU_FLUSH_PEND_SYNC :
-					       KCTX_MMU_FLUSH_PEND_NO_SYNC;
-
-		WARN_ON(kctx != kbdev->as_to_kctx[kctx->as_nr]);
-
-		if (kctx->mmu_flush_pend_state != KCTX_MMU_FLUSH_PEND_SYNC)
-			kctx->mmu_flush_pend_state = new_state;
+		KBASE_KTRACE_ADD(kbdev, SCHED_RETAIN_CTX_NOLOCK, kctx,
+				 kbase_ktrace_get_ctx_refcnt(kctx));
+		added_ref = true;
 	}
 
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);

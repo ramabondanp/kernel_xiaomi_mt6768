@@ -72,6 +72,14 @@ int kbase_arbif_init(struct kbase_device *kbdev);
 void kbase_arbif_destroy(struct kbase_device *kbdev);
 
 /**
+ * kbase_arbif_get_max_config() - Request max config info
+ * @kbdev: The kbase device structure for the device (must be a valid pointer)
+ *
+ * call back function from arb interface to arbiter requesting max config info
+ */
+void kbase_arbif_get_max_config(struct kbase_device *kbdev);
+
+/**
  * kbase_arbif_gpu_request() - Send GPU request message to the arbiter
  * @kbdev: The kbase device structure for the device (must be a valid pointer)
  *

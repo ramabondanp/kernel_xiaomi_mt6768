@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -74,7 +74,7 @@ void kbase_create_timeline_objects(struct kbase_device *kbdev)
 				kctx,
 				kctx->id,
 				(u32)(kctx->tgid));
-	};
+	}
 
 	/* Reset body stream buffers while holding the kctx lock.
 	 * This ensures we can't fire both summary and normal tracepoints for

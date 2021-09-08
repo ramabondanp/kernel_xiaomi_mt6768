@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -95,7 +95,7 @@ static void kbasep_csf_kcpu_debugfs_print_queue(struct seq_file *file,
 			struct kbase_sync_fence_info info;
 
 			kbase_sync_fence_info_get(cmd->info.fence.fence, &info);
-			seq_printf(file, ",  Fence      %p %s %s",
+			seq_printf(file, ",  Fence      %pK %s %s",
 				   info.fence, info.name,
 				   kbase_sync_status_string(info.status));
 			break;

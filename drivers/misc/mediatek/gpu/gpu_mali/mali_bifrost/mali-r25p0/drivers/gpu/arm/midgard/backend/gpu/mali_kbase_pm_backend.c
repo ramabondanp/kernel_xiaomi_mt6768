@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2010-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -507,7 +507,15 @@ static void kbase_pm_hwcnt_disable_worker(struct work_struct *data)
 		/* PM state was updated while we were doing the disable,
 		 * so we need to undo the disable we just performed.
 		 */
+#if MALI_USE_CSF
+		unsigned long lock_flags;
+
+		kbase_csf_scheduler_spin_lock(kbdev, &lock_flags);
+#endif
 		kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
+#if MALI_USE_CSF
+		kbase_csf_scheduler_spin_unlock(kbdev, lock_flags);
+#endif
 	}
 
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
@@ -673,10 +681,15 @@ void kbase_hwaccess_pm_term(struct kbase_device *kbdev)
 
 	if (kbdev->pm.backend.hwcnt_disabled) {
 		unsigned long flags;
-
+#if MALI_USE_CSF
+		kbase_csf_scheduler_spin_lock(kbdev, &flags);
+		kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
+		kbase_csf_scheduler_spin_unlock(kbdev, flags);
+#else
 		spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 		kbase_hwcnt_context_enable(kbdev->hwcnt_gpu_ctx);
 		spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+#endif
 	}
 
 	/* Free any resources the policy allocated */

@@ -42,18 +42,6 @@ void kbase_device_vinstr_term(struct kbase_device *kbdev);
 int kbase_device_timeline_init(struct kbase_device *kbdev);
 void kbase_device_timeline_term(struct kbase_device *kbdev);
 
-#if MALI_USE_CSF
-int kbase_device_hwcnt_backend_csf_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_csf_term(struct kbase_device *kbdev);
-int kbase_device_hwcnt_backend_csf_if_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_csf_if_term(struct kbase_device *kbdev);
-int kbase_device_hwcnt_backend_csf_metadata_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_csf_metadata_term(struct kbase_device *kbdev);
-#else
-int kbase_device_hwcnt_backend_jm_init(struct kbase_device *kbdev);
-void kbase_device_hwcnt_backend_jm_term(struct kbase_device *kbdev);
-#endif
-
 int kbase_device_hwcnt_context_init(struct kbase_device *kbdev);
 void kbase_device_hwcnt_context_term(struct kbase_device *kbdev);
 

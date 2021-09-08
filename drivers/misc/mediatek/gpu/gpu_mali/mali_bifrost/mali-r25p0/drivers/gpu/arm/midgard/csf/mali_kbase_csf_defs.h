@@ -401,6 +401,8 @@ struct kbase_protected_suspend_buffer {
  * @tiler_mask:     Mask of tiler endpoints the group is allowed to use.
  * @fragment_mask:  Mask of fragment endpoints the group is allowed to use.
  * @compute_mask:   Mask of compute endpoints the group is allowed to use.
+ * @group_uid:      32-bit wide unsigned identifier for the group, unique
+ *                  across all kbase devices and contexts.
  * @link:           Link to this queue group in the 'runnable_groups' list of
  *                  the corresponding kctx.
  * @link_to_schedule: Link to this queue group in the list of prepared groups
@@ -448,6 +450,8 @@ struct kbase_queue_group {
 	u64 tiler_mask;
 	u64 fragment_mask;
 	u64 compute_mask;
+
+	u32 group_uid;
 
 	struct list_head link;
 	struct list_head link_to_schedule;
@@ -801,9 +805,6 @@ struct kbase_csf_csg_slot {
  *                          other phases.
  * @non_idle_scanout_grps:  Count on the non-idle groups in the scan-out
  *                          list at the scheduling prepare stage.
- * @apply_async_protm:      Signalling the internal scheduling apply stage to
- *                          act with some special handling for entering the
- *                          protected mode asynchronously.
  * @pm_active_count:        Count indicating if the scheduler is owning a power
  *                          management reference count. Reference is taken when
  *                          the count becomes 1 and is dropped when the count
@@ -853,7 +854,6 @@ struct kbase_csf_scheduler {
 	struct work_struct gpu_idle_work;
 	atomic_t non_idle_offslot_grps;
 	u32 non_idle_scanout_grps;
-	bool apply_async_protm;
 	u32 pm_active_count;
 	unsigned int csg_scheduling_period_ms;
 	bool tick_timer_active;
@@ -1055,7 +1055,7 @@ struct kbase_csf_firmware_interface {
 	struct protected_memory_allocation **pma;
 };
 
-/**
+/*
  * struct kbase_csf_hwcnt - Object containing members for handling the dump of
  *                          HW counters.
  *

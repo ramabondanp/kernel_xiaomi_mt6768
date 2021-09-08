@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2012-2016, 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2012-2016, 2018-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -548,6 +548,14 @@ void kbase_debug_job_fault_context_term(struct kbase_context *kctx)
 void kbase_debug_job_fault_kctx_unblock(struct kbase_context *kctx)
 {
 	WARN_ON(!kbase_ctx_flag(kctx, KCTX_DYING));
+
+	/* Return early if the job fault part of the kbase_device is not
+	 * initialized yet. An error can happen during the device probe after
+	 * the privileged Kbase context was created for the HW counter dumping
+	 * but before the job fault part is initialized.
+	 */
+	if (!kctx->kbdev->job_fault_resume_workq)
+		return;
 
 	kbase_ctx_remove_pending_event(kctx);
 }

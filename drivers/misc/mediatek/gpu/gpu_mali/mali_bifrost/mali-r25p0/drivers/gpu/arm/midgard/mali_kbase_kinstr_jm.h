@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  *
- * (C) COPYRIGHT 2019, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -63,7 +63,7 @@
 #ifndef _KBASE_KINSTR_JM_H_
 #define _KBASE_KINSTR_JM_H_
 
-#include "mali_kbase_kinstr_jm_reader.h"
+#include <uapi/gpu/arm/midgard/mali_kbase_kinstr_jm_reader.h>
 
 #ifdef __KERNEL__
 #include <linux/version.h>

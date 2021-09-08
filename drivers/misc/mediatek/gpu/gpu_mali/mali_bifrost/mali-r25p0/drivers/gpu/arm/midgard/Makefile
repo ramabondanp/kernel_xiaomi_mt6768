@@ -27,7 +27,7 @@ ifeq ($(KBUILD_EXTMOD),)
 export CONFIG_MALI_MIDGARD?=m
 
 ifneq ($(CONFIG_MALI_MIDGARD),n)
-export CONFIF_MALI_CSF_SUPPORT?=n
+export CONFIG_MALI_CSF_SUPPORT?=n
 export CONFIG_MALI_KUTF?=m
 export CONFIG_MALI_REAL_HW?=y
 
@@ -39,7 +39,7 @@ export CONFIG_MALI_DEVFREQ?=y
 endif
 
 DEFINES += -DCONFIG_MALI_MIDGARD=$(CONFIG_MALI_MIDGARD) \
-	-DCONFIF_MALI_CSF_SUPPORT=$(CONFIF_MALI_CSF_SUPPORT) \
+	-DCONFIG_MALI_CSF_SUPPORT=$(CONFIG_MALI_CSF_SUPPORT) \
 	-DCONFIG_MALI_KUTF=$(CONFIG_MALI_KUTF) \
 	-DCONFIG_MALI_REAL_HW=$(CONFIG_MALI_REAL_HW) \
 	-DCONFIG_MALI_GATOR_SUPPORT=$(CONFIG_MALI_GATOR_SUPPORT) \
@@ -50,13 +50,8 @@ export DEFINES
 endif
 endif
 
-BUSLOG_PATH_RELATIVE = $(CURDIR)/../../../..
 KBASE_PATH_RELATIVE = $(CURDIR)
 
-ifeq ($(CONFIG_MALI_BUSLOG),y)
-#Add bus logger symbols
-EXTRA_SYMBOLS += $(BUSLOG_PATH_RELATIVE)/drivers/base/bus_logger/Module.symvers
-endif
 
 # we get the symbols from modules using KBUILD_EXTRA_SYMBOLS to prevent warnings about unknown functions
 all:

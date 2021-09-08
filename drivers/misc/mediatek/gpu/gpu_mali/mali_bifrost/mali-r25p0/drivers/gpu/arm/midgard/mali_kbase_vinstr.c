@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2011-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2011-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -22,9 +22,9 @@
 #include "mali_kbase_vinstr.h"
 #include "mali_kbase_hwcnt_virtualizer.h"
 #include "mali_kbase_hwcnt_types.h"
-#include "mali_kbase_hwcnt_reader.h"
+#include <uapi/gpu/arm/midgard/mali_kbase_hwcnt_reader.h>
 #include "mali_kbase_hwcnt_gpu.h"
-#include "mali_kbase_ioctl.h"
+#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
 #include "mali_malisw.h"
 #include "mali_kbase_debug.h"
 
@@ -898,11 +898,12 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_get_api_version(
 	struct kbase_vinstr_client *cli, unsigned long arg, size_t size)
 {
 	long ret = -EINVAL;
-	u8 clk_cnt = cli->vctx->metadata->clk_cnt;
 
 	if (size == sizeof(u32)) {
 		ret = put_user(HWCNT_READER_API, (u32 __user *)arg);
 	} else if (size == sizeof(struct kbase_hwcnt_reader_api_version)) {
+		u8 clk_cnt = cli->vctx->metadata->clk_cnt;
+		unsigned long bytes = 0;
 		struct kbase_hwcnt_reader_api_version api_version = {
 			.version = HWCNT_READER_API,
 			.features = KBASE_HWCNT_READER_API_VERSION_NO_FEATURE,
@@ -915,8 +916,16 @@ static long kbasep_vinstr_hwcnt_reader_ioctl_get_api_version(
 			api_version.features |=
 			    KBASE_HWCNT_READER_API_VERSION_FEATURE_CYCLES_SHADER_CORES;
 
-		ret = copy_to_user(
+		bytes = copy_to_user(
 			(void __user *)arg, &api_version, sizeof(api_version));
+
+		/* copy_to_user returns zero in case of success.
+		 * If it fails, it returns the number of bytes that could NOT be copied
+		 */
+		if (bytes == 0)
+			ret = 0;
+		else
+			ret = -EFAULT;
 	}
 	return ret;
 }
@@ -1042,7 +1051,16 @@ static int kbasep_vinstr_hwcnt_reader_mmap(
 		return -EINVAL;
 
 	vm_size = vma->vm_end - vma->vm_start;
-	size = cli->dump_bufs.buf_cnt * cli->vctx->metadata->dump_buf_bytes;
+
+	/* The mapping is allowed to span the entirety of the page allocation,
+	 * not just the chunk where the dump buffers are allocated.
+	 * This accommodates the corner case where the combined size of the
+	 * dump buffers is smaller than a single page.
+	 * This does not pose a security risk as the pages are zeroed on
+	 * allocation, and anything out of bounds of the dump buffers is never
+	 * written to.
+	 */
+	size = (1ull << cli->dump_bufs.page_order) * PAGE_SIZE;
 
 	if (vma->vm_pgoff > (size >> PAGE_SHIFT))
 		return -EINVAL;

@@ -56,20 +56,19 @@ static void kbasep_packet_header_setup(
  * @numbered:   non-zero if the stream is numbered
  *
  * Function updates mutable part of packet header in the given buffer.
- * Note that value of data_size must not including size of the header.
+ * Note that value of data_size must not include size of the header.
  */
 static void kbasep_packet_header_update(
 		char  *buffer,
 		size_t data_size,
 		int    numbered)
 {
-	u32 word0;
 	u32 word1 = MIPE_PACKET_HEADER_W1((u32)data_size, !!numbered);
 
 	KBASE_DEBUG_ASSERT(buffer);
-	CSTD_UNUSED(word0);
 
-	memcpy(&buffer[sizeof(word0)], &word1, sizeof(word1));
+	/* we copy the contents of word1 to its respective position in the buffer */
+	memcpy(&buffer[sizeof(u32)], &word1, sizeof(word1));
 }
 
 /**

@@ -27,7 +27,7 @@
 #include <linux/export.h>
 #include <linux/priority_control_manager.h>
 #include <linux/shmem_fs.h>
-#include "mali_gpu_csf_registers.h"
+#include <uapi/gpu/arm/midgard/csf/mali_gpu_csf_registers.h>
 #include "mali_kbase_csf_tiler_heap.h"
 #include <mmu/mali_kbase_mmu.h>
 #include "mali_kbase_csf_timeout.h"
@@ -588,7 +588,7 @@ void kbase_csf_queue_terminate(struct kbase_context *kctx,
 
 		spin_lock_irqsave(&kctx->csf.event_lock, flags);
 		dev_dbg(kctx->kbdev->dev,
-			"Remove any pending command queue fatal from context %p\n",
+			"Remove any pending command queue fatal from context %pK\n",
 			(void *)kctx);
 		list_del_init(&queue->error.link);
 		spin_unlock_irqrestore(&kctx->csf.event_lock, flags);
@@ -1132,6 +1132,26 @@ static int create_suspend_buffers(struct kbase_context *const kctx,
 }
 
 /**
+ * generate_group_uid() - Makes an ID unique to all kernel base devices
+ *                        and contexts, for a queue group and CSG.
+ *
+ * Return:      A unique ID in the form of an unsigned 32-bit integer
+ */
+static u32 generate_group_uid(void)
+{
+	/* use first KBase device to store max UID */
+	struct kbase_device *kbdev = kbase_find_device(-1);
+	u32 uid = 1;
+
+	if (kbdev)
+		uid = (u32) atomic_inc_return(&kbdev->group_max_uid_in_devices);
+	else
+		WARN(1, "NULL kbase device pointer in group UID generation");
+
+	return uid;
+}
+
+/**
  * create_queue_group() - Create a queue group
  *
  * @kctx:	Address of the kbase context within which the queue group
@@ -1142,7 +1162,7 @@ static int create_suspend_buffers(struct kbase_context *const kctx,
  * Return: a queue group handle on success, or a negative error code on failure.
  */
 static int create_queue_group(struct kbase_context *const kctx,
-	const union kbase_ioctl_cs_queue_group_create *const create)
+	union kbase_ioctl_cs_queue_group_create *const create)
 {
 	int group_handle = find_free_group_handle(kctx);
 
@@ -1177,6 +1197,9 @@ static int create_queue_group(struct kbase_context *const kctx,
 				kbase_csf_priority_check(kctx->kbdev, create->in.priority));
 			group->doorbell_nr = KBASEP_USER_DB_NR_INVALID;
 			group->faulted = false;
+
+			group->group_uid = generate_group_uid();
+			create->out.group_uid = group->group_uid;
 
 			INIT_LIST_HEAD(&group->link);
 			INIT_LIST_HEAD(&group->link_to_schedule);
@@ -1409,7 +1432,7 @@ void kbase_csf_queue_group_terminate(struct kbase_context *kctx,
 		spin_lock_irqsave(&kctx->csf.event_lock, flags);
 
 		dev_dbg(kbdev->dev,
-			"Remove any pending group fatal error from context %p\n",
+			"Remove any pending group fatal error from context %pK\n",
 			(void *)group->kctx);
 
 		list_del_init(&group->error_tiler_oom.link);
@@ -1503,7 +1526,7 @@ static void add_error(struct kbase_context *const kctx,
 		error->data = *data;
 		list_add_tail(&error->link, &kctx->csf.error_list);
 		dev_dbg(kctx->kbdev->dev,
-			"Added error %p of type %d in context %p\n",
+			"Added error %pK of type %d in context %pK\n",
 			(void *)error, data->type, (void *)kctx);
 	}
 
@@ -1796,7 +1819,7 @@ int kbase_csf_event_wait_add(struct kbase_context *kctx,
 		spin_lock_irqsave(&kctx->csf.event_lock, flags);
 		list_add_tail(&event->link, &kctx->csf.event_callback_list);
 		dev_dbg(kctx->kbdev->dev,
-			"Added event handler %p with param %p\n", event,
+			"Added event handler %pK with param %pK\n", event,
 			event->param);
 		spin_unlock_irqrestore(&kctx->csf.event_lock, flags);
 
@@ -1818,7 +1841,7 @@ void kbase_csf_event_wait_remove(struct kbase_context *kctx,
 		if ((event->callback == callback) && (event->param == param)) {
 			list_del(&event->link);
 			dev_dbg(kctx->kbdev->dev,
-				"Removed event handler %p with param %p\n",
+				"Removed event handler %pK with param %pK\n",
 				event, event->param);
 			kfree(event);
 			break;
@@ -1841,7 +1864,7 @@ bool kbase_csf_read_error(struct kbase_context *kctx,
 			struct kbase_csf_notification, link);
 		list_del_init(&error_data->link);
 		*event_data = error_data->data;
-		dev_dbg(kctx->kbdev->dev, "Dequeued error %p in context %p\n",
+		dev_dbg(kctx->kbdev->dev, "Dequeued error %pK in context %pK\n",
 			(void *)error_data, (void *)kctx);
 	} else {
 		got_event = false;
@@ -1859,7 +1882,7 @@ bool kbase_csf_error_pending(struct kbase_context *kctx)
 
 	spin_lock_irqsave(&kctx->csf.event_lock, flags);
 	event_pended = !list_empty(&kctx->csf.error_list);
-	dev_dbg(kctx->kbdev->dev, "%s error is pending in context %p\n",
+	dev_dbg(kctx->kbdev->dev, "%s error is pending in context %pK\n",
 		event_pended ? "An" : "No", (void *)kctx);
 	spin_unlock_irqrestore(&kctx->csf.event_lock, flags);
 
@@ -1872,7 +1895,7 @@ void kbase_csf_event_signal(struct kbase_context *kctx, bool notify_gpu)
 	unsigned long flags;
 
 	dev_dbg(kctx->kbdev->dev,
-		"Signal event (%s GPU notify) for context %p\n",
+		"Signal event (%s GPU notify) for context %pK\n",
 		notify_gpu ? "with" : "without", (void *)kctx);
 
 	/* First increment the signal count and wake up event thread.
@@ -1903,7 +1926,7 @@ void kbase_csf_event_signal(struct kbase_context *kctx, bool notify_gpu)
 		enum kbase_csf_event_callback_action action;
 
 		dev_dbg(kctx->kbdev->dev,
-			"Calling event handler %p with param %p\n",
+			"Calling event handler %pK with param %pK\n",
 			(void *)event, event->param);
 		action = event->callback(event->param);
 		if (action == KBASE_CSF_EVENT_CALLBACK_REMOVE) {
@@ -1926,7 +1949,7 @@ void kbase_csf_event_wait_remove_all(struct kbase_context *kctx)
 		event, next_event, &kctx->csf.event_callback_list, link) {
 		list_del(&event->link);
 		dev_dbg(kctx->kbdev->dev,
-			"Removed event handler %p with param %p\n",
+			"Removed event handler %pK with param %pK\n",
 			(void *)event, event->param);
 		kfree(event);
 	}
@@ -2231,6 +2254,31 @@ static void protm_event_worker(struct work_struct *data)
 	kbase_csf_scheduler_group_protm_enter(group);
 }
 
+static void report_queue_fatal_error(struct kbase_queue *const queue,
+				     u32 cs_fatal, u64 cs_fatal_info,
+				     u8 group_handle)
+{
+	struct base_csf_notification error =
+		{ .type = BASE_CSF_NOTIFICATION_GPU_QUEUE_GROUP_ERROR,
+		  .payload = {
+			  .csg_error = {
+				  .handle = group_handle,
+				  .error = {
+					  .error_type =
+						  BASE_GPU_QUEUE_GROUP_QUEUE_ERROR_FATAL,
+					  .payload = {
+						  .fatal_queue = {
+							  .sideband =
+								  cs_fatal_info,
+							  .status = cs_fatal,
+							  .csi_index =
+								  queue->csi_index,
+						  } } } } } };
+
+	add_error(queue->kctx, &queue->error, &error);
+	kbase_event_wakeup(queue->kctx);
+}
+
 /**
  * handle_fault_event - Handler for CS fault.
  *
@@ -2268,51 +2316,10 @@ handle_fault_event(struct kbase_queue *const queue,
 			kbase_gpu_exception_name(cs_fault_exception_type),
 			cs_fault_exception_data, cs_fault_info_exception_data);
 
-	/* TODO GPUCORE-26291: We've'identified an issue with faulted CSIs not
-	 * making progress in some cases. Until the issue is resolved,
-	 * RESOURCE_EVICTION_TIMEOUT error shall be treated as a fatal error
-	 * to give userspace a chance to terminate the group. This is intended
-	 * to be a temporary workaround.
-	 */
 	if (cs_fault_exception_type ==
 	    CS_FAULT_EXCEPTION_TYPE_RESOURCE_EVICTION_TIMEOUT)
-		kbase_csf_add_queue_fatal_error(
-			queue, GPU_EXCEPTION_TYPE_SW_FAULT_2, 0);
-}
-
-static void report_queue_fatal_error(struct kbase_queue *const queue,
-				     u32 cs_fatal, u64 cs_fatal_info,
-				     u8 group_handle)
-{
-	struct base_csf_notification error = {
-		.type = BASE_CSF_NOTIFICATION_GPU_QUEUE_GROUP_ERROR,
-		.payload = {
-			.csg_error = {
-				.handle = group_handle,
-				.error = {
-					.error_type =
-					BASE_GPU_QUEUE_GROUP_QUEUE_ERROR_FATAL,
-					.payload = {
-						.fatal_queue = {
-						.sideband = cs_fatal_info,
-						.status = cs_fatal,
-						.csi_index = queue->csi_index,
-						}
-					}
-				}
-			}
-		}
-	};
-
-	add_error(queue->kctx, &queue->error, &error);
-	kbase_event_wakeup(queue->kctx);
-}
-
-void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
-				     u32 cs_fatal, u64 cs_fatal_info)
-{
-	report_queue_fatal_error(queue, cs_fatal, cs_fatal_info,
-				 queue->group->handle);
+		report_queue_fatal_error(queue, GPU_EXCEPTION_TYPE_SW_FAULT_2,
+					 0, queue->group->handle);
 }
 
 /**
@@ -2643,8 +2650,20 @@ static void process_csg_interrupts(struct kbase_device *const kbdev,
 	process_cs_interrupts(group, ginfo, irqreq, irqack);
 }
 
+/**
+ * process_prfcnt_interrupts - Process performance counter interrupts.
+ *
+ * @kbdev:   Instance of a GPU platform device that implements a CSF interface.
+ * @glb_req: Global request register value.
+ * @glb_ack: Global acknowledge register value.
+ *
+ * Handles interrupts issued by the firmware that relate to the performance
+ * counters. For example, on completion of a performance counter sample. It is
+ * expected that the scheduler spinlock is already held on calling this
+ * function.
+ */
 static void process_prfcnt_interrupts(struct kbase_device *kbdev, u32 glb_req,
-				      u32 glb_ack, unsigned long *flags)
+				      u32 glb_ack)
 {
 	const struct kbase_csf_global_iface *const global_iface =
 		&kbdev->csf.global_iface;
@@ -2656,14 +2675,11 @@ static void process_prfcnt_interrupts(struct kbase_device *kbdev, u32 glb_req,
 	    ((glb_req & GLB_REQ_PRFCNT_SAMPLE_MASK) ==
 	     (glb_ack & GLB_REQ_PRFCNT_SAMPLE_MASK))) {
 		kbdev->csf.hwcnt.request_pending = false;
-		kbase_csf_scheduler_spin_unlock(kbdev, *flags);
 
 		dev_dbg(kbdev->dev, "PRFCNT_SAMPLE done interrupt received.");
 
 		kbase_hwcnt_backend_csf_on_prfcnt_sample(
 			&kbdev->hwcnt_gpu_iface);
-
-		kbase_csf_scheduler_spin_lock(kbdev, flags);
 	}
 
 	/* Process PRFCNT_ENABLE interrupt. */
@@ -2671,31 +2687,24 @@ static void process_prfcnt_interrupts(struct kbase_device *kbdev, u32 glb_req,
 	    ((glb_req & GLB_REQ_PRFCNT_ENABLE_MASK) ==
 	     (glb_ack & GLB_REQ_PRFCNT_ENABLE_MASK))) {
 		kbdev->csf.hwcnt.enable_pending = false;
-		kbase_csf_scheduler_spin_unlock(kbdev, *flags);
 
 		dev_dbg(kbdev->dev,
 			"PRFCNT_ENABLE status changed interrupt received.");
 
-		if (glb_ack & GLB_REQ_PRFCNT_ENABLE_MASK) {
+		if (glb_ack & GLB_REQ_PRFCNT_ENABLE_MASK)
 			kbase_hwcnt_backend_csf_on_prfcnt_enable(
 				&kbdev->hwcnt_gpu_iface);
-		} else {
+		else
 			kbase_hwcnt_backend_csf_on_prfcnt_disable(
 				&kbdev->hwcnt_gpu_iface);
-		}
-
-		kbase_csf_scheduler_spin_lock(kbdev, flags);
 	}
 
 	/* Process PRFCNT_THRESHOLD interrupt. */
 	if ((glb_req ^ glb_ack) & GLB_REQ_PRFCNT_THRESHOLD_MASK) {
-		kbase_csf_scheduler_spin_unlock(kbdev, *flags);
 		dev_dbg(kbdev->dev, "PRFCNT_THRESHOLD interrupt received.");
 
 		kbase_hwcnt_backend_csf_on_prfcnt_threshold(
 			&kbdev->hwcnt_gpu_iface);
-
-		kbase_csf_scheduler_spin_lock(kbdev, flags);
 
 		/* Set the GLB_REQ.PRFCNT_THRESHOLD flag back to
 		 * the same value as GLB_ACK.PRFCNT_THRESHOLD
@@ -2709,13 +2718,11 @@ static void process_prfcnt_interrupts(struct kbase_device *kbdev, u32 glb_req,
 
 	/* Process PRFCNT_OVERFLOW interrupt. */
 	if ((glb_req ^ glb_ack) & GLB_REQ_PRFCNT_OVERFLOW_MASK) {
-		kbase_csf_scheduler_spin_unlock(kbdev, *flags);
 		dev_dbg(kbdev->dev, "PRFCNT_OVERFLOW interrupt received.");
 
 		kbase_hwcnt_backend_csf_on_prfcnt_overflow(
 			&kbdev->hwcnt_gpu_iface);
 
-		kbase_csf_scheduler_spin_lock(kbdev, flags);
 		/* Set the GLB_REQ.PRFCNT_OVERFLOW flag back to
 		 * the same value as GLB_ACK.PRFCNT_OVERFLOW
 		 * flag in order to enable reporting of another
@@ -2790,8 +2797,7 @@ void kbase_csf_interrupt(struct kbase_device *kbdev, u32 val)
 				}
 			}
 
-			process_prfcnt_interrupts(kbdev, glb_req, glb_ack,
-						  &flags);
+			process_prfcnt_interrupts(kbdev, glb_req, glb_ack);
 
 			kbase_csf_scheduler_spin_unlock(kbdev, flags);
 

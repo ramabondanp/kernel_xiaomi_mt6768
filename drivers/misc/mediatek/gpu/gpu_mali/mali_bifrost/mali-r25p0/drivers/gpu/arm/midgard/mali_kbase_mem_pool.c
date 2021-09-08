@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2015-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2015-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -309,7 +309,7 @@ void kbase_mem_pool_set_max_size(struct kbase_mem_pool *pool, size_t max_size)
 
 	kbase_mem_pool_unlock(pool);
 }
-
+KBASE_EXPORT_TEST_API(kbase_mem_pool_set_max_size);
 
 static unsigned long kbase_mem_pool_reclaim_count_objects(struct shrinker *s,
 		struct shrink_control *sc)
@@ -804,8 +804,8 @@ void kbase_mem_pool_free_pages_locked(struct kbase_mem_pool *pool,
 		nr_to_pool = kbase_mem_pool_capacity(pool);
 		nr_to_pool = min(nr_pages, nr_to_pool);
 
-		kbase_mem_pool_add_array_locked(pool, nr_pages, pages, false,
-				dirty);
+		kbase_mem_pool_add_array_locked(pool, nr_to_pool, pages, false,
+						dirty);
 
 		i += nr_to_pool;
 	}

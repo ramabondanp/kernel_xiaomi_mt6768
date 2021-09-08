@@ -27,7 +27,7 @@
 #include <mali_kbase_sync.h>
 #endif
 #include <linux/dma-mapping.h>
-#include <mali_base_kernel.h>
+#include <uapi/gpu/arm/midgard/mali_base_kernel.h>
 #include <mali_kbase_hwaccess_time.h>
 #include <mali_kbase_kinstr_jm.h>
 #include <mali_kbase_mem_linux.h>
@@ -145,6 +145,9 @@ static int kbase_dump_cpu_gpu_time(struct kbase_jd_atom *katom)
 	 * delay suspend until we process the atom (which may be at the end of a
 	 * long chain of dependencies
 	 */
+#ifdef CONFIG_MALI_ARBITER_SUPPORT
+	atomic_inc(&kctx->kbdev->pm.gpu_users_waiting);
+#endif /* CONFIG_MALI_ARBITER_SUPPORT */
 	pm_active_err = kbase_pm_context_active_handle_suspend(kctx->kbdev, KBASE_PM_SUSPEND_HANDLER_DONT_REACTIVATE);
 	if (pm_active_err) {
 		struct kbasep_js_device_data *js_devdata = &kctx->kbdev->js_data;
@@ -162,6 +165,10 @@ static int kbase_dump_cpu_gpu_time(struct kbase_jd_atom *katom)
 
 		return pm_active_err;
 	}
+#ifdef CONFIG_MALI_ARBITER_SUPPORT
+	else
+		atomic_dec(&kctx->kbdev->pm.gpu_users_waiting);
+#endif /* CONFIG_MALI_ARBITER_SUPPORT */
 
 	kbase_backend_get_gpu_time(kctx->kbdev, &cycle_counter, &system_time,
 									&ts);
@@ -291,7 +298,7 @@ static void kbase_fence_debug_check_atom(struct kbase_jd_atom *katom)
 
 				if (!kbase_sync_fence_in_info_get(dep, &info)) {
 					dev_warn(dev,
-						 "\tVictim trigger atom %d fence [%p] %s: %s\n",
+						 "\tVictim trigger atom %d fence [%pK] %s: %s\n",
 						 kbase_jd_atom_id(kctx, dep),
 						 info.fence,
 						 info.name,
@@ -320,11 +327,11 @@ static void kbase_fence_debug_wait_timeout(struct kbase_jd_atom *katom)
 		return;
 	}
 
-	dev_warn(dev, "ctx %d_%d: Atom %d still waiting for fence [%p] after %dms\n",
+	dev_warn(dev, "ctx %d_%d: Atom %d still waiting for fence [%pK] after %dms\n",
 		 kctx->tgid, kctx->id,
 		 kbase_jd_atom_id(kctx, katom),
 		 info.fence, timeout_ms);
-	dev_warn(dev, "\tGuilty fence [%p] %s: %s\n",
+	dev_warn(dev, "\tGuilty fence [%pK] %s: %s\n",
 		 info.fence, info.name,
 		 kbase_sync_status_string(info.status));
 
@@ -1422,41 +1429,27 @@ static int kbase_ext_res_prepare(struct kbase_jd_atom *katom)
 	struct base_external_resource_list *ext_res;
 	u64 count = 0;
 	size_t copy_size;
-	int ret;
 
 	user_ext_res = (__user struct base_external_resource_list *)
 			(uintptr_t) katom->jc;
 
 	/* Fail the job if there is no info structure */
-	if (!user_ext_res) {
-		ret = -EINVAL;
-		goto fail;
-	}
+	if (!user_ext_res)
+		return -EINVAL;
 
-	if (copy_from_user(&count, &user_ext_res->count, sizeof(u64)) != 0) {
-		ret = -EINVAL;
-		goto fail;
-	}
+	if (copy_from_user(&count, &user_ext_res->count, sizeof(u64)) != 0)
+		return -EINVAL;
 
 	/* Is the number of external resources in range? */
-	if (!count || count > BASE_EXT_RES_COUNT_MAX) {
-		ret = -EINVAL;
-		goto fail;
-	}
+	if (!count || count > BASE_EXT_RES_COUNT_MAX)
+		return -EINVAL;
 
 	/* Copy the information for safe access and future storage */
 	copy_size = sizeof(*ext_res);
 	copy_size += sizeof(struct base_external_resource) * (count - 1);
-	ext_res = kzalloc(copy_size, GFP_KERNEL);
-	if (!ext_res) {
-		ret = -ENOMEM;
-		goto fail;
-	}
-
-	if (copy_from_user(ext_res, user_ext_res, copy_size) != 0) {
-		ret = -EINVAL;
-		goto free_info;
-	}
+	ext_res = memdup_user(user_ext_res, copy_size);
+	if (IS_ERR(ext_res))
+		return PTR_ERR(ext_res);
 
 	/*
 	 * Overwrite the count with the first value incase it was changed
@@ -1467,11 +1460,6 @@ static int kbase_ext_res_prepare(struct kbase_jd_atom *katom)
 	katom->softjob_data = ext_res;
 
 	return 0;
-
-free_info:
-	kfree(ext_res);
-fail:
-	return ret;
 }
 
 static void kbase_ext_res_process(struct kbase_jd_atom *katom, bool map)
@@ -1793,6 +1781,9 @@ void kbase_resume_suspended_soft_jobs(struct kbase_device *kbdev)
 		if (kbase_process_soft_job(katom_iter) == 0) {
 			kbase_finish_soft_job(katom_iter);
 			resched |= jd_done_nolock(katom_iter, NULL);
+#ifdef CONFIG_MALI_ARBITER_SUPPORT
+			atomic_dec(&kbdev->pm.gpu_users_waiting);
+#endif /* CONFIG_MALI_ARBITER_SUPPORT */
 		}
 		mutex_unlock(&kctx->jctx.lock);
 	}

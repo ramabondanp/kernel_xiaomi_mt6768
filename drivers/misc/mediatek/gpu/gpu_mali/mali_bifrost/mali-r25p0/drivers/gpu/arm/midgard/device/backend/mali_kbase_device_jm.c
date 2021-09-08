@@ -21,6 +21,7 @@
 
 #include "../mali_kbase_device_internal.h"
 #include "../mali_kbase_device.h"
+#include "../mali_kbase_hwaccess_instr.h"
 
 #include <mali_kbase_config_defaults.h>
 #include <mali_kbase_hwaccess_backend.h>
@@ -107,6 +108,7 @@ static int kbase_backend_late_init(struct kbase_device *kbdev)
 	return 0;
 
 fail_update_l2_features:
+	kbase_backend_devfreq_term(kbdev);
 fail_devfreq_init:
 	kbase_job_slot_term(kbdev);
 fail_job_slot:
@@ -142,6 +144,16 @@ static void kbase_backend_late_term(struct kbase_device *kbdev)
 	kbase_hwaccess_pm_halt(kbdev);
 	kbase_reset_gpu_term(kbdev);
 	kbase_hwaccess_pm_term(kbdev);
+}
+
+static int kbase_device_hwcnt_backend_jm_init(struct kbase_device *kbdev)
+{
+	return kbase_hwcnt_backend_jm_create(kbdev, &kbdev->hwcnt_gpu_iface);
+}
+
+static void kbase_device_hwcnt_backend_jm_term(struct kbase_device *kbdev)
+{
+	kbase_hwcnt_backend_jm_destroy(&kbdev->hwcnt_gpu_iface);
 }
 
 static const struct kbase_device_init dev_init[] = {
@@ -183,6 +195,8 @@ static const struct kbase_device_init dev_init[] = {
 	{kbase_clk_rate_trace_manager_init,
 			kbase_clk_rate_trace_manager_term,
 			"Clock rate trace manager initialization failed"},
+	{kbase_instr_backend_init, kbase_instr_backend_term,
+			"Instrumentation backend initialization failed"},
 	{kbase_device_hwcnt_backend_jm_init,
 			kbase_device_hwcnt_backend_jm_term,
 			"GPU hwcnt backend creation failed"},
@@ -215,9 +229,6 @@ static const struct kbase_device_init dev_init[] = {
 	{kbase_sysfs_init, kbase_sysfs_term, "SysFS group creation failed"},
 	{kbase_device_misc_register, kbase_device_misc_deregister,
 			"Misc device registration failed"},
-#ifdef CONFIG_MALI_BUSLOG
-	{buslog_init, buslog_term, "Bus log client registration failed"},
-#endif
 	{kbase_gpuprops_populate_user_buffer, kbase_gpuprops_free_user_buffer,
 			"GPU property population failed"},
 #endif
@@ -258,7 +269,8 @@ int kbase_device_init(struct kbase_device *kbdev)
 	for (i = 0; i < ARRAY_SIZE(dev_init); i++) {
 		err = dev_init[i].init(kbdev);
 		if (err) {
-			dev_err(kbdev->dev, "%s error = %d\n",
+			if (err != -EPROBE_DEFER)
+				dev_err(kbdev->dev, "%s error = %d\n",
 						dev_init[i].err_mes, err);
 			kbase_device_term_partial(kbdev, i);
 			break;

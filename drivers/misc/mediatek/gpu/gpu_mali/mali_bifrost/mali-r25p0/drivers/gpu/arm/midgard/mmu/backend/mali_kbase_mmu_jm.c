@@ -206,7 +206,7 @@ static void kbase_mmu_interrupt_process(struct kbase_device *kbdev,
 	lockdep_assert_held(&kbdev->hwaccess_lock);
 
 	dev_dbg(kbdev->dev,
-		"Entering %s kctx %p, as %p\n",
+		"Entering %s kctx %pK, as %pK\n",
 		__func__, (void *)kctx, (void *)as);
 
 	if (!kctx) {
@@ -255,14 +255,10 @@ static void kbase_mmu_interrupt_process(struct kbase_device *kbdev,
 		 */
 		kbasep_js_clear_submit_allowed(js_devdata, kctx);
 
-		if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_AARCH64_MMU))
-			dev_warn(kbdev->dev,
-					"Bus error in AS%d at VA=0x%016llx, IPA=0x%016llx\n",
-					as->number, fault->addr,
-					fault->extra_addr);
-		else
-			dev_warn(kbdev->dev, "Bus error in AS%d at 0x%016llx\n",
-					as->number, fault->addr);
+		dev_warn(kbdev->dev,
+				"Bus error in AS%d at VA=0x%016llx, IPA=0x%016llx\n",
+				as->number, fault->addr,
+				fault->extra_addr);
 
 		/*
 		 * We need to switch to UNMAPPED mode - but we do this in a
@@ -276,7 +272,7 @@ static void kbase_mmu_interrupt_process(struct kbase_device *kbdev,
 	}
 
 	dev_dbg(kbdev->dev,
-		"Leaving %s kctx %p, as %p\n",
+		"Leaving %s kctx %pK, as %pK\n",
 		__func__, (void *)kctx, (void *)as);
 }
 
@@ -375,14 +371,11 @@ void kbase_mmu_interrupt(struct kbase_device *kbdev, u32 irq_stat)
 		/* record the fault status */
 		fault->status = kbase_reg_read(kbdev, MMU_AS_REG(as_no,
 				AS_FAULTSTATUS));
-
-		if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_AARCH64_MMU)) {
-			fault->extra_addr = kbase_reg_read(kbdev,
-					MMU_AS_REG(as_no, AS_FAULTEXTRA_HI));
-			fault->extra_addr <<= 32;
-			fault->extra_addr |= kbase_reg_read(kbdev,
-					MMU_AS_REG(as_no, AS_FAULTEXTRA_LO));
-		}
+		fault->extra_addr = kbase_reg_read(kbdev,
+				MMU_AS_REG(as_no, AS_FAULTEXTRA_HI));
+		fault->extra_addr <<= 32;
+		fault->extra_addr |= kbase_reg_read(kbdev,
+				MMU_AS_REG(as_no, AS_FAULTEXTRA_LO));
 
 		if (kbase_as_has_bus_fault(as, fault)) {
 			/* Mark bus fault as handled.
@@ -423,7 +416,7 @@ int kbase_mmu_switch_to_ir(struct kbase_context *const kctx,
 	struct kbase_va_region *const reg)
 {
 	dev_dbg(kctx->kbdev->dev,
-		"Switching to incremental rendering for region %p\n",
+		"Switching to incremental rendering for region %pK\n",
 		(void *)reg);
 	return kbase_job_slot_softstop_start_rp(kctx, reg);
 }

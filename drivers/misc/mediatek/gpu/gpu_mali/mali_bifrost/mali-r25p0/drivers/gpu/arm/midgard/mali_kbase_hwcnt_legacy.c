@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2018, 2020-2021 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -23,7 +23,7 @@
 #include "mali_kbase_hwcnt_virtualizer.h"
 #include "mali_kbase_hwcnt_types.h"
 #include "mali_kbase_hwcnt_gpu.h"
-#include "mali_kbase_ioctl.h"
+#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
 
 #include <linux/slab.h>
 #include <linux/uaccess.h>

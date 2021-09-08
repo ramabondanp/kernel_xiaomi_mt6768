@@ -237,6 +237,9 @@ void __kbase_tlstream_tl_arbiter_stop_requested(
 void __kbase_tlstream_tl_arbiter_stopped(
 	struct kbase_tlstream *stream,
 	const void *gpu);
+void __kbase_tlstream_tl_arbiter_requested(
+	struct kbase_tlstream *stream,
+	const void *gpu);
 void __kbase_tlstream_jd_gpu_soft_reset(
 	struct kbase_tlstream *stream,
 	const void *gpu);
@@ -1296,6 +1299,25 @@ struct kbase_tlstream;
 		int enabled = atomic_read(&kbdev->timeline_flags);	\
 		if (enabled & TLSTREAM_ENABLED)	\
 			__kbase_tlstream_tl_arbiter_stopped(	\
+				__TL_DISPATCH_STREAM(kbdev, obj),	\
+				gpu);	\
+	} while (0)
+
+/**
+ * KBASE_TLSTREAM_TL_ARBITER_REQUESTED -
+ *   Driver has requested the arbiter for gpu access
+ *
+ * @kbdev: Kbase device
+ * @gpu: Name of the GPU object
+ */
+#define KBASE_TLSTREAM_TL_ARBITER_REQUESTED(	\
+	kbdev,	\
+	gpu	\
+	)	\
+	do {	\
+		int enabled = atomic_read(&kbdev->timeline_flags);	\
+		if (enabled & TLSTREAM_ENABLED)	\
+			__kbase_tlstream_tl_arbiter_requested(	\
 				__TL_DISPATCH_STREAM(kbdev, obj),	\
 				gpu);	\
 	} while (0)
