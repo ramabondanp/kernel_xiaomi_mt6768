@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0
-
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -29,10 +28,7 @@
 
 #include <mali_kbase.h>
 #include <mali_kbase_pm.h>
-#include <mali_kbase_hwaccess_jm.h>
 #include <mali_kbase_irq_internal.h>
-#include <mali_kbase_hwcnt_context.h>
-#include <mali_kbase_pm_internal.h>
 #include <tl/mali_kbase_tracepoints.h>
 
 static void kbase_arbiter_pm_vm_wait_gpu_assignment(struct kbase_device *kbdev);
@@ -131,6 +127,9 @@ static void kbase_arbiter_pm_vm_set_state(struct kbase_device *kbdev,
 
 	lockdep_assert_held(&arb_vm_state->vm_state_lock);
 	arb_vm_state->vm_state = new_state;
+	if (new_state != KBASE_VM_STATE_INITIALIZING_WITH_GPU &&
+		new_state != KBASE_VM_STATE_INITIALIZING)
+		KBASE_KTRACE_ADD(kbdev, ARB_VM_STATE, NULL, new_state);
 	wake_up(&arb_vm_state->vm_state_wait);
 }
 
@@ -193,6 +192,7 @@ static void kbase_arbiter_pm_resume_wq(struct work_struct *data)
 	}
 	arb_vm_state->vm_arb_starting = false;
 	mutex_unlock(&arb_vm_state->vm_state_lock);
+	KBASE_TLSTREAM_TL_ARBITER_STARTED(kbdev, kbdev);
 	dev_dbg(kbdev->dev, "<%s\n", __func__);
 }
 
@@ -231,7 +231,7 @@ int kbase_arbiter_pm_early_init(struct kbase_device *kbdev)
 	INIT_WORK(&arb_vm_state->vm_suspend_work, kbase_arbiter_pm_suspend_wq);
 	INIT_WORK(&arb_vm_state->vm_resume_work, kbase_arbiter_pm_resume_wq);
 	arb_vm_state->vm_arb_starting = false;
-	arb_vm_state->vm_arb_users_waiting = 0;
+	atomic_set(&kbdev->pm.gpu_users_waiting, 0);
 	kbdev->pm.arb_vm_state = arb_vm_state;
 
 	err = kbase_arbif_init(kbdev);
@@ -312,7 +312,7 @@ void kbase_arbiter_pm_vm_stopped(struct kbase_device *kbdev)
 
 	lockdep_assert_held(&arb_vm_state->vm_state_lock);
 
-	if (arb_vm_state->vm_arb_users_waiting > 0 &&
+	if (atomic_read(&kbdev->pm.gpu_users_waiting) > 0 &&
 			arb_vm_state->vm_state == KBASE_VM_STATE_STOPPING_IDLE)
 		kbase_arbiter_pm_vm_set_state(kbdev,
 			 KBASE_VM_STATE_STOPPING_ACTIVE);
@@ -623,7 +623,9 @@ void kbase_arbiter_pm_vm_event(struct kbase_device *kbdev,
 	mutex_lock(&arb_vm_state->vm_state_lock);
 	dev_dbg(kbdev->dev, "%s %s\n", __func__,
 		kbase_arbiter_pm_vm_event_str(evt));
-
+	if (arb_vm_state->vm_state != KBASE_VM_STATE_INITIALIZING_WITH_GPU &&
+		arb_vm_state->vm_state != KBASE_VM_STATE_INITIALIZING)
+		KBASE_KTRACE_ADD(kbdev, ARB_VM_EVT, NULL, evt);
 	switch (evt) {
 	case KBASE_VM_GPU_GRANTED_EVT:
 		kbase_arbiter_pm_vm_gpu_start(kbdev);
@@ -656,8 +658,6 @@ void kbase_arbiter_pm_vm_event(struct kbase_device *kbdev,
 	case KBASE_VM_REF_EVENT:
 		switch (arb_vm_state->vm_state) {
 		case KBASE_VM_STATE_STARTING:
-			KBASE_TLSTREAM_TL_ARBITER_STARTED(kbdev, kbdev);
-			/* FALL THROUGH */
 		case KBASE_VM_STATE_IDLE:
 			kbase_arbiter_pm_vm_set_state(kbdev,
 			KBASE_VM_STATE_ACTIVE);
@@ -799,7 +799,7 @@ int kbase_arbiter_pm_ctx_active_handle_suspend(struct kbase_device *kbdev,
 			}
 
 			/* Need to synchronously wait for GPU assignment */
-			arb_vm_state->vm_arb_users_waiting++;
+			atomic_inc(&kbdev->pm.gpu_users_waiting);
 			mutex_unlock(&arb_vm_state->vm_state_lock);
 			mutex_unlock(&kbdev->pm.lock);
 			mutex_unlock(&js_devdata->runpool_mutex);
@@ -807,7 +807,7 @@ int kbase_arbiter_pm_ctx_active_handle_suspend(struct kbase_device *kbdev,
 			mutex_lock(&js_devdata->runpool_mutex);
 			mutex_lock(&kbdev->pm.lock);
 			mutex_lock(&arb_vm_state->vm_state_lock);
-			arb_vm_state->vm_arb_users_waiting--;
+			atomic_dec(&kbdev->pm.gpu_users_waiting);
 		}
 		mutex_unlock(&arb_vm_state->vm_state_lock);
 	}

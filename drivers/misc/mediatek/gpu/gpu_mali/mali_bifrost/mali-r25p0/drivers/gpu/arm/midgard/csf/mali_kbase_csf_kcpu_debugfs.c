@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -196,4 +197,3 @@ void kbase_csf_kcpu_debugfs_init(struct kbase_context *kctx)
 }
 
 #endif /* CONFIG_DEBUG_FS */
-

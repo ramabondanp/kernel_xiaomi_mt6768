@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
@@ -19,6 +20,7 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
+
 #include <mali_kbase.h>
 #include "mali_kbase_clk_rate_trace_mgr.h"
 #include "mali_kbase_csf_ipa_control.h"
@@ -45,14 +47,23 @@
 
 /**
  * Default value for the TIMER register of the IPA Control interface,
- * expressed as number of clock cycles.
+ * expressed in milliseconds.
+ *
+ * The chosen value is a trade off between two requirements: the IPA Control
+ * interface should sample counters with a resolution in the order of
+ * milliseconds, while keeping GPU overhead as limited as possible.
  */
-#define TIMER_DEFAULT_VALUE_CLK_CYCLES ((u32)1000)
+#define TIMER_DEFAULT_VALUE_MS ((u32)10) /* 10 milliseconds */
+
+/**
+ * Number of timer events per second.
+ */
+#define TIMER_EVENTS_PER_SECOND ((u32)1000 / TIMER_DEFAULT_VALUE_MS)
 
 /**
  * Maximum number of loops polling the GPU before we assume the GPU has hung.
  */
-#define IPA_INACTIVE_MAX_LOOPS ((unsigned int)100000000)
+#define IPA_INACTIVE_MAX_LOOPS ((unsigned int)8000000)
 
 /**
  * Number of bits used to configure a performance counter in SELECT registers.
@@ -76,14 +87,19 @@ struct kbase_ipa_control_listener_data {
 	struct kbase_device *kbdev;
 };
 
+static u32 timer_value(u32 gpu_rate)
+{
+	return gpu_rate / TIMER_EVENTS_PER_SECOND;
+}
+
 static int wait_status(struct kbase_device *kbdev, u32 flags)
 {
 	unsigned int max_loops = IPA_INACTIVE_MAX_LOOPS;
 	u32 status = kbase_reg_read(kbdev, IPA_CONTROL_REG(STATUS));
 
 	/*
-	 * Wait for the STATUS register to indicate that flags have been cleared,
-	 * in case a transition is pending.
+	 * Wait for the STATUS register to indicate that flags have been
+	 * cleared, in case a transition is pending.
 	 */
 	while (--max_loops && (status & flags))
 		status = kbase_reg_read(kbdev, IPA_CONTROL_REG(STATUS));
@@ -285,6 +301,15 @@ kbase_ipa_control_rate_change_notify(struct kbase_clk_rate_listener *listener,
 		}
 
 		ipa_ctrl->cur_gpu_rate = clk_rate_hz;
+
+		/* Update the timer for automatic sampling if active sessions
+		 * are present. Counters have already been manually sampled.
+		 */
+		if (ipa_ctrl->num_active_sessions > 0) {
+			kbase_reg_write(kbdev, IPA_CONTROL_REG(TIMER),
+					timer_value(ipa_ctrl->cur_gpu_rate));
+		}
+
 		spin_unlock(&ipa_ctrl->lock);
 
 		spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
@@ -499,6 +524,14 @@ int kbase_ipa_control_register(
 			perf_counters[i].scaling_factor;
 		session->prfcnts[i].gpu_norm = perf_counters[i].gpu_norm;
 
+		/* Reports to this client for GPU time spent in protected mode
+		 * should begin from the point of registration.
+		 */
+		session->last_query_time = ktime_get_ns();
+
+		/* Initially, no time has been spent in protected mode */
+		session->protm_time = 0;
+
 		prfcnt_config->refcount++;
 	}
 
@@ -528,8 +561,9 @@ int kbase_ipa_control_register(
 					COMMAND_SAMPLE);
 			ret = wait_status(kbdev, STATUS_COMMAND_ACTIVE);
 			if (!ret) {
-				kbase_reg_write(kbdev, IPA_CONTROL_REG(TIMER),
-						TIMER_DEFAULT_VALUE_CLK_CYCLES);
+				kbase_reg_write(
+					kbdev, IPA_CONTROL_REG(TIMER),
+					timer_value(ipa_ctrl->cur_gpu_rate));
 			} else {
 				dev_err(kbdev->dev,
 					"%s: failed to sample new counters",
@@ -680,8 +714,7 @@ int kbase_ipa_control_query(struct kbase_device *kbdev, const void *client,
 	gpu_ready = kbdev->pm.backend.gpu_ready;
 
 	for (i = 0; i < session->num_prfcnts; i++) {
-		struct kbase_ipa_control_prfcnt *prfcnt =
-			&session->prfcnts[i];
+		struct kbase_ipa_control_prfcnt *prfcnt = &session->prfcnts[i];
 
 		calc_prfcnt_delta(kbdev, prfcnt, gpu_ready);
 		/* Return all the accumulated difference */
@@ -689,13 +722,27 @@ int kbase_ipa_control_query(struct kbase_device *kbdev, const void *client,
 		prfcnt->accumulated_diff = 0;
 	}
 
+	if (protected_time) {
+		u64 time_now = ktime_get_ns();
+
+		/* This is the amount of protected-mode time spent prior to
+		 * the current protm period.
+		 */
+		*protected_time = session->protm_time;
+
+		if (kbdev->protected_mode) {
+			*protected_time +=
+				time_now - MAX(session->last_query_time,
+					       ipa_ctrl->protm_start);
+		}
+		session->last_query_time = time_now;
+		session->protm_time = 0;
+	}
+
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 
 	for (i = session->num_prfcnts; i < num_values; i++)
 		values[i] = 0;
-
-	if (protected_time)
-		*protected_time = 0;
 
 	return 0;
 }
@@ -774,7 +821,7 @@ void kbase_ipa_control_handle_gpu_power_on(struct kbase_device *kbdev)
 
 	/* Re-enable the timer for periodic sampling */
 	kbase_reg_write(kbdev, IPA_CONTROL_REG(TIMER),
-			TIMER_DEFAULT_VALUE_CLK_CYCLES);
+			timer_value(ipa_ctrl->cur_gpu_rate));
 
 	spin_unlock(&ipa_ctrl->lock);
 }
@@ -832,3 +879,49 @@ void kbase_ipa_control_rate_change_notify_test(struct kbase_device *kbdev,
 }
 KBASE_EXPORT_TEST_API(kbase_ipa_control_rate_change_notify_test);
 #endif
+
+void kbase_ipa_control_protm_entered(struct kbase_device *kbdev)
+{
+	struct kbase_ipa_control *ipa_ctrl = &kbdev->csf.ipa_control;
+
+	lockdep_assert_held(&kbdev->hwaccess_lock);
+	ipa_ctrl->protm_start = ktime_get_ns();
+}
+
+void kbase_ipa_control_protm_exited(struct kbase_device *kbdev)
+{
+	struct kbase_ipa_control *ipa_ctrl = &kbdev->csf.ipa_control;
+	size_t i;
+	u64 time_now = ktime_get_ns();
+	u32 status;
+
+	lockdep_assert_held(&kbdev->hwaccess_lock);
+
+	for (i = 0; i < ipa_ctrl->num_active_sessions; i++) {
+		struct kbase_ipa_control_session *session =
+			&ipa_ctrl->sessions[i];
+		u64 protm_time = time_now - MAX(session->last_query_time,
+						ipa_ctrl->protm_start);
+
+		session->protm_time += protm_time;
+	}
+
+	/* Acknowledge the protected_mode bit in the IPA_CONTROL STATUS
+	 * register
+	 */
+	status = kbase_reg_read(kbdev, IPA_CONTROL_REG(STATUS));
+	if (status & STATUS_PROTECTED_MODE) {
+		int ret;
+
+		/* Acknowledge the protm command */
+		kbase_reg_write(kbdev, IPA_CONTROL_REG(COMMAND),
+				COMMAND_PROTECTED_ACK);
+		ret = wait_status(kbdev, STATUS_PROTECTED_MODE);
+		if (ret) {
+			dev_err(kbdev->dev,
+				"Wait for the protm ack command failed: %d",
+				ret);
+		}
+	}
+}
+

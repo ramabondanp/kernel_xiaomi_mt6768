@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2012-2017, 2019-2020 ARM Limited. All rights reserved.

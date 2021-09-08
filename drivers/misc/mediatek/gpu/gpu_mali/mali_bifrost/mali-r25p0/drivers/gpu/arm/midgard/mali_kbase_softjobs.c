@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2011-2020 ARM Limited. All rights reserved.
@@ -19,8 +20,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
-
-
 
 #include <mali_kbase.h>
 
@@ -148,7 +147,8 @@ static int kbase_dump_cpu_gpu_time(struct kbase_jd_atom *katom)
 
 	/* Take the PM active reference as late as possible - otherwise, it could
 	 * delay suspend until we process the atom (which may be at the end of a
-	 * long chain of dependencies */
+	 * long chain of dependencies
+	 */
 	pm_active_err = kbase_pm_context_active_handle_suspend(kctx->kbdev, KBASE_PM_SUSPEND_HANDLER_DONT_REACTIVATE);
 	if (pm_active_err) {
 		struct kbasep_js_device_data *js_devdata = &kctx->kbdev->js_data;
@@ -183,7 +183,8 @@ static int kbase_dump_cpu_gpu_time(struct kbase_jd_atom *katom)
 	/* GPU_WR access is checked on the range for returning the result to
 	 * userspace for the following reasons:
 	 * - security, this is currently how imported user bufs are checked.
-	 * - userspace ddk guaranteed to assume region was mapped as GPU_WR */
+	 * - userspace ddk guaranteed to assume region was mapped as GPU_WR
+	 */
 	user_result = kbase_vmap_prot(kctx, jc, sizeof(data), KBASE_REG_GPU_WR, &map);
 	if (!user_result)
 		return 0;
@@ -715,7 +716,8 @@ out_unlock:
 
 out_cleanup:
 	/* Frees allocated memory for kbase_debug_copy_job struct, including
-	 * members, and sets jc to 0 */
+	 * members, and sets jc to 0
+	 */
 	kbase_debug_copy_finish(katom);
 	kfree(user_buffers);
 
@@ -723,7 +725,7 @@ out_cleanup:
 }
 #endif /* !MALI_USE_CSF */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+#if KERNEL_VERSION(5, 6, 0) <= LINUX_VERSION_CODE
 static void *dma_buf_kmap_page(struct kbase_mem_phy_alloc *gpu_alloc,
 	unsigned long page_num, struct page **page)
 {
@@ -804,16 +806,16 @@ int kbase_mem_copy_from_extres(struct kbase_context *kctx,
 		dma_to_copy = min(dma_buf->size,
 			(size_t)(buf_data->nr_extres_pages * PAGE_SIZE));
 		ret = dma_buf_begin_cpu_access(dma_buf,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0) && !defined(CONFIG_CHROMEOS)
-				0, dma_to_copy,
+#if KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE && !defined(CONFIG_CHROMEOS)
+					       0, dma_to_copy,
 #endif
-				DMA_FROM_DEVICE);
+					       DMA_FROM_DEVICE);
 		if (ret)
 			goto out_unlock;
 
 		for (i = 0; i < dma_to_copy/PAGE_SIZE &&
 				target_page_nr < buf_data->nr_pages; i++) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+#if KERNEL_VERSION(5, 6, 0) <= LINUX_VERSION_CODE
 			struct page *pg;
 			void *extres_page = dma_buf_kmap_page(gpu_alloc, i, &pg);
 #else
@@ -825,7 +827,7 @@ int kbase_mem_copy_from_extres(struct kbase_context *kctx,
 						buf_data->nr_pages,
 						&target_page_nr, offset);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+#if KERNEL_VERSION(5, 6, 0) <= LINUX_VERSION_CODE
 				kunmap(pg);
 #else
 				dma_buf_kunmap(dma_buf, i, extres_page);
@@ -835,10 +837,10 @@ int kbase_mem_copy_from_extres(struct kbase_context *kctx,
 			}
 		}
 		dma_buf_end_cpu_access(dma_buf,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0) && !defined(CONFIG_CHROMEOS)
-				0, dma_to_copy,
+#if KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE && !defined(CONFIG_CHROMEOS)
+				       0, dma_to_copy,
 #endif
-				DMA_FROM_DEVICE);
+				       DMA_FROM_DEVICE);
 		break;
 	}
 	default:
@@ -925,11 +927,6 @@ int kbasep_jit_alloc_validate(struct kbase_context *kctx,
 }
 
 #if !MALI_USE_CSF
-
-#if (KERNEL_VERSION(3, 18, 63) > LINUX_VERSION_CODE)
-#define offsetofend(TYPE, MEMBER) \
-	(offsetof(TYPE, MEMBER) + sizeof(((TYPE *)0)->MEMBER))
-#endif
 
 /*
  * Sizes of user data to copy for each just-in-time memory interface version
@@ -1654,7 +1651,9 @@ int kbase_prepare_soft_job(struct kbase_jd_atom *katom)
 			struct base_fence fence;
 			int fd;
 
-			if (0 != copy_from_user(&fence, (__user void *)(uintptr_t) katom->jc, sizeof(fence)))
+			if (copy_from_user(&fence,
+					   (__user void *)(uintptr_t)katom->jc,
+					   sizeof(fence)) != 0)
 				return -EINVAL;
 
 			fd = kbase_sync_fence_out_create(katom,
@@ -1663,7 +1662,8 @@ int kbase_prepare_soft_job(struct kbase_jd_atom *katom)
 				return -EINVAL;
 
 			fence.basep.fd = fd;
-			if (0 != copy_to_user((__user void *)(uintptr_t) katom->jc, &fence, sizeof(fence))) {
+			if (copy_to_user((__user void *)(uintptr_t)katom->jc,
+					 &fence, sizeof(fence)) != 0) {
 				kbase_sync_fence_out_remove(katom);
 				kbase_sync_fence_close_fd(fd);
 				fence.basep.fd = -EINVAL;
@@ -1676,7 +1676,9 @@ int kbase_prepare_soft_job(struct kbase_jd_atom *katom)
 			struct base_fence fence;
 			int ret;
 
-			if (0 != copy_from_user(&fence, (__user void *)(uintptr_t) katom->jc, sizeof(fence)))
+			if (copy_from_user(&fence,
+					   (__user void *)(uintptr_t)katom->jc,
+					   sizeof(fence)) != 0)
 				return -EINVAL;
 
 			/* Get a reference to the fence object */

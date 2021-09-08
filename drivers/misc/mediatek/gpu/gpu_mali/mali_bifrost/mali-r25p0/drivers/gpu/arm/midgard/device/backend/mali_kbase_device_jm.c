@@ -96,15 +96,15 @@ static int kbase_backend_late_init(struct kbase_device *kbdev)
 	if (err)
 		goto fail_devfreq_init;
 
-	/* Idle the GPU and/or cores, if the policy wants it to */
-	kbase_pm_context_idle(kbdev);
-
 	/* Update gpuprops with L2_FEATURES if applicable */
 	err = kbase_gpuprops_update_l2_features(kbdev);
 	if (err)
 		goto fail_update_l2_features;
 
 	init_waitqueue_head(&kbdev->hwaccess.backend.reset_wait);
+
+	/* Idle the GPU and/or cores, if the policy wants it to */
+	kbase_pm_context_idle(kbdev);
 
 	return 0;
 
@@ -121,6 +121,7 @@ fail_interrupt_test:
 
 	kbase_backend_timer_term(kbdev);
 fail_timer:
+	kbase_pm_context_idle(kbdev);
 	kbase_hwaccess_pm_halt(kbdev);
 fail_pm_powerup:
 	kbase_reset_gpu_term(kbdev);

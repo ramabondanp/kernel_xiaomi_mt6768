@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -96,7 +97,7 @@ static void small_granularity_alloc(struct simple_pma_device *const epma_dev,
 	    WARN_ON(!pma))
 		return;
 
-	WARN(0 == epma_dev->rmem_size, "%s: rmem_size is 0", __FUNCTION__);
+	WARN(epma_dev->rmem_size == 0, "%s: rmem_size is 0", __func__);
 	alloc_pages_bitfield_size = ALLOC_PAGES_BITFIELD_ARR_SIZE(epma_dev->rmem_size);
 
 	WARN(alloc_bitfield_idx >= alloc_pages_bitfield_size,
@@ -291,7 +292,7 @@ static struct protected_memory_allocation *simple_pma_alloc_page(
 
 		for (i = 0; i < alloc_pages_bitmap_size; i++) {
 			/* Are all the pages free for the i'th u64 bitfield element? */
-			if (0 == bitfields[i]) {
+			if (bitfields[i] == 0) {
 				count += PAGES_PER_BITFIELD_ELEM;
 
 				if (count >= (1 << order)) {
@@ -350,7 +351,7 @@ static void simple_pma_free_page(
 	size_t alloc_pages_bitmap_size;
 	size_t num_bitfield_elems_used_by_alloc;
 
-	WARN_ON(NULL == pma);
+	WARN_ON(pma == NULL);
 
 	dev_dbg(epma_dev->dev, "%s(pma_dev=%px, pma=%px, pa=%llx\n",
 		__func__, (void *)pma_dev, (void *)pma, pma->pa);

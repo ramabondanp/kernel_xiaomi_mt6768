@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -29,12 +30,37 @@
 #ifdef CONFIG_DEBUG_FS
 #include "mali_kbase_csf_tl_reader.h"
 
+/**
+ * blocked_reason_to_string() - Convert blocking reason id to a string
+ *
+ * @reason_id: blocked_reason
+ *
+ * Return: Suitable string
+ */
+static const char *blocked_reason_to_string(u32 reason_id)
+{
+	/* possible blocking reasons of a cs */
+	static const char *const cs_blocked_reason[] = {
+		[CS_STATUS_BLOCKED_REASON_REASON_UNBLOCKED] = "UNBLOCKED",
+		[CS_STATUS_BLOCKED_REASON_REASON_WAIT] = "WAIT",
+		[CS_STATUS_BLOCKED_REASON_REASON_PROGRESS_WAIT] =
+			"PROGRESS_WAIT",
+		[CS_STATUS_BLOCKED_REASON_REASON_SYNC_WAIT] = "SYNC_WAIT",
+		[CS_STATUS_BLOCKED_REASON_REASON_DEFERRED] = "DEFERRED",
+		[CS_STATUS_BLOCKED_REASON_REASON_RESOURCE] = "RESOURCE",
+		[CS_STATUS_BLOCKED_REASON_REASON_FLUSH] = "FLUSH"
+	};
+
+	if (WARN_ON(reason_id >= ARRAY_SIZE(cs_blocked_reason)))
+		return "UNKNOWN_BLOCKED_REASON_ID";
+
+	return cs_blocked_reason[reason_id];
+}
+
 static void kbasep_csf_scheduler_dump_active_queue_cs_status_wait(
-		struct seq_file *file,
-		u32 wait_status,
-		u32 wait_sync_value,
-		u64 wait_sync_live_value,
-		u64 wait_sync_pointer)
+	struct seq_file *file, u32 wait_status, u32 wait_sync_value,
+	u64 wait_sync_live_value, u64 wait_sync_pointer, u32 sb_status,
+	u32 blocked_reason)
 {
 #define WAITING "Waiting"
 #define NOT_WAITING "Not waiting"
@@ -56,6 +82,11 @@ static void kbasep_csf_scheduler_dump_active_queue_cs_status_wait(
 	seq_printf(file, "SYNC_POINTER: 0x%llx\n", wait_sync_pointer);
 	seq_printf(file, "SYNC_VALUE: %d\n", wait_sync_value);
 	seq_printf(file, "SYNC_LIVE_VALUE: 0x%016llx\n", wait_sync_live_value);
+	seq_printf(file, "SB_STATUS: %u\n",
+		   CS_STATUS_SCOREBOARDS_NONZERO_GET(sb_status));
+	seq_printf(file, "BLOCKED_REASON: %s\n",
+		   blocked_reason_to_string(CS_STATUS_BLOCKED_REASON_REASON_GET(
+			   blocked_reason)));
 }
 
 /**
@@ -74,6 +105,8 @@ static void kbasep_csf_scheduler_dump_active_queue(struct seq_file *file,
 	u32 cs_active;
 	u64 wait_sync_pointer;
 	u32 wait_status, wait_sync_value;
+	u32 sb_status;
+	u32 blocked_reason;
 	struct kbase_vmap_struct *mapping;
 	u64 *evt;
 	u64 wait_sync_live_value;
@@ -109,6 +142,8 @@ static void kbasep_csf_scheduler_dump_active_queue(struct seq_file *file,
 			wait_status = queue->status_wait;
 			wait_sync_value = queue->sync_value;
 			wait_sync_pointer = queue->sync_ptr;
+			sb_status = queue->sb_status;
+			blocked_reason = queue->blocked_reason;
 
 			evt = (u64 *)kbase_phy_alloc_mapping_get(queue->kctx, wait_sync_pointer, &mapping);
 			if (evt) {
@@ -120,7 +155,8 @@ static void kbasep_csf_scheduler_dump_active_queue(struct seq_file *file,
 
 			kbasep_csf_scheduler_dump_active_queue_cs_status_wait(
 				file, wait_status, wait_sync_value,
-				wait_sync_live_value, wait_sync_pointer);
+				wait_sync_live_value, wait_sync_pointer,
+				sb_status, blocked_reason);
 		}
 	} else {
 		struct kbase_device const *const kbdev =
@@ -161,6 +197,11 @@ static void kbasep_csf_scheduler_dump_active_queue(struct seq_file *file,
 		wait_sync_pointer |= (u64)kbase_csf_firmware_cs_output(stream,
 					CS_STATUS_WAIT_SYNC_POINTER_HI) << 32;
 
+		sb_status = kbase_csf_firmware_cs_output(stream,
+							 CS_STATUS_SCOREBOARDS);
+		blocked_reason = kbase_csf_firmware_cs_output(
+			stream, CS_STATUS_BLOCKED_REASON);
+
 		evt = (u64 *)kbase_phy_alloc_mapping_get(queue->kctx, wait_sync_pointer, &mapping);
 		if (evt) {
 			wait_sync_live_value = evt[0];
@@ -171,7 +212,8 @@ static void kbasep_csf_scheduler_dump_active_queue(struct seq_file *file,
 
 		kbasep_csf_scheduler_dump_active_queue_cs_status_wait(
 			file, wait_status, wait_sync_value,
-			wait_sync_live_value, wait_sync_pointer);
+			wait_sync_live_value, wait_sync_pointer, sb_status,
+			blocked_reason);
 	}
 
 	seq_puts(file, "\n");

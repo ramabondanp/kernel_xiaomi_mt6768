@@ -41,10 +41,14 @@
 
 #include <tl/mali_kbase_timeline.h>
 #include "mali_kbase_vinstr.h"
+#if MALI_USE_CSF
+#include <mali_kbase_hwcnt_backend_csf_if_fw.h>
+#endif
 #include "mali_kbase_hwcnt_context.h"
 #include "mali_kbase_hwcnt_virtualizer.h"
 
 #include "mali_kbase_device.h"
+#include "mali_kbase_device_internal.h"
 #include "backend/gpu/mali_kbase_pm_internal.h"
 #include "backend/gpu/mali_kbase_irq_internal.h"
 #include "mali_kbase_regs_history_debugfs.h"
@@ -112,6 +116,9 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 #ifdef CONFIG_ARM64
 	struct device_node *np = NULL;
 #endif /* CONFIG_ARM64 */
+#ifdef CONFIG_OF
+	struct device_node *prio_ctrl_node = NULL;
+#endif
 
 	spin_lock_init(&kbdev->mmu_mask_change);
 	mutex_init(&kbdev->mmu_hw_mutex);
@@ -136,6 +143,34 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 		}
 	}
 #endif /* CONFIG_ARM64 */
+	kbdev->pcm_dev = NULL;
+#ifdef CONFIG_OF
+	/* Check to see whether or not a platform specific priority control manager
+	 * is available.
+	 */
+	prio_ctrl_node = of_parse_phandle(kbdev->dev->of_node,
+			"priority-control-manager", 0);
+	if (!prio_ctrl_node) {
+		dev_info(kbdev->dev,
+			"No priority control manager is configured\n");
+	} else {
+		struct platform_device *const pdev =
+			of_find_device_by_node(prio_ctrl_node);
+		if (!pdev) {
+			dev_err(kbdev->dev,
+				"The configured priority control manager was not found\n");
+		} else {
+			kbdev->pcm_dev = platform_get_drvdata(pdev);
+			if (!kbdev->pcm_dev) {
+				dev_info(kbdev->dev,
+					"Priority control manager is not ready\n");
+				err = -EPROBE_DEFER;
+			}
+		}
+		of_node_put(prio_ctrl_node);
+	}
+#endif /* CONFIG_OF */
+
 	/* Get the list of workarounds for issues on the current HW
 	 * (identified by the GPU_ID register)
 	 */
@@ -151,11 +186,6 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 	err = kbase_gpuprops_set_features(kbdev);
 	if (err)
 		goto fail;
-
-	/* On Linux 4.0+, dma coherency is determined from device tree */
-#if defined(CONFIG_ARM64) && LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)
-	set_dma_ops(kbdev->dev, &noncoherent_swiotlb_dma_ops);
-#endif
 
 	/* Workaround a pre-3.13 Linux issue, where dma_mask is NULL when our
 	 * device structure was created by device-tree
@@ -179,7 +209,9 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 	if (err)
 		goto dma_set_mask_failed;
 
+#if !MALI_USE_CSF
 	spin_lock_init(&kbdev->hwcnt.lock);
+#endif
 
 	err = kbase_ktrace_init(kbdev);
 	if (err)
@@ -191,9 +223,11 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 
 	atomic_set(&kbdev->ctx_num, 0);
 
+#if !MALI_USE_CSF
 	err = kbase_instr_backend_init(kbdev);
 	if (err)
 		goto term_trace;
+#endif
 
 	kbdev->pm.dvfs_period = DEFAULT_PM_DVFS_PERIOD;
 
@@ -210,8 +244,12 @@ int kbase_device_misc_init(struct kbase_device * const kbdev)
 	spin_lock_init(&kbdev->hwaccess_lock);
 
 	return 0;
+
+#if !MALI_USE_CSF
 term_trace:
 	kbase_ktrace_term(kbdev);
+#endif
+
 term_as:
 	kbase_device_all_as_term(kbdev);
 dma_set_mask_failed:
@@ -229,7 +267,9 @@ void kbase_device_misc_term(struct kbase_device *kbdev)
 	kbase_debug_assert_register_hook(NULL, NULL);
 #endif
 
+#if !MALI_USE_CSF
 	kbase_instr_backend_term(kbdev);
+#endif
 
 	kbase_ktrace_term(kbdev);
 
@@ -253,6 +293,49 @@ void kbase_increment_device_id(void)
 	kbase_dev_nr++;
 }
 
+#if MALI_USE_CSF
+
+int kbase_device_hwcnt_backend_csf_if_init(struct kbase_device *kbdev)
+{
+	return kbase_hwcnt_backend_csf_if_fw_create(
+		kbdev, &kbdev->hwcnt_backend_csf_if_fw);
+}
+
+void kbase_device_hwcnt_backend_csf_if_term(struct kbase_device *kbdev)
+{
+	kbase_hwcnt_backend_csf_if_fw_destroy(&kbdev->hwcnt_backend_csf_if_fw);
+}
+
+int kbase_device_hwcnt_backend_csf_init(struct kbase_device *kbdev)
+{
+	return kbase_hwcnt_backend_csf_create(
+		&kbdev->hwcnt_backend_csf_if_fw,
+		KBASE_HWCNT_BACKEND_CSF_RING_BUFFER_COUNT,
+		&kbdev->hwcnt_gpu_iface);
+}
+
+void kbase_device_hwcnt_backend_csf_term(struct kbase_device *kbdev)
+{
+	kbase_hwcnt_backend_csf_destroy(&kbdev->hwcnt_gpu_iface);
+}
+
+int kbase_device_hwcnt_backend_csf_metadata_init(struct kbase_device *kbdev)
+{
+	/* For CSF GPUs, HWC metadata needs to query informatoin from CSF
+	 * firmware, so the initialization of HWC metadata only can be called
+	 * after firmware initialised, but firmware initialization depends on
+	 * HWC backend initialization, so we need to separate HWC backend
+	 * metadata initialization from HWC backend initialization.
+	 */
+	return kbase_hwcnt_backend_csf_metadata_init(&kbdev->hwcnt_gpu_iface);
+}
+
+void kbase_device_hwcnt_backend_csf_metadata_term(struct kbase_device *kbdev)
+{
+	kbase_hwcnt_backend_csf_metadata_term(&kbdev->hwcnt_gpu_iface);
+}
+#else
+
 int kbase_device_hwcnt_backend_jm_init(struct kbase_device *kbdev)
 {
 	return kbase_hwcnt_backend_jm_create(kbdev, &kbdev->hwcnt_gpu_iface);
@@ -262,6 +345,7 @@ void kbase_device_hwcnt_backend_jm_term(struct kbase_device *kbdev)
 {
 	kbase_hwcnt_backend_jm_destroy(&kbdev->hwcnt_gpu_iface);
 }
+#endif /* MALI_USE_CSF */
 
 int kbase_device_hwcnt_context_init(struct kbase_device *kbdev)
 {

@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -166,21 +185,29 @@ enum kbase_shader_core_state {
  * struct kbasep_pm_metrics - Metrics data collected for use by the power
  *                            management framework.
  *
- *  @time_busy: number of ns the GPU was busy executing jobs since the
- *          @time_period_start timestamp.
- *  @time_idle: number of ns since time_period_start the GPU was not executing
- *          jobs since the @time_period_start timestamp.
- *  @busy_cl: number of ns the GPU was busy executing CL jobs. Note that
- *           if two CL jobs were active for 400ns, this value would be updated
- *           with 800.
- *  @busy_gl: number of ns the GPU was busy executing GL jobs. Note that
- *           if two GL jobs were active for 400ns, this value would be updated
- *           with 800.
+ *  @time_busy: the amount of time the GPU was busy executing jobs since the
+ *          @time_period_start timestamp, in units of 256ns. This also includes
+ *          time_in_protm, the time spent in protected mode, since it's assumed
+ *          the GPU was busy 100% during this period.
+ *  @time_idle: the amount of time the GPU was not executing jobs since the
+ *              time_period_start timestamp, measured in units of 256ns.
+ *  @busy_cl: the amount of time the GPU was busy executing CL jobs. Note that
+ *           if two CL jobs were active for 256ns, this value would be updated
+ *           with 2 (2x256ns).
+ *  @busy_gl: the amount of time the GPU was busy executing GL jobs. Note that
+ *           if two GL jobs were active for 256ns, this value would be updated
+ *           with 2 (2x256ns).
  */
 struct kbasep_pm_metrics {
 	u32 time_busy;
 	u32 time_idle;
-#if !MALI_USE_CSF
+#if MALI_USE_CSF
+	/*
+	 *  The amount of time the GPU has spent in protected mode since
+	 *  the time_period_start timestamp, measured in units of 256ns.
+	 */
+	u32 time_in_protm;
+#else
 	u32 busy_cl[2];
 	u32 busy_gl;
 #endif
@@ -201,6 +228,7 @@ struct kbasep_pm_metrics {
  *  @values: The current values of the power management metrics. The
  *           kbase_pm_get_dvfs_metrics() function is used to compare these
  *           current values with the saved values from a previous invocation.
+ *  @initialized: tracks whether metrics_state has been initialized or not.
  *  @timer: timer to regularly make DVFS decisions based on the power
  *           management metrics.
  *  @timer_active: boolean indicating @timer is running
@@ -212,6 +240,10 @@ struct kbasep_pm_metrics_state {
 #if MALI_USE_CSF
 	/* Handle returned on registering DVFS as a kbase_ipa_control client */
 	void *ipa_control_client;
+	/* Decide whether to skip GPU_ACTIVE sanity check in DVFS utilisation
+	 * calculation
+	 */
+	bool skip_gpu_active_sanity_check;
 #else
 	bool gpu_active;
 	u32 active_cl_ctx[2];
@@ -225,6 +257,7 @@ struct kbasep_pm_metrics_state {
 	struct kbasep_pm_metrics values;
 
 #ifdef CONFIG_MALI_MIDGARD_DVFS
+	bool initialized;
 	struct hrtimer timer;
 	bool timer_active;
 	struct kbasep_pm_metrics dvfs_last;
@@ -461,6 +494,21 @@ struct kbase_pm_backend_data {
 #if MALI_USE_CSF
 	/* True if the micro-control unit should be powered on */
 	bool mcu_desired;
+	/* Signaling the backend is in PM policy change transition, needs the
+	 * mcu/L2 to be brought back to the off state and remain in that state
+	 * until the flag is cleared.
+	 */
+	bool policy_change_clamp_state_to_off;
+	/* CSF Dynamic PM control flags in accordance to the current active PM
+	 * policy. This field is updated whenever a new policy is activated.
+	 */
+	unsigned int csf_pm_sched_flags;
+	/* Used to serialize the policy change calls. In CSF case, the change
+	 * of policy may involve the scheduler to suspend running CSGs and
+	 * then reconfigure the MCU. This mutex lock is to serialize such
+	 * sequence.
+	 */
+	struct mutex policy_change_lock;
 #endif
 	bool l2_desired;
 	bool l2_always_on;
@@ -485,6 +533,23 @@ struct kbase_pm_backend_data {
 	struct work_struct gpu_clock_control_work;
 };
 
+#if MALI_USE_CSF
+/* CSF PM flag, signaling that the MCU CORE should be kept on */
+#define  CSF_DYNAMIC_PM_CORE_KEEP_ON (1 << 0)
+/* CSF PM flag, signaling no scheduler suspension on idle groups */
+#define CSF_DYNAMIC_PM_SCHED_IGNORE_IDLE (1 << 1)
+/* CSF PM flag, signaling no scheduler suspension on no runnable groups */
+#define CSF_DYNAMIC_PM_SCHED_NO_SUSPEND (1 << 2)
+
+/* The following flags corresponds to existing defined PM policies */
+#define ALWAYS_ON_PM_SCHED_FLAGS (CSF_DYNAMIC_PM_CORE_KEEP_ON | \
+				  CSF_DYNAMIC_PM_SCHED_IGNORE_IDLE | \
+				  CSF_DYNAMIC_PM_SCHED_NO_SUSPEND)
+#define COARSE_ON_DEMAND_PM_SCHED_FLAGS (0)
+#if !MALI_CUSTOMER_RELEASE
+#define ALWAYS_ON_DEMAND_PM_SCHED_FLAGS (CSF_DYNAMIC_PM_SCHED_IGNORE_IDLE)
+#endif
+#endif
 
 /* List of policy IDs */
 enum kbase_pm_policy_id {
@@ -564,6 +629,15 @@ struct kbase_pm_policy {
 	bool (*get_core_active)(struct kbase_device *kbdev);
 
 	enum kbase_pm_policy_id id;
+
+#if MALI_USE_CSF
+	/* Policy associated with CSF PM scheduling operational flags.
+	 * There are pre-defined required flags exist for each of the
+	 * ARM released policies, such as 'always_on', 'coarse_demand'
+	 * and etc.
+	 */
+	unsigned int pm_sched_flags;
+#endif
 };
 
 #endif /* _KBASE_PM_HWACCESS_DEFS_H_ */

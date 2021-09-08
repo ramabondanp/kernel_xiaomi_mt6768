@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
@@ -22,10 +23,9 @@
 
 #include "mali_kbase_hwcnt_gpu.h"
 #include "mali_kbase_hwcnt_types.h"
-#include "mali_kbase.h"
-#ifdef CONFIG_MALI_NO_MALI
-#include "backend/gpu/mali_kbase_model_dummy.h"
-#endif
+
+#include <linux/bug.h>
+#include <linux/err.h>
 
 #define KBASE_HWCNT_V5_BLOCK_TYPE_COUNT 4
 #define KBASE_HWCNT_V5_HEADERS_PER_BLOCK 4
@@ -118,17 +118,18 @@ static void kbasep_get_memsys_block_type(u64 *dst,
 }
 
 /**
- * kbasep_hwcnt_backend_gpu_metadata_v5_create() - Create hardware counter
- *                                                 metadata for a v5 GPU.
- * @v5_info:       Non-NULL pointer to hwcnt info for a v5 GPU.
+ * kbasep_hwcnt_backend_gpu_metadata_create() - Create hardware counter metadata
+ *                                              for the GPU.
+ * @gpu_info:      Non-NULL pointer to hwcnt info for current GPU.
+ * @is_csf:        true for CSF GPU, otherwise false.
  * @counter_set:   The performance counter set to use.
  * @metadata:      Non-NULL pointer to where created metadata is stored
  *                 on success.
  *
  * Return: 0 on success, else error code.
  */
-static int kbasep_hwcnt_backend_gpu_metadata_v5_create(
-	const struct kbase_hwcnt_gpu_v5_info *v5_info,
+static int kbasep_hwcnt_backend_gpu_metadata_create(
+	const struct kbase_hwcnt_gpu_info *gpu_info, const bool is_csf,
 	enum kbase_hwcnt_set counter_set,
 	const struct kbase_hwcnt_metadata **metadata)
 {
@@ -139,13 +140,13 @@ static int kbasep_hwcnt_backend_gpu_metadata_v5_create(
 	size_t non_sc_block_count;
 	size_t sc_block_count;
 
-	WARN_ON(!v5_info);
+	WARN_ON(!gpu_info);
 	WARN_ON(!metadata);
 
 	/* Calculate number of block instances that aren't shader cores */
-	non_sc_block_count = 2 + v5_info->l2_count;
+	non_sc_block_count = 2 + gpu_info->l2_count;
 	/* Calculate number of block instances that are shader cores */
-	sc_block_count = fls64(v5_info->core_mask);
+	sc_block_count = fls64(gpu_info->core_mask);
 
 	/*
 	 * A system can have up to 64 shader cores, but the 64-bit
@@ -158,7 +159,7 @@ static int kbasep_hwcnt_backend_gpu_metadata_v5_create(
 		return -EINVAL;
 
 	/* One Front End block */
-	kbasep_get_fe_block_type(&blks[0].type, counter_set, v5_info->is_csf);
+	kbasep_get_fe_block_type(&blks[0].type, counter_set, is_csf);
 	blks[0].inst_cnt = 1;
 	blks[0].hdr_cnt = KBASE_HWCNT_V5_HEADERS_PER_BLOCK;
 	blks[0].ctr_cnt = KBASE_HWCNT_V5_COUNTERS_PER_BLOCK;
@@ -171,7 +172,7 @@ static int kbasep_hwcnt_backend_gpu_metadata_v5_create(
 
 	/* l2_count memsys blks */
 	kbasep_get_memsys_block_type(&blks[2].type, counter_set);
-	blks[2].inst_cnt = v5_info->l2_count;
+	blks[2].inst_cnt = gpu_info->l2_count;
 	blks[2].hdr_cnt = KBASE_HWCNT_V5_HEADERS_PER_BLOCK;
 	blks[2].ctr_cnt = KBASE_HWCNT_V5_COUNTERS_PER_BLOCK;
 
@@ -191,7 +192,7 @@ static int kbasep_hwcnt_backend_gpu_metadata_v5_create(
 	 * requirements, and embed the core mask into the availability mask so
 	 * we can determine later which shader cores physically exist.
 	 */
-	kbasep_get_sc_block_type(&blks[3].type, counter_set, v5_info->is_csf);
+	kbasep_get_sc_block_type(&blks[3].type, counter_set, is_csf);
 	blks[3].inst_cnt = sc_block_count;
 	blks[3].hdr_cnt = KBASE_HWCNT_V5_HEADERS_PER_BLOCK;
 	blks[3].ctr_cnt = KBASE_HWCNT_V5_COUNTERS_PER_BLOCK;
@@ -204,77 +205,34 @@ static int kbasep_hwcnt_backend_gpu_metadata_v5_create(
 
 	desc.grp_cnt = 1;
 	desc.grps = &group;
-	desc.clk_cnt = v5_info->clk_cnt;
+	desc.clk_cnt = gpu_info->clk_cnt;
 
 	/* The JM, Tiler, and L2s are always available, and are before cores */
 	desc.avail_mask = (1ull << non_sc_block_count) - 1;
 	/* Embed the core mask directly in the availability mask */
-	desc.avail_mask |= (v5_info->core_mask << non_sc_block_count);
+	desc.avail_mask |= (gpu_info->core_mask << non_sc_block_count);
 
 	return kbase_hwcnt_metadata_create(&desc, metadata);
 }
 
 /**
- * kbasep_hwcnt_backend_gpu_v5_dump_bytes() - Get the raw dump buffer size for a
- *                                            V5 GPU.
- * @v5_info: Non-NULL pointer to hwcnt info for a v5 GPU.
+ * kbasep_hwcnt_backend_jm_dump_bytes() - Get the raw dump buffer size for the
+ *                                        GPU.
+ * @v5_info: Non-NULL pointer to hwcnt info for the GPU.
  *
- * Return: Size of buffer the V5 GPU needs to perform a counter dump.
+ * Return: Size of buffer the GPU needs to perform a counter dump.
  */
-static size_t kbasep_hwcnt_backend_gpu_v5_dump_bytes(
-	const struct kbase_hwcnt_gpu_v5_info *v5_info)
+static size_t
+kbasep_hwcnt_backend_jm_dump_bytes(const struct kbase_hwcnt_gpu_info *gpu_info)
 {
-	WARN_ON(!v5_info);
-	return (2 + v5_info->l2_count + fls64(v5_info->core_mask)) *
-		KBASE_HWCNT_V5_VALUES_PER_BLOCK *
-		KBASE_HWCNT_VALUE_BYTES;
+	WARN_ON(!gpu_info);
+
+	return (2 + gpu_info->l2_count + fls64(gpu_info->core_mask)) *
+	       KBASE_HWCNT_V5_VALUES_PER_BLOCK * KBASE_HWCNT_VALUE_BYTES;
 }
 
-int kbase_hwcnt_gpu_info_init(
-	struct kbase_device *kbdev,
-	struct kbase_hwcnt_gpu_info *info)
-{
-	size_t clk;
-
-	if (!kbdev || !info)
-		return -EINVAL;
-
-#ifdef CONFIG_MALI_NO_MALI
-	/* NO_MALI uses V5 layout, regardless of the underlying platform. */
-	info->type = KBASE_HWCNT_GPU_GROUP_TYPE_V5;
-	info->v5.l2_count = KBASE_DUMMY_MODEL_MAX_MEMSYS_BLOCKS;
-	info->v5.core_mask = (1ull << KBASE_DUMMY_MODEL_MAX_SHADER_CORES) - 1;
-#else /* CONFIG_MALI_NO_MALI */
-	{
-		const struct base_gpu_props *props = &kbdev->gpu_props.props;
-		const size_t l2_count = props->l2_props.num_l2_slices;
-		const size_t core_mask =
-			props->coherency_info.group[0].core_mask;
-
-		info->type = KBASE_HWCNT_GPU_GROUP_TYPE_V5;
-		info->v5.l2_count = l2_count;
-		info->v5.core_mask = core_mask;
-	}
-#endif /* CONFIG_MALI_NO_MALI */
-
-#ifdef MALI_USE_CSF
-	info->v5.is_csf = true;
-#else
-	info->v5.is_csf = false;
-#endif
-
-	/* Determine the number of available clock domains. */
-	for (clk = 0; clk < BASE_MAX_NR_CLOCKS_REGULATORS; clk++) {
-		if (kbdev->pm.clk_rtm.clks[clk] == NULL)
-			break;
-	}
-	info->v5.clk_cnt = clk;
-
-	return 0;
-}
-
-int kbase_hwcnt_gpu_metadata_create(
-	const struct kbase_hwcnt_gpu_info *info,
+int kbase_hwcnt_jm_metadata_create(
+	const struct kbase_hwcnt_gpu_info *gpu_info,
 	enum kbase_hwcnt_set counter_set,
 	const struct kbase_hwcnt_metadata **out_metadata,
 	size_t *out_dump_bytes)
@@ -283,16 +241,12 @@ int kbase_hwcnt_gpu_metadata_create(
 	const struct kbase_hwcnt_metadata *metadata;
 	size_t dump_bytes;
 
-	if (!info || !out_metadata || !out_dump_bytes)
+	if (!gpu_info || !out_metadata || !out_dump_bytes)
 		return -EINVAL;
 
-	if (info->type == KBASE_HWCNT_GPU_GROUP_TYPE_V5) {
-		dump_bytes = kbasep_hwcnt_backend_gpu_v5_dump_bytes(&info->v5);
-		errcode = kbasep_hwcnt_backend_gpu_metadata_v5_create(
-			&info->v5, counter_set, &metadata);
-	} else {
-		return -EINVAL;
-	}
+	dump_bytes = kbasep_hwcnt_backend_jm_dump_bytes(gpu_info);
+	errcode = kbasep_hwcnt_backend_gpu_metadata_create(
+		gpu_info, false, counter_set, &metadata);
 	if (errcode)
 		return errcode;
 
@@ -307,9 +261,8 @@ int kbase_hwcnt_gpu_metadata_create(
 
 	return 0;
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_gpu_metadata_create);
 
-void kbase_hwcnt_gpu_metadata_destroy(
+void kbase_hwcnt_jm_metadata_destroy(
 	const struct kbase_hwcnt_metadata *metadata)
 {
 	if (!metadata)
@@ -317,7 +270,36 @@ void kbase_hwcnt_gpu_metadata_destroy(
 
 	kbase_hwcnt_metadata_destroy(metadata);
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_gpu_metadata_destroy);
+
+int kbase_hwcnt_csf_metadata_create(
+	const struct kbase_hwcnt_gpu_info *gpu_info,
+	enum kbase_hwcnt_set counter_set,
+	const struct kbase_hwcnt_metadata **out_metadata)
+{
+	int errcode;
+	const struct kbase_hwcnt_metadata *metadata;
+
+	if (!gpu_info || !out_metadata)
+		return -EINVAL;
+
+	errcode = kbasep_hwcnt_backend_gpu_metadata_create(
+		gpu_info, true, counter_set, &metadata);
+	if (errcode)
+		return errcode;
+
+	*out_metadata = metadata;
+
+	return 0;
+}
+
+void kbase_hwcnt_csf_metadata_destroy(
+	const struct kbase_hwcnt_metadata *metadata)
+{
+	if (!metadata)
+		return;
+
+	kbase_hwcnt_metadata_destroy(metadata);
+}
 
 static bool is_block_type_shader(
 	const u64 grp_type,
@@ -338,12 +320,9 @@ static bool is_block_type_shader(
 	return is_shader;
 }
 
-int kbase_hwcnt_gpu_dump_get(
-	struct kbase_hwcnt_dump_buffer *dst,
-	void *src,
-	const struct kbase_hwcnt_enable_map *dst_enable_map,
-	u64 pm_core_mask,
-	bool accumulate)
+int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
+			    const struct kbase_hwcnt_enable_map *dst_enable_map,
+			    u64 pm_core_mask, bool accumulate)
 {
 	const struct kbase_hwcnt_metadata *metadata;
 	const u32 *dump_src;
@@ -402,7 +381,52 @@ int kbase_hwcnt_gpu_dump_get(
 
 	return 0;
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_gpu_dump_get);
+
+int kbase_hwcnt_csf_dump_get(
+	struct kbase_hwcnt_dump_buffer *dst, void *src,
+	const struct kbase_hwcnt_enable_map *dst_enable_map,
+	bool accumulate)
+{
+	const struct kbase_hwcnt_metadata *metadata;
+	const u32 *dump_src;
+	size_t src_offset, grp, blk, blk_inst;
+
+	if (!dst || !src || !dst_enable_map ||
+	    (dst_enable_map->metadata != dst->metadata))
+		return -EINVAL;
+
+	metadata = dst->metadata;
+	dump_src = (const u32 *)src;
+	src_offset = 0;
+
+	kbase_hwcnt_metadata_for_each_block(metadata, grp, blk, blk_inst) {
+		const size_t hdr_cnt = kbase_hwcnt_metadata_block_headers_count(
+			metadata, grp, blk);
+		const size_t ctr_cnt =
+			kbase_hwcnt_metadata_block_counters_count(metadata, grp,
+								  blk);
+
+		/* Early out if no values in the dest block are enabled */
+		if (kbase_hwcnt_enable_map_block_enabled(dst_enable_map, grp,
+							 blk, blk_inst)) {
+			u32 *dst_blk = kbase_hwcnt_dump_buffer_block_instance(
+				dst, grp, blk, blk_inst);
+			const u32 *src_blk = dump_src + src_offset;
+
+			if (accumulate) {
+				kbase_hwcnt_dump_buffer_block_accumulate(
+					dst_blk, src_blk, hdr_cnt, ctr_cnt);
+			} else {
+				kbase_hwcnt_dump_buffer_block_copy(
+					dst_blk, src_blk, (hdr_cnt + ctr_cnt));
+			}
+		}
+
+		src_offset += (hdr_cnt + ctr_cnt);
+	}
+
+	return 0;
+}
 
 /**
  * kbasep_hwcnt_backend_gpu_block_map_to_physical() - Convert from a block
@@ -558,7 +582,6 @@ void kbase_hwcnt_gpu_enable_map_to_physical(
 	dst->mmu_l2_bm =
 		kbasep_hwcnt_backend_gpu_block_map_to_physical(mmu_l2_bm, 0);
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_gpu_enable_map_to_physical);
 
 void kbase_hwcnt_gpu_set_to_physical(enum kbase_hwcnt_physical_set *dst,
 				     enum kbase_hwcnt_set src)
@@ -577,7 +600,6 @@ void kbase_hwcnt_gpu_set_to_physical(enum kbase_hwcnt_physical_set *dst,
 		WARN_ON(true);
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_gpu_set_to_physical);
 
 void kbase_hwcnt_gpu_enable_map_from_physical(
 	struct kbase_hwcnt_enable_map *dst,
@@ -649,7 +671,6 @@ void kbase_hwcnt_gpu_enable_map_from_physical(
 		}
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_gpu_enable_map_from_physical);
 
 void kbase_hwcnt_gpu_patch_dump_headers(
 	struct kbase_hwcnt_dump_buffer *buf,
@@ -683,4 +704,3 @@ void kbase_hwcnt_gpu_patch_dump_headers(
 		}
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_gpu_patch_dump_headers);

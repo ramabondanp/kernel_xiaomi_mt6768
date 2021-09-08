@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,6 +18,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
 
 #ifndef _KBASE_CSF_IOCTL_H_
@@ -29,10 +48,16 @@
 /*
  * 1.0:
  * - CSF IOCTL header separated from JM
+ * 1.1:
+ * - Add a new priority level BASE_QUEUE_GROUP_PRIORITY_REALTIME
+ * - Add ioctl 54: This controls the priority setting.
+ * 1.2:
+ * - Add new CSF GPU_FEATURES register into the property structure
+ *   returned by KBASE_IOCTL_GET_GPUPROPS
  */
 
 #define BASE_UK_VERSION_MAJOR 1
-#define BASE_UK_VERSION_MINOR 0
+#define BASE_UK_VERSION_MINOR 2
 
 /**
  * struct kbase_ioctl_version_check - Check version compatibility between
@@ -45,7 +70,6 @@ struct kbase_ioctl_version_check {
 	__u16 major;
 	__u16 minor;
 };
-
 
 #define KBASE_IOCTL_VERSION_CHECK_RESERVED \
 	_IOWR(KBASE_IOCTL_TYPE, 0, struct kbase_ioctl_version_check)
@@ -340,7 +364,6 @@ struct kbase_ioctl_cs_cpu_queue_info {
 
 #define KBASE_IOCTL_CS_CPU_QUEUE_DUMP \
 	_IOW(KBASE_IOCTL_TYPE, 53, struct kbase_ioctl_cs_cpu_queue_info)
-
 
 /***************
  * test ioctls *

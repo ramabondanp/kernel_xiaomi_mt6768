@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2016-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,6 +18,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2016-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
 
 #ifndef _KBASE_IPA_H_
@@ -26,6 +45,20 @@
 #if defined(CONFIG_MALI_DEVFREQ) && defined(CONFIG_DEVFREQ_THERMAL)
 
 struct devfreq;
+
+/**
+ * enum kbase_ipa_block_type - Type of block for which power estimation is done.
+ *
+ * @KBASE_IPA_BLOCK_TYPE_TOP_LEVEL:    Top-level block, that covers CSHW,
+ *                                     MEMSYS, Tiler.
+ * @KBASE_IPA_BLOCK_TYPE_SHADER_CORES: All Shader cores.
+ * @KBASE_IPA_BLOCK_TYPE_NUM:          Number of blocks.
+ */
+enum kbase_ipa_block_type {
+	KBASE_IPA_BLOCK_TYPE_TOP_LEVEL,
+	KBASE_IPA_BLOCK_TYPE_SHADER_CORES,
+	KBASE_IPA_BLOCK_TYPE_NUM
+};
 
 /**
  * struct kbase_ipa_model - Object describing a particular IPA model.
@@ -89,7 +122,8 @@ struct kbase_ipa_model_ops {
 	int (*init)(struct kbase_ipa_model *model);
 	/* Called immediately after init(), or when a parameter is changed, so
 	 * that any coefficients derived from model parameters can be
-	 * recalculated. */
+	 * recalculated
+	 */
 	int (*recalculate)(struct kbase_ipa_model *model);
 	void (*term)(struct kbase_ipa_model *model);
 	/*
@@ -101,7 +135,9 @@ struct kbase_ipa_model_ops {
 	 * is then scaled by the IPA framework according to the current OPP's
 	 * frequency and voltage.
 	 *
-	 * Return: 0 on success, or an error code.
+	 * Return: 0 on success, or an error code. -EOVERFLOW error code will
+	 * indicate that sampling interval was too large and no meaningful
+	 * scaling for GPU utiliation can be done.
 	 */
 	int (*get_dynamic_coeff)(struct kbase_ipa_model *model, u32 *coeffp);
 	/*
@@ -115,6 +151,18 @@ struct kbase_ipa_model_ops {
 	 * Return: 0 on success, or an error code.
 	 */
 	int (*get_static_coeff)(struct kbase_ipa_model *model, u32 *coeffp);
+
+	/*
+	 * reset_counter_data() - Reset the HW counter data used for calculating
+	 *                        dynamic power coefficient
+	 * @model:		  pointer to model
+	 *
+	 * This method is currently applicable only to the counter based model.
+	 * The next call to get_dynamic_coeff() will have to calculate the
+	 * dynamic power coefficient based on the HW counter data generated
+	 * from this point onwards.
+	 */
+	void (*reset_counter_data)(struct kbase_ipa_model *model);
 };
 
 /**
@@ -248,11 +296,20 @@ int kbase_get_real_power_locked(struct kbase_device *kbdev, u32 *power,
 				unsigned long voltage);
 #endif /* MALI_UNIT_TEST */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
-extern struct devfreq_cooling_ops kbase_ipa_power_model_ops;
-#else
 extern struct devfreq_cooling_power kbase_ipa_power_model_ops;
-#endif
+
+/**
+ * kbase_ipa_reset_data() - Reset the data required for power estimation.
+ * @kbdev:  Pointer to kbase device.
+ *
+ * This function is called to ensure a meaningful baseline for
+ * kbase_get_real_power(), when thermal governor starts the polling, and
+ * that is achieved by updating the GPU utilization metrics and retrieving
+ * the accumulated value of HW counters.
+ * Basically this function collects all the data required for power estimation
+ * but does not process it.
+ */
+void kbase_ipa_reset_data(struct kbase_device *kbdev);
 
 #else /* !(defined(CONFIG_MALI_DEVFREQ) && defined(CONFIG_DEVFREQ_THERMAL)) */
 

@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2017-2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2017-2018, 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -180,6 +199,19 @@ void kbase_ipa_detach_vinstr(struct kbase_ipa_model_vinstr_data *model_data);
  * Return: 0 on success, or an error code.
  */
 int kbase_ipa_vinstr_dynamic_coeff(struct kbase_ipa_model *model, u32 *coeffp);
+
+/**
+ * kbase_ipa_vinstr_reset_data() - Reset the counters data used for dynamic
+ *                                 power estimation
+ * @model:		pointer to instantiated model
+ *
+ * Currently it is not implemented for JM GPUs.
+ * When implemented it is expected to retrieve the accumulated value of HW
+ * counters from the Vinstr component, without doing any processing, which is
+ * effectively a reset as the next call to kbase_ipa_counter_dynamic_coeff()
+ * will see the increment in counter values from this point onwards.
+ */
+void kbase_ipa_vinstr_reset_data(struct kbase_ipa_model *model);
 
 /**
  * kbase_ipa_vinstr_common_model_init() - initialize ipa power model

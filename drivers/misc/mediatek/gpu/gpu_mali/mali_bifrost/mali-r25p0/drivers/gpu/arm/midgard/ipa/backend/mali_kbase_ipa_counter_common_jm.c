@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
@@ -271,6 +272,12 @@ err0:
 	/* Clamp to a sensible range - 2^16 gives about 14W at 400MHz/750mV */
 	*coeffp = clamp(coeff_mul, (u64) 0, (u64) 1 << 16);
 	return err;
+}
+
+void kbase_ipa_vinstr_reset_data(struct kbase_ipa_model *model)
+{
+	/* Currently not implemented */
+	WARN_ON_ONCE(1);
 }
 
 int kbase_ipa_vinstr_common_model_init(struct kbase_ipa_model *model,

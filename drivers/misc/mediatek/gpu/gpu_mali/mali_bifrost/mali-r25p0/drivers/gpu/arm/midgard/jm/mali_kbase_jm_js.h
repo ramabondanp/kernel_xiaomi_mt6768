@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2020-2021 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -584,7 +603,6 @@ void kbase_js_set_timeouts(struct kbase_device *kbdev);
  */
 void kbase_js_set_ctx_priority(struct kbase_context *kctx, int new_priority);
 
-
 /**
  * kbase_js_update_ctx_priority - update the context priority
  *
@@ -888,5 +906,18 @@ static inline base_jd_prio kbasep_js_sched_prio_to_atom_prio(int sched_prio)
 
 	return kbasep_js_relative_priority_to_atom[prio_idx];
 }
+
+/**
+ * kbase_js_priority_check - Check the priority requested
+ *
+ * @kbdev:    Device pointer
+ * @priority: Requested priority
+ *
+ * This will determine whether the requested priority can be satisfied.
+ *
+ * Return: The same or lower priority than requested.
+ */
+
+base_jd_prio kbase_js_priority_check(struct kbase_device *kbdev, base_jd_prio priority);
 
 #endif	/* _KBASE_JM_JS_H_ */

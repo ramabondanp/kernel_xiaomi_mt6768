@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2015-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2015-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -53,7 +72,8 @@
 								GPU_ID2_VERSION_STATUS)
 
 /* Helper macro to create a partial GPU_ID (new format) that defines
-   a product ignoring its version. */
+ * a product ignoring its version.
+ */
 #define GPU_ID2_PRODUCT_MAKE(arch_major, arch_minor, arch_rev, product_major) \
 		((((u32)arch_major) << GPU_ID2_ARCH_MAJOR_SHIFT)  | \
 		 (((u32)arch_minor) << GPU_ID2_ARCH_MINOR_SHIFT)  | \
@@ -61,7 +81,8 @@
 		 (((u32)product_major) << GPU_ID2_PRODUCT_MAJOR_SHIFT))
 
 /* Helper macro to create a partial GPU_ID (new format) that specifies the
-   revision (major, minor, status) of a product */
+ * revision (major, minor, status) of a product
+ */
 #define GPU_ID2_VERSION_MAKE(version_major, version_minor, version_status) \
 		((((u32)version_major) << GPU_ID2_VERSION_MAJOR_SHIFT)  | \
 		 (((u32)version_minor) << GPU_ID2_VERSION_MINOR_SHIFT)  | \
@@ -76,14 +97,16 @@
 			version_status))
 
 /* Helper macro to create a partial GPU_ID (new format) that identifies
-   a particular GPU model by its arch_major and product_major. */
+ * a particular GPU model by its arch_major and product_major.
+ */
 #define GPU_ID2_MODEL_MAKE(arch_major, product_major) \
 		((((u32)arch_major) << GPU_ID2_ARCH_MAJOR_SHIFT)  | \
 		(((u32)product_major) << GPU_ID2_PRODUCT_MAJOR_SHIFT))
 
 /* Strip off the non-relevant bits from a product_id value and make it suitable
-   for comparison against the GPU_ID2_PRODUCT_xxx values which identify a GPU
-   model. */
+ * for comparison against the GPU_ID2_PRODUCT_xxx values which identify a GPU
+ * model.
+ */
 #define GPU_ID2_MODEL_MATCH_VALUE(product_id) \
 		((((u32)product_id) << GPU_ID2_PRODUCT_MAJOR_SHIFT) & \
 		    GPU_ID2_PRODUCT_MODEL)
@@ -108,7 +131,8 @@
 #define GPU_ID2_PRODUCT_LTUX              GPU_ID2_MODEL_MAKE(11, 3)
 
 /* Helper macro to create a GPU_ID assuming valid values for id, major,
-   minor, status */
+ * minor, status
+ */
 #define GPU_ID_MAKE(id, major, minor, status) \
 		((((u32)id) << GPU_ID_VERSION_PRODUCT_ID_SHIFT) | \
 		(((u32)major) << GPU_ID_VERSION_MAJOR_SHIFT) |   \

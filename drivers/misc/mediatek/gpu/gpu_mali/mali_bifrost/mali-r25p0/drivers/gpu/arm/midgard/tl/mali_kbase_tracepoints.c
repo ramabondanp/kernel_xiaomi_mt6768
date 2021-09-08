@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
@@ -135,6 +136,7 @@ enum tl_msg_id_aux {
 	KBASE_AUX_PROTECTED_LEAVE_START,
 	KBASE_AUX_PROTECTED_LEAVE_END,
 	KBASE_AUX_JIT_STATS,
+	KBASE_AUX_TILER_HEAP_STATS,
 	KBASE_AUX_EVENT_JOB_SLOT,
 	KBASE_AUX_MSG_COUNT,
 };
@@ -541,6 +543,10 @@ const size_t  obj_desc_header_size = sizeof(__obj_desc_header);
 		"per-bin JIT statistics", \
 		"@IIIIII", \
 		"ctx_nr,bid,max_allocs,allocs,va_pages,ph_pages") \
+	TRACEPOINT_DESC(KBASE_AUX_TILER_HEAP_STATS, \
+		"Tiler Heap statistics", \
+		"@ILIIIIIII", \
+		"ctx_nr,heap_id,va_pages,ph_pages,max_chunks,chunk_size,chunk_count,target_in_flight,nr_in_flight") \
 	TRACEPOINT_DESC(KBASE_AUX_EVENT_JOB_SLOT, \
 		"event on a given job slot", \
 		"@pIII", \
@@ -1813,6 +1819,60 @@ void __kbase_tlstream_aux_jit_stats(
 		pos, &va_pages, sizeof(va_pages));
 	pos = kbasep_serialize_bytes(buffer,
 		pos, &ph_pages, sizeof(ph_pages));
+
+	kbase_tlstream_msgbuf_release(stream, acq_flags);
+}
+
+void __kbase_tlstream_aux_tiler_heap_stats(
+	struct kbase_tlstream *stream,
+	u32 ctx_nr,
+	u64 heap_id,
+	u32 va_pages,
+	u32 ph_pages,
+	u32 max_chunks,
+	u32 chunk_size,
+	u32 chunk_count,
+	u32 target_in_flight,
+	u32 nr_in_flight)
+{
+	const u32 msg_id = KBASE_AUX_TILER_HEAP_STATS;
+	const size_t msg_size = sizeof(msg_id) + sizeof(u64)
+		+ sizeof(ctx_nr)
+		+ sizeof(heap_id)
+		+ sizeof(va_pages)
+		+ sizeof(ph_pages)
+		+ sizeof(max_chunks)
+		+ sizeof(chunk_size)
+		+ sizeof(chunk_count)
+		+ sizeof(target_in_flight)
+		+ sizeof(nr_in_flight)
+		;
+	char *buffer;
+	unsigned long acq_flags;
+	size_t pos = 0;
+
+	buffer = kbase_tlstream_msgbuf_acquire(stream, msg_size, &acq_flags);
+
+	pos = kbasep_serialize_bytes(buffer, pos, &msg_id, sizeof(msg_id));
+	pos = kbasep_serialize_timestamp(buffer, pos);
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &ctx_nr, sizeof(ctx_nr));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &heap_id, sizeof(heap_id));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &va_pages, sizeof(va_pages));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &ph_pages, sizeof(ph_pages));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &max_chunks, sizeof(max_chunks));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &chunk_size, sizeof(chunk_size));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &chunk_count, sizeof(chunk_count));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &target_in_flight, sizeof(target_in_flight));
+	pos = kbasep_serialize_bytes(buffer,
+		pos, &nr_in_flight, sizeof(nr_in_flight));
 
 	kbase_tlstream_msgbuf_release(stream, acq_flags);
 }

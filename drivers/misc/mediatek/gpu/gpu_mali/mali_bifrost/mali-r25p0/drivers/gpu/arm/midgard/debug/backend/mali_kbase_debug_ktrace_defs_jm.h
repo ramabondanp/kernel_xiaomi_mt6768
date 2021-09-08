@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -71,7 +90,9 @@
 		| KBASE_KTRACE_FLAG_JM_ATOM)
 
 /**
- * struct kbase_ktrace_backend - backend specific part of a trace message
+ * union kbase_ktrace_backend - backend specific part of a trace message
+ * Contains only a struct but is a union such that it is compatible with
+ * generic JM and CSF KTrace calls.
  *
  * @atom_udata:  Copy of the user data sent for the atom in base_jd_submit.
  *               Only valid if KBASE_KTRACE_FLAG_JM_ATOM is set in @flags
@@ -86,16 +107,20 @@
  * @refcount:    reference count for the context, valid for certain events
  *               related to scheduler core and policy.
  */
-struct kbase_ktrace_backend {
-	/* Place 64 and 32-bit members together */
-	u64 atom_udata[2]; /* Only valid for KBASE_KTRACE_FLAG_JM_ATOM */
-	u64 gpu_addr;
-	int atom_number; /* Only valid for KBASE_KTRACE_FLAG_JM_ATOM */
-	/* Pack smaller members together */
-	kbase_ktrace_code_t code;
-	kbase_ktrace_flag_t flags;
-	u8 jobslot;
-	u8 refcount;
+union kbase_ktrace_backend {
+	struct {
+		/* Place 64 and 32-bit members together */
+		u64 atom_udata[2]; /* Only valid for
+				    * KBASE_KTRACE_FLAG_JM_ATOM
+				    */
+		u64 gpu_addr;
+		int atom_number; /* Only valid for KBASE_KTRACE_FLAG_JM_ATOM */
+		/* Pack smaller members together */
+		kbase_ktrace_code_t code;
+		kbase_ktrace_flag_t flags;
+		u8 jobslot;
+		u8 refcount;
+	} gpu;
 };
 #endif /* KBASE_KTRACE_TARGET_RBUF */
 

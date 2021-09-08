@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2012-2020 ARM Limited. All rights reserved.
@@ -31,18 +32,16 @@
 #include <linux/atomic.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0))
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0))
+#if (KERNEL_VERSION(4, 8, 0) > LINUX_VERSION_CODE)
 #include <linux/dma-attrs.h>
 #endif
 #include <linux/dma-mapping.h>
-#endif
 
 /* Maximum size allowed in a single DMA_BUF_TE_ALLOC call */
 #define DMA_BUF_TE_ALLOC_MAX_SIZE ((8ull << 30) >> PAGE_SHIFT) /* 8 GB */
 
 /* Since kernel version 5.0 CONFIG_ARCH_NO_SG_CHAIN replaced CONFIG_ARCH_HAS_SG_CHAIN */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+#if KERNEL_VERSION(5, 0, 0) > LINUX_VERSION_CODE
 #if (!defined(ARCH_HAS_SG_CHAIN) && !defined(CONFIG_ARCH_HAS_SG_CHAIN))
 #define NO_SG_CHAIN
 #endif
@@ -77,7 +76,7 @@ struct dma_buf_te_attachment {
 
 static struct miscdevice te_device;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0))
+#if (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE)
 static int dma_buf_te_attach(struct dma_buf *buf, struct device *dev, struct dma_buf_attachment *attachment)
 #else
 static int dma_buf_te_attach(struct dma_buf *buf, struct dma_buf_attachment *attachment)
@@ -206,24 +205,19 @@ static void dma_buf_te_release(struct dma_buf *buf)
 	/* no need for locking */
 
 	if (alloc->contiguous) {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
+#if (KERNEL_VERSION(4, 8, 0) <= LINUX_VERSION_CODE)
 		dma_free_attrs(te_device.this_device,
 						alloc->nr_pages * PAGE_SIZE,
 						alloc->contig_cpu_addr,
 						alloc->contig_dma_addr,
 						DMA_ATTR_WRITE_COMBINE);
-
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0))
+#else
 		DEFINE_DMA_ATTRS(attrs);
 
 		dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
 		dma_free_attrs(te_device.this_device,
 						alloc->nr_pages * PAGE_SIZE,
 						alloc->contig_cpu_addr, alloc->contig_dma_addr, &attrs);
-#else
-		dma_free_writecombine(te_device.this_device,
-								alloc->nr_pages * PAGE_SIZE,
-								alloc->contig_cpu_addr, alloc->contig_dma_addr);
 #endif
 	} else {
 		for (i = 0; i < alloc->nr_pages; i++)
@@ -316,7 +310,7 @@ static void dma_buf_te_mmap_close(struct vm_area_struct *vma)
 	mutex_unlock(&dma_buf->lock);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
+#if KERNEL_VERSION(4, 11, 0) > LINUX_VERSION_CODE
 static int dma_buf_te_mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 #elif KERNEL_VERSION(5, 1, 0) > LINUX_VERSION_CODE
 static int dma_buf_te_mmap_fault(struct vm_fault *vmf)
@@ -328,7 +322,7 @@ static vm_fault_t dma_buf_te_mmap_fault(struct vm_fault *vmf)
 	struct dma_buf *dmabuf;
 	struct page *pageptr;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
+#if KERNEL_VERSION(4, 11, 0) > LINUX_VERSION_CODE
 	dmabuf = vma->vm_private_data;
 #else
 	dmabuf = vmf->vma->vm_private_data;
@@ -362,11 +356,7 @@ static int dma_buf_te_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 	if (alloc->fail_mmap)
 		return -ENOMEM;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0))
 	vma->vm_flags |= VM_IO | VM_DONTEXPAND | VM_DONTDUMP;
-#else
-	vma->vm_flags |= VM_RESERVED | VM_IO | VM_DONTEXPAND;
-#endif
 	vma->vm_ops = &dma_buf_te_vm_ops;
 	vma->vm_private_data = dmabuf;
 
@@ -378,7 +368,7 @@ static int dma_buf_te_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
+#if KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE
 static void *dma_buf_te_kmap_atomic(struct dma_buf *buf, unsigned long page_num)
 {
 	/* IGNORE */
@@ -419,19 +409,19 @@ static struct dma_buf_ops dma_buf_te_ops = {
 	.mmap = dma_buf_te_mmap,
 	.begin_cpu_access = dma_buf_te_begin_cpu_access,
 	.end_cpu_access = dma_buf_te_end_cpu_access,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)
+#if KERNEL_VERSION(4, 12, 0) > LINUX_VERSION_CODE
 	.kmap = dma_buf_te_kmap,
 	.kunmap = dma_buf_te_kunmap,
 
 	/* nop handlers for mandatory functions we ignore */
 	.kmap_atomic = dma_buf_te_kmap_atomic
 #else
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
+#if KERNEL_VERSION(5, 6, 0) > LINUX_VERSION_CODE
 	.map = dma_buf_te_kmap,
 	.unmap = dma_buf_te_kunmap,
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 19, 0)
+#if KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE
 	/* nop handlers for mandatory functions we ignore */
 	.map_atomic = dma_buf_te_kmap_atomic
 #endif
@@ -481,7 +471,8 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 	/* Whilst it is possible to allocate larger buffer, we won't be able to
 	 * map it during actual usage (mmap() still succeeds). We fail here so
 	 * userspace code can deal with it early than having driver failure
-	 * later on. */
+	 * later on.
+	 */
 	if (max_nr_pages > SG_MAX_SINGLE_ALLOC)
 		max_nr_pages = SG_MAX_SINGLE_ALLOC;
 #endif /* NO_SG_CHAIN */
@@ -493,7 +484,7 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 	}
 
 	alloc = kzalloc(sizeof(struct dma_buf_te_alloc), GFP_KERNEL);
-	if (NULL == alloc) {
+	if (alloc == NULL) {
 		dev_err(te_device.this_device, "%s: couldn't alloc object", __func__);
 		goto no_alloc_object;
 	}
@@ -512,14 +503,13 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 	if (contiguous) {
 		dma_addr_t dma_aux;
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
+#if (KERNEL_VERSION(4, 8, 0) <= LINUX_VERSION_CODE)
 		alloc->contig_cpu_addr = dma_alloc_attrs(te_device.this_device,
 				alloc->nr_pages * PAGE_SIZE,
 				&alloc->contig_dma_addr,
 				GFP_KERNEL | __GFP_ZERO,
 				DMA_ATTR_WRITE_COMBINE);
-
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0))
+#else
 		DEFINE_DMA_ATTRS(attrs);
 
 		dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
@@ -527,11 +517,6 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 				alloc->nr_pages * PAGE_SIZE,
 				&alloc->contig_dma_addr,
 				GFP_KERNEL | __GFP_ZERO, &attrs);
-#else
-		alloc->contig_cpu_addr = dma_alloc_writecombine(te_device.this_device,
-				alloc->nr_pages * PAGE_SIZE,
-				&alloc->contig_dma_addr,
-				GFP_KERNEL | __GFP_ZERO);
 #endif
 		if (!alloc->contig_cpu_addr) {
 			dev_err(te_device.this_device, "%s: couldn't alloc contiguous buffer %zu pages",
@@ -546,7 +531,7 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 	} else {
 		for (i = 0; i < alloc->nr_pages; i++) {
 			alloc->pages[i] = alloc_page(GFP_KERNEL | __GFP_ZERO);
-			if (NULL == alloc->pages[i]) {
+			if (alloc->pages[i] == NULL) {
 				dev_err(te_device.this_device, "%s: couldn't alloc page", __func__);
 				goto no_page;
 			}
@@ -554,13 +539,10 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 	}
 
 	/* alloc ready, let's export it */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
 	{
 		struct dma_buf_export_info export_info = {
 			.exp_name = "dma_buf_te",
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0))
 			.owner = THIS_MODULE,
-#endif
 			.ops = &dma_buf_te_ops,
 			.size = alloc->nr_pages << PAGE_SHIFT,
 			.flags = O_CLOEXEC | O_RDWR,
@@ -569,13 +551,6 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 
 		dma_buf = dma_buf_export(&export_info);
 	}
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0))
-	dma_buf = dma_buf_export(alloc, &dma_buf_te_ops,
-			alloc->nr_pages << PAGE_SHIFT, O_CLOEXEC|O_RDWR, NULL);
-#else
-	dma_buf = dma_buf_export(alloc, &dma_buf_te_ops,
-			alloc->nr_pages << PAGE_SHIFT, O_CLOEXEC|O_RDWR);
-#endif
 
 	if (IS_ERR_OR_NULL(dma_buf)) {
 		dev_err(te_device.this_device, "%s: couldn't export dma_buf", __func__);
@@ -598,25 +573,19 @@ no_export:
 	/* i still valid */
 no_page:
 	if (contiguous) {
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0))
+#if (KERNEL_VERSION(4, 8, 0) <= LINUX_VERSION_CODE)
 		dma_free_attrs(te_device.this_device,
 						alloc->nr_pages * PAGE_SIZE,
 						alloc->contig_cpu_addr,
 						alloc->contig_dma_addr,
 						DMA_ATTR_WRITE_COMBINE);
-
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0))
+#else
 		DEFINE_DMA_ATTRS(attrs);
 
 		dma_set_attr(DMA_ATTR_WRITE_COMBINE, &attrs);
 		dma_free_attrs(te_device.this_device,
 						alloc->nr_pages * PAGE_SIZE,
 						alloc->contig_cpu_addr, alloc->contig_dma_addr, &attrs);
-#else
-		dma_free_writecombine(te_device.this_device,
-								alloc->nr_pages * PAGE_SIZE,
-								alloc->contig_cpu_addr, alloc->contig_dma_addr);
 #endif
 	} else {
 		while (i-- > 0)
@@ -727,17 +696,17 @@ static u32 dma_te_buf_fill(struct dma_buf *dma_buf, unsigned int value)
 	}
 
 	ret = dma_buf_begin_cpu_access(dma_buf,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
-			0, dma_buf->size,
+#if KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE
+				       0, dma_buf->size,
 #endif
-			DMA_BIDIRECTIONAL);
+				       DMA_BIDIRECTIONAL);
 	if (ret)
 		goto no_cpu_access;
 
 	for_each_sg(sgt->sgl, sg, sgt->nents, count) {
 		for (i = 0; i < sg_dma_len(sg); i = i + PAGE_SIZE) {
 			void *addr = NULL;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+#if KERNEL_VERSION(5, 6, 0) <= LINUX_VERSION_CODE
 			addr = dma_buf_te_kmap(dma_buf, i >> PAGE_SHIFT);
 #else
 			addr = dma_buf_kmap(dma_buf, i >> PAGE_SHIFT);
@@ -747,7 +716,7 @@ static u32 dma_te_buf_fill(struct dma_buf *dma_buf, unsigned int value)
 				goto no_kmap;
 			}
 			memset(addr, value, PAGE_SIZE);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+#if KERNEL_VERSION(5, 6, 0) <= LINUX_VERSION_CODE
 			dma_buf_te_kunmap(dma_buf, i >> PAGE_SHIFT, addr);
 #else
 			dma_buf_kunmap(dma_buf, i >> PAGE_SHIFT, addr);
@@ -758,10 +727,10 @@ static u32 dma_te_buf_fill(struct dma_buf *dma_buf, unsigned int value)
 
 no_kmap:
 	dma_buf_end_cpu_access(dma_buf,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0)
-			0, dma_buf->size,
+#if KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE
+			       0, dma_buf->size,
 #endif
-			DMA_BIDIRECTIONAL);
+			       DMA_BIDIRECTIONAL);
 no_cpu_access:
 	dma_buf_unmap_attachment(attachment, sgt, DMA_BIDIRECTIONAL);
 no_import:

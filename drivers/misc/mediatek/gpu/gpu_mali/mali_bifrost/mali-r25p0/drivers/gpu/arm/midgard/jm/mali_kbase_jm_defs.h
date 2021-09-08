@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,9 +18,26 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
-
-
 
 /*
  * Definitions (types, defines, etcs) specific to Job Manager Kbase.
@@ -786,6 +803,7 @@ struct kbase_jd_renderpass {
  * @jit_pending_alloc:        A list of just-in-time memory allocation
  *                            soft-jobs which will be reattempted after the
  *                            impending free of other active allocations.
+ * @max_priority:             Max priority level allowed for this context.
  */
 struct kbase_jd_context {
 	struct mutex lock;
@@ -806,6 +824,7 @@ struct kbase_jd_context {
 
 	struct list_head jit_atoms_head;
 	struct list_head jit_pending_alloc;
+	int max_priority;
 };
 
 /**

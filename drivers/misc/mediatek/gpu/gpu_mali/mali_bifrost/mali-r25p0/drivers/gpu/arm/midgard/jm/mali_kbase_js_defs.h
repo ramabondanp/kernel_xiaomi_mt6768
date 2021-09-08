@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2011-2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,8 +18,26 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2011-2018, 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
-
 
 /**
  * @file mali_kbase_js.h
@@ -51,7 +69,8 @@ struct kbase_jd_atom;
 typedef u32 kbase_context_flags;
 
 /** Callback function run on all of a context's jobs registered with the Job
- * Scheduler */
+ * Scheduler
+ */
 typedef void (*kbasep_js_ctx_job_cb)(struct kbase_device *kbdev, struct kbase_jd_atom *katom);
 
 /**
@@ -168,7 +187,8 @@ enum {
  * Internal atom priority defines for kbase_jd_atom::sched_prio
  */
 enum {
-	KBASE_JS_ATOM_SCHED_PRIO_HIGH = 0,
+	KBASE_JS_ATOM_SCHED_PRIO_REALTIME = 0,
+	KBASE_JS_ATOM_SCHED_PRIO_HIGH,
 	KBASE_JS_ATOM_SCHED_PRIO_MED,
 	KBASE_JS_ATOM_SCHED_PRIO_LOW,
 	KBASE_JS_ATOM_SCHED_PRIO_COUNT,
@@ -198,7 +218,8 @@ enum {
  */
 struct kbasep_js_device_data {
 	/* Sub-structure to collect together Job Scheduling data used in IRQ
-	 * context. The hwaccess_lock must be held when accessing. */
+	 * context. The hwaccess_lock must be held when accessing.
+	 */
 	struct runpool_irq {
 		/** Bitvector indicating whether a currently scheduled context is allowed to submit jobs.
 		 * When bit 'N' is set in this, it indicates whether the context bound to address space
@@ -219,14 +240,17 @@ struct kbasep_js_device_data {
 		 * - error detection in debug builds
 		 * - Optimization: it is undefined for a signed int to overflow, and so
 		 * the compiler can optimize for that never happening (thus, no masking
-		 * is required on updating the variable) */
+		 * is required on updating the variable)
+		 */
 		s8 ctx_attr_ref_count[KBASEP_JS_CTX_ATTR_COUNT];
 
 		/*
 		 * Affinity management and tracking
 		 */
 		/** Bitvector to aid affinity checking. Element 'n' bit 'i' indicates
-		 * that slot 'n' is using core i (i.e. slot_affinity_refcount[n][i] > 0) */
+		 * that slot 'n' is using core i (i.e.
+		 * slot_affinity_refcount[n][i] > 0)
+		 */
 		u64 slot_affinities[BASE_JM_MAX_NR_SLOTS];
 		/** Refcount for each core owned by each slot. Used to generate the
 		 * slot_affinities array of bitvectors
@@ -234,7 +258,8 @@ struct kbasep_js_device_data {
 		 * The value of the refcount will not exceed BASE_JM_SUBMIT_SLOTS,
 		 * because it is refcounted only when a job is definitely about to be
 		 * submitted to a slot, and is de-refcounted immediately after a job
-		 * finishes */
+		 * finishes
+		 */
 		s8 slot_affinity_refcount[BASE_JM_MAX_NR_SLOTS][64];
 	} runpool_irq;
 
@@ -260,7 +285,9 @@ struct kbasep_js_device_data {
 	s8 nr_all_contexts_running;
 
 	/** Core Requirements to match up with base_js_atom's core_req memeber
-	 * @note This is a write-once member, and so no locking is required to read */
+	 * @note This is a write-once member, and so no locking is required to
+	 * read
+	 */
 	base_jd_core_req js_reqs[BASE_JM_MAX_NR_SLOTS];
 
 	u32 scheduling_period_ns;    /*< Value for JS_SCHEDULING_PERIOD_NS */
@@ -282,16 +309,19 @@ struct kbasep_js_device_data {
 	bool softstop_always;
 #endif				/* CONFIG_MALI_DEBUG */
 
-	/** The initalized-flag is placed at the end, to avoid cache-pollution (we should
-	 * only be using this during init/term paths).
-	 * @note This is a write-once member, and so no locking is required to read */
+	/** The initialized-flag is placed at the end, to avoid cache-pollution
+	 * (we should only be using this during init/term paths).
+	 * @note This is a write-once member, and so no locking is required to
+	 * read
+	 */
 	int init_status;
 
 	/* Number of contexts that can currently be pulled from */
 	u32 nr_contexts_pullable;
 
 	/* Number of contexts that can either be pulled from or are currently
-	 * running */
+	 * running
+	 */
 	atomic_t nr_contexts_runnable;
 
 	/** Value for JS_SOFT_JOB_TIMEOUT */
@@ -339,9 +369,10 @@ struct kbasep_js_kctx_info {
 	struct kbase_jsctx {
 		struct mutex jsctx_mutex;		    /**< Job Scheduler Context lock */
 
-		/** Number of jobs <b>ready to run</b> - does \em not include the jobs waiting in
-		 * the dispatcher, and dependency-only jobs. See kbase_jd_context::job_nr
-		 * for such jobs*/
+		/** Number of jobs <b>ready to run</b> - does \em not include
+		 * the jobs waiting in the dispatcher, and dependency-only
+		 * jobs. See kbase_jd_context::job_nr for such jobs
+		 */
 		u32 nr_jobs;
 
 		/** Context Attributes:
@@ -351,7 +382,7 @@ struct kbasep_js_kctx_info {
 
 		/**
 		 * Wait queue to wait for KCTX_SHEDULED flag state changes.
-		 * */
+		 */
 		wait_queue_head_t is_scheduled_wait;
 
 		/** Link implementing JS queues. Context can be present on one
@@ -361,13 +392,15 @@ struct kbasep_js_kctx_info {
 	} ctx;
 
 	/* The initalized-flag is placed at the end, to avoid cache-pollution (we should
-	 * only be using this during init/term paths) */
+	 * only be using this during init/term paths)
+	 */
 	int init_status;
 };
 
 /** Subset of atom state that can be available after jd_done_nolock() is called
  * on that atom. A copy must be taken via kbasep_js_atom_retained_state_copy(),
- * because the original atom could disappear. */
+ * because the original atom could disappear.
+ */
 struct kbasep_js_atom_retained_state {
 	/** Event code - to determine whether the atom has finished */
 	enum base_jd_event_code event_code;

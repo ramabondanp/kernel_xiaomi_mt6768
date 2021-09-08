@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2014-2016,2018-2020 ARM Limited. All rights reserved.
@@ -215,20 +216,21 @@ int kbase_set_custom_irq_handler(struct kbase_device *kbdev,
 	int result = 0;
 	irq_handler_t requested_irq_handler = NULL;
 
-	KBASE_DEBUG_ASSERT((JOB_IRQ_HANDLER <= irq_type) &&
-						(GPU_IRQ_HANDLER >= irq_type));
+	KBASE_DEBUG_ASSERT((irq_type >= JOB_IRQ_HANDLER) &&
+			   (irq_type <= GPU_IRQ_HANDLER));
 
 	/* Release previous handler */
 	if (kbdev->irqs[irq_type].irq)
 		free_irq(kbdev->irqs[irq_type].irq, kbase_tag(kbdev, irq_type));
 
-	requested_irq_handler = (NULL != custom_handler) ? custom_handler :
-						kbase_handler_table[irq_type];
+	requested_irq_handler = (custom_handler != NULL) ?
+					custom_handler :
+					kbase_handler_table[irq_type];
 
-	if (0 != request_irq(kbdev->irqs[irq_type].irq,
-			requested_irq_handler,
+	if (request_irq(kbdev->irqs[irq_type].irq, requested_irq_handler,
 			kbdev->irqs[irq_type].flags | IRQF_SHARED,
-			dev_name(kbdev->dev), kbase_tag(kbdev, irq_type))) {
+			dev_name(kbdev->dev),
+			kbase_tag(kbdev, irq_type)) != 0) {
 		result = -EINVAL;
 		dev_err(kbdev->dev, "Can't request interrupt %d (index %d)\n",
 					kbdev->irqs[irq_type].irq, irq_type);

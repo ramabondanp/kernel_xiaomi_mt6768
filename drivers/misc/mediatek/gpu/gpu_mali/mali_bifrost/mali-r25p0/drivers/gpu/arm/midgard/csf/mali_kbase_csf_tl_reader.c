@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -40,7 +41,7 @@
 #include "tl/mali_kbase_timeline_priv.h"
 #include <linux/debugfs.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 7, 0))
+#if (KERNEL_VERSION(4, 7, 0) > LINUX_VERSION_CODE)
 #define DEFINE_DEBUGFS_ATTRIBUTE DEFINE_SIMPLE_ATTRIBUTE
 #endif
 #endif

@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2015, 2018 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,6 +18,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2014-2015, 2018, 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
 
 /**
@@ -28,23 +47,6 @@
 #define _MALISW_H_
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
-#define U8_MAX          ((u8)~0U)
-#define S8_MAX          ((s8)(U8_MAX>>1))
-#define S8_MIN          ((s8)(-S8_MAX - 1))
-#define U16_MAX         ((u16)~0U)
-#define S16_MAX         ((s16)(U16_MAX>>1))
-#define S16_MIN         ((s16)(-S16_MAX - 1))
-#define U32_MAX         ((u32)~0U)
-#define S32_MAX         ((s32)(U32_MAX>>1))
-#define S32_MIN         ((s32)(-S32_MAX - 1))
-#define U64_MAX         ((u64)~0ULL)
-#define S64_MAX         ((s64)(U64_MAX>>1))
-#define S64_MIN         ((s64)(-S64_MAX - 1))
-#endif /* LINUX_VERSION_CODE */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0)
-#define SIZE_MAX        (~(size_t)0)
-#endif /* LINUX_VERSION_CODE */
 
 /**
  * MIN - Return the lesser of two values.

@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014,2018,2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2014, 2018, 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -98,7 +117,13 @@ DEFINE_MALI_ADD_EVENT(PM_CONTEXT_IDLE);
 DEFINE_MALI_ADD_EVENT(PM_WAKE_WAITERS);
 DEFINE_MALI_ADD_EVENT(SCHED_RETAIN_CTX_NOLOCK);
 DEFINE_MALI_ADD_EVENT(SCHED_RELEASE_CTX);
+#ifdef CONFIG_MALI_ARBITER_SUPPORT
 
+DEFINE_MALI_ADD_EVENT(ARB_GPU_LOST);
+DEFINE_MALI_ADD_EVENT(ARB_VM_STATE);
+DEFINE_MALI_ADD_EVENT(ARB_VM_EVT);
+
+#endif
 #if MALI_USE_CSF
 #include "mali_kbase_debug_linux_ktrace_csf.h"
 #else

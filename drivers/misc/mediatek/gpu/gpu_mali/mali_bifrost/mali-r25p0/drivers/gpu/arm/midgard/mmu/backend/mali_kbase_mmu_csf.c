@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -69,17 +70,27 @@ void kbase_mmu_get_as_setup(struct kbase_mmu_table *mmut,
 static void submit_work_pagefault(struct kbase_device *kbdev, u32 as_nr,
 		struct kbase_fault *fault)
 {
+	unsigned long flags;
 	struct kbase_as *const as = &kbdev->as[as_nr];
+	struct kbase_context *kctx;
 
-	as->pf_data = (struct kbase_fault) {
-		.status = fault->status,
-		.addr = fault->addr,
-	};
+	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+	kctx = kbase_ctx_sched_as_to_ctx_nolock(kbdev, as_nr);
 
-	if (kbase_ctx_sched_as_to_ctx_refcount(kbdev, as_nr)) {
-		WARN_ON(!queue_work(as->pf_wq, &as->work_pagefault));
-		atomic_inc(&kbdev->faults_pending);
+	if (kctx) {
+		kbase_ctx_sched_retain_ctx_refcount(kctx);
+
+		as->pf_data = (struct kbase_fault) {
+			.status = fault->status,
+			.addr = fault->addr,
+		};
+
+		if (WARN_ON(!queue_work(as->pf_wq, &as->work_pagefault)))
+			kbase_ctx_sched_release_ctx(kctx);
+		else
+			atomic_inc(&kbdev->faults_pending);
 	}
+	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 }
 
 void kbase_mmu_report_mcu_as_fault_and_reset(struct kbase_device *kbdev,
@@ -106,8 +117,14 @@ void kbase_mmu_report_mcu_as_fault_and_reset(struct kbase_device *kbdev,
 
 	/* Report MMU fault for all address spaces (except MCU_AS_NR) */
 	for (as_no = 1; as_no < kbdev->nr_hw_address_spaces; as_no++)
-		if (kbase_ctx_sched_as_to_ctx(kbdev, as_no))
-			submit_work_pagefault(kbdev, as_no, fault);
+		submit_work_pagefault(kbdev, as_no, fault);
+
+	/* MCU AS fault could mean hardware counters will stop working.
+	 * Put the backend into the unrecoverable error state to cause
+	 * current and subsequent counter operations to immediately
+	 * fail, avoiding the risk of a hang.
+	 */
+	kbase_hwcnt_backend_csf_on_unrecoverable_error(&kbdev->hwcnt_gpu_iface);
 
 	/* GPU reset is required to recover */
 	if (kbase_prepare_to_reset_gpu(kbdev))
@@ -482,18 +499,25 @@ static void submit_work_gpufault(struct kbase_device *kbdev, u32 status,
 {
 	unsigned long flags;
 	struct kbase_as *const as = &kbdev->as[as_nr];
+	struct kbase_context *kctx;
 
 	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
-	as->gf_data = (struct kbase_fault) {
+	kctx = kbase_ctx_sched_as_to_ctx_nolock(kbdev, as_nr);
+
+	if (kctx) {
+		kbase_ctx_sched_retain_ctx_refcount(kctx);
+
+		as->gf_data = (struct kbase_fault) {
 			.status = status,
 			.addr = address,
-	};
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+		};
 
-	if (kbase_ctx_sched_as_to_ctx_refcount(kbdev, as_nr)) {
-		WARN_ON(!queue_work(as->pf_wq, &as->work_gpufault));
-		atomic_inc(&kbdev->faults_pending);
+		if (WARN_ON(!queue_work(as->pf_wq, &as->work_gpufault)))
+			kbase_ctx_sched_release_ctx(kctx);
+		else
+			atomic_inc(&kbdev->faults_pending);
 	}
+	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 }
 
 void kbase_mmu_gpu_fault_interrupt(struct kbase_device *kbdev, u32 status,

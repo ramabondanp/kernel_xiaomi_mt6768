@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
@@ -161,12 +162,14 @@ int kbase_clk_rate_trace_manager_init(struct kbase_device *kbdev)
 	unsigned int i;
 	int ret = 0;
 
-	/* Return early if no callbacks provided for clock rate tracing */
-	if (!callbacks)
-		return 0;
-
 	spin_lock_init(&clk_rtm->lock);
 	INIT_LIST_HEAD(&clk_rtm->listeners);
+
+	/* Return early if no callbacks provided for clock rate tracing */
+	if (!callbacks) {
+		WRITE_ONCE(clk_rtm->clk_rate_trace_ops, NULL);
+		return 0;
+	}
 
 	clk_rtm->gpu_idle = true;
 
@@ -185,10 +188,12 @@ int kbase_clk_rate_trace_manager_init(struct kbase_device *kbdev)
 	/* Activate clock rate trace manager if at least one GPU clock was
 	 * enumerated.
 	 */
-	if (i)
+	if (i) {
 		WRITE_ONCE(clk_rtm->clk_rate_trace_ops, callbacks);
-	else
+	} else {
 		dev_info(kbdev->dev, "No clock(s) available for rate tracing");
+		WRITE_ONCE(clk_rtm->clk_rate_trace_ops, NULL);
+	}
 
 	return 0;
 
@@ -316,4 +321,3 @@ void kbase_clk_rate_trace_manager_notify_all(
 	}
 }
 KBASE_EXPORT_TEST_API(kbase_clk_rate_trace_manager_notify_all);
-

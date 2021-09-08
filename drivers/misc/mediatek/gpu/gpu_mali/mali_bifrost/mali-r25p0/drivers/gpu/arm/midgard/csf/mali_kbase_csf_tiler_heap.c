@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -19,6 +20,8 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
+
+#include <tl/mali_kbase_tracepoints.h>
 
 #include "mali_kbase_csf_tiler_heap.h"
 #include "mali_kbase_csf_tiler_heap_def.h"
@@ -337,6 +340,12 @@ static void delete_heap(struct kbase_csf_tiler_heap *heap)
 		heap->gpu_va);
 
 	list_del(&heap->link);
+
+	WARN_ON(heap->chunk_count);
+	KBASE_TLSTREAM_AUX_TILER_HEAP_STATS(kctx->kbdev, kctx->id,
+		heap->heap_id, 0, 0, heap->max_chunks, heap->chunk_size, 0,
+		heap->target_in_flight, 0);
+
 	kfree(heap);
 }
 
@@ -473,10 +482,19 @@ int kbase_csf_tiler_heap_init(struct kbase_context *const kctx,
 			list_first_entry(&heap->chunks_list,
 				struct kbase_csf_tiler_heap_chunk, link);
 
+		kctx->csf.tiler_heaps.nr_of_heaps++;
+		heap->heap_id = kctx->csf.tiler_heaps.nr_of_heaps;
 		list_add(&heap->link, &kctx->csf.tiler_heaps.list);
 
 		*heap_gpu_va = heap->gpu_va;
 		*first_chunk_va = first_chunk->gpu_va;
+
+		KBASE_TLSTREAM_AUX_TILER_HEAP_STATS(
+			kctx->kbdev, kctx->id, heap->heap_id,
+			PFN_UP(heap->chunk_size * heap->max_chunks),
+			PFN_UP(heap->chunk_size * heap->chunk_count),
+			heap->max_chunks, heap->chunk_size, heap->chunk_count,
+			heap->target_in_flight, 0);
 
 		dev_dbg(kctx->kbdev->dev, "Created tiler heap 0x%llX\n",
 			heap->gpu_va);
@@ -581,6 +599,13 @@ int kbase_csf_tiler_heap_alloc_new_chunk(struct kbase_context *kctx,
 		err = alloc_new_chunk(heap, nr_in_flight, pending_frag_count,
 			new_chunk_ptr);
 	}
+
+	KBASE_TLSTREAM_AUX_TILER_HEAP_STATS(
+		kctx->kbdev, kctx->id, heap->heap_id,
+		PFN_UP(heap->chunk_size * heap->max_chunks),
+		PFN_UP(heap->chunk_size * heap->chunk_count), heap->max_chunks,
+		heap->chunk_size, heap->chunk_count, heap->target_in_flight,
+		nr_in_flight);
 
 	mutex_unlock(&kctx->csf.tiler_heaps.lock);
 

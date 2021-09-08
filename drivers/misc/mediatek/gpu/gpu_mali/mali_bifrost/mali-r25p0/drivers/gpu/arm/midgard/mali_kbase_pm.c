@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
@@ -19,8 +20,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
-
-
 
 /**
  * @file mali_kbase_pm.c
@@ -191,7 +190,8 @@ void kbase_pm_driver_suspend(struct kbase_device *kbdev)
 
 #if !MALI_USE_CSF
 	/* Suspend job scheduler and associated components, so that it releases all
-	 * the PM active count references */
+	 * the PM active count references
+	 */
 	kbasep_js_suspend(kbdev);
 #else
 	kbase_csf_scheduler_pm_suspend(kbdev);

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
@@ -220,8 +221,3 @@ void kbase_add_dma_buf_usage(struct kbase_context *kctx,
 
 	mutex_unlock(&kbdev->dma_buf_lock);
 }
-
-#if !defined(CONFIG_TRACE_GPU_MEM) && !MALI_CUSTOMER_RELEASE
-#define CREATE_TRACE_POINTS
-#include "mali_gpu_mem_trace.h"
-#endif

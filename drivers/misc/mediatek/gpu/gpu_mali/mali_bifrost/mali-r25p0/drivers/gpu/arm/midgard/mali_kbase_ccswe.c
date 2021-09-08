@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
@@ -50,7 +51,6 @@ void kbase_ccswe_init(struct kbase_ccswe *self)
 
 	spin_lock_init(&self->access);
 }
-KBASE_EXPORT_TEST_API(kbase_ccswe_init);
 
 u64 kbase_ccswe_cycle_at(struct kbase_ccswe *self, u64 timestamp_ns)
 {
@@ -63,7 +63,6 @@ u64 kbase_ccswe_cycle_at(struct kbase_ccswe *self, u64 timestamp_ns)
 
 	return result;
 }
-KBASE_EXPORT_TEST_API(kbase_ccswe_cycle_at);
 
 void kbase_ccswe_freq_change(
 	struct kbase_ccswe *self, u64 timestamp_ns, u32 gpu_freq)
@@ -87,7 +86,6 @@ void kbase_ccswe_freq_change(
 exit:
 	spin_unlock_irqrestore(&self->access, flags);
 }
-KBASE_EXPORT_TEST_API(kbase_ccswe_freq_change);
 
 void kbase_ccswe_reset(struct kbase_ccswe *self)
 {
@@ -102,4 +100,3 @@ void kbase_ccswe_reset(struct kbase_ccswe *self)
 
 	spin_unlock_irqrestore(&self->access, flags);
 }
-

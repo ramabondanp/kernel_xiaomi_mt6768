@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -672,6 +691,18 @@ union kbase_ioctl_get_cpu_gpu_timeinfo {
 #define KBASE_IOCTL_GET_CPU_GPU_TIMEINFO \
 	_IOWR(KBASE_IOCTL_TYPE, 50, union kbase_ioctl_get_cpu_gpu_timeinfo)
 
+/**
+ * struct kbase_ioctl_context_priority_check - Check the max possible priority
+ * @priority: Input priority & output priority
+ */
+
+struct kbase_ioctl_context_priority_check {
+	__u8 priority;
+};
+
+#define KBASE_IOCTL_CONTEXT_PRIORITY_CHECK \
+	_IOWR(KBASE_IOCTL_TYPE, 54, struct kbase_ioctl_context_priority_check)
+
 /***************
  * test ioctls *
  ***************/
@@ -826,11 +857,11 @@ struct kbase_ioctl_tlstream_stats {
 #define KBASE_GPUPROP_TEXTURE_FEATURES_3		80
 #define KBASE_GPUPROP_RAW_TEXTURE_FEATURES_3		81
 
-#define KBASE_GPUPROP_NUM_EXEC_ENGINES                  82
+#define KBASE_GPUPROP_NUM_EXEC_ENGINES			82
 
 #define KBASE_GPUPROP_RAW_THREAD_TLS_ALLOC		83
 #define KBASE_GPUPROP_TLS_ALLOC				84
-
+#define KBASE_GPUPROP_RAW_GPU_FEATURES			85
 #ifdef __cpluscplus
 }
 #endif

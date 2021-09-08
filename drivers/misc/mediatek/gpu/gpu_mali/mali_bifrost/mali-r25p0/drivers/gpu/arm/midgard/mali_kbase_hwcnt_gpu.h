@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -18,6 +18,25 @@
  *
  * SPDX-License-Identifier: GPL-2.0
  *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2018, 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
+ *
  */
 
 #ifndef _KBASE_HWCNT_GPU_H_
@@ -29,6 +48,14 @@ struct kbase_device;
 struct kbase_hwcnt_metadata;
 struct kbase_hwcnt_enable_map;
 struct kbase_hwcnt_dump_buffer;
+
+#define KBASE_HWCNT_V5_BLOCK_TYPE_COUNT 4
+#define KBASE_HWCNT_V5_HEADERS_PER_BLOCK 4
+#define KBASE_HWCNT_V5_COUNTERS_PER_BLOCK 60
+#define KBASE_HWCNT_V5_VALUES_PER_BLOCK                                        \
+	(KBASE_HWCNT_V5_HEADERS_PER_BLOCK + KBASE_HWCNT_V5_COUNTERS_PER_BLOCK)
+/** Index of the PRFCNT_EN header into a V5 counter block */
+#define KBASE_HWCNT_V5_PRFCNT_EN_HEADER 2
 
 /**
  * enum kbase_hwcnt_gpu_group_type - GPU hardware counter group types, used to
@@ -109,47 +136,21 @@ enum kbase_hwcnt_physical_set {
 };
 
 /**
- * struct kbase_hwcnt_gpu_v5_info - Information about hwcnt blocks on v5 GPUs.
+ * struct kbase_hwcnt_gpu_info - Information about hwcnt blocks on the GPUs.
  * @l2_count:   L2 cache count.
  * @core_mask:  Shader core mask. May be sparse.
  * @clk_cnt:    Number of clock domains available.
- * @is_csf: 	Whether CSF is used.
  */
-struct kbase_hwcnt_gpu_v5_info {
+struct kbase_hwcnt_gpu_info {
 	size_t l2_count;
 	u64 core_mask;
 	u8 clk_cnt;
-	bool is_csf;
 };
 
 /**
- * struct kbase_hwcnt_gpu_info - Tagged union with information about the current
- *                               GPU's hwcnt blocks.
- * @type: GPU type.
- * @v5:   Info filled in if a v5 GPU.
- */
-struct kbase_hwcnt_gpu_info {
-	enum kbase_hwcnt_gpu_group_type type;
-	struct kbase_hwcnt_gpu_v5_info v5;
-};
-
-/**
- * kbase_hwcnt_gpu_info_init() - Initialise an info structure used to create the
- *                               hwcnt metadata.
- * @kbdev: Non-NULL pointer to kbase device.
- * @info:  Non-NULL pointer to data structure to be filled in.
- *
- * The initialised info struct will only be valid for use while kbdev is valid.
- */
-int kbase_hwcnt_gpu_info_init(
-	struct kbase_device *kbdev,
-	struct kbase_hwcnt_gpu_info *info);
-
-/**
- * kbase_hwcnt_gpu_metadata_create() - Create hardware counter metadata for the
- *                                     current GPU.
- * @info:           Non-NULL pointer to info struct initialised by
- *                  kbase_hwcnt_gpu_info_init.
+ * kbase_hwcnt_jm_metadata_create() - Create hardware counter metadata for the
+ *                                    JM GPUs.
+ * @info:           Non-NULL pointer to info struct.
  * @counter_set:    The performance counter set used.
  * @out_metadata:   Non-NULL pointer to where created metadata is stored on
  *                  success.
@@ -158,43 +159,87 @@ int kbase_hwcnt_gpu_info_init(
  *
  * Return: 0 on success, else error code.
  */
-int kbase_hwcnt_gpu_metadata_create(
+int kbase_hwcnt_jm_metadata_create(
 	const struct kbase_hwcnt_gpu_info *info,
 	enum kbase_hwcnt_set counter_set,
 	const struct kbase_hwcnt_metadata **out_metadata,
 	size_t *out_dump_bytes);
 
 /**
- * kbase_hwcnt_gpu_metadata_destroy() - Destroy GPU hardware counter metadata.
+ * kbase_hwcnt_jm_metadata_destroy() - Destroy JM GPU hardware counter metadata.
+ *
  * @metadata: Pointer to metadata to destroy.
  */
-void kbase_hwcnt_gpu_metadata_destroy(
+void kbase_hwcnt_jm_metadata_destroy(
 	const struct kbase_hwcnt_metadata *metadata);
 
 /**
- * kbase_hwcnt_gpu_dump_get() - Copy or accumulate enabled counters from the raw
- *                              dump buffer in src into the dump buffer
- *                              abstraction in dst.
+ * kbase_hwcnt_csf_metadata_create() - Create hardware counter metadata for the
+ *                                     CSF GPUs.
+ * @info:           Non-NULL pointer to info struct.
+ * @counter_set:    The performance counter set used.
+ * @out_metadata:   Non-NULL pointer to where created metadata is stored on
+ *                  success.
+ *
+ * Return: 0 on success, else error code.
+ */
+int kbase_hwcnt_csf_metadata_create(
+	const struct kbase_hwcnt_gpu_info *info,
+	enum kbase_hwcnt_set counter_set,
+	const struct kbase_hwcnt_metadata **out_metadata);
+
+/**
+ * kbase_hwcnt_csf_metadata_destroy() - Destroy CSF GPU hardware counter
+ *                                      metadata.
+ * @metadata: Pointer to metadata to destroy.
+ */
+void kbase_hwcnt_csf_metadata_destroy(
+	const struct kbase_hwcnt_metadata *metadata);
+
+/**
+ * kbase_hwcnt_jm_dump_get() - Copy or accumulate enabled counters from the raw
+ *                             dump buffer in src into the dump buffer
+ *                             abstraction in dst.
  * @dst:            Non-NULL pointer to dst dump buffer.
  * @src:            Non-NULL pointer to src raw dump buffer, of same length
  *                  as returned in out_dump_bytes parameter of
- *                  kbase_hwcnt_gpu_metadata_create.
+ *                  kbase_hwcnt_jm_metadata_create.
  * @dst_enable_map: Non-NULL pointer to enable map specifying enabled values.
  * @pm_core_mask:   PM state synchronized shaders core mask with the dump.
  * @accumulate:     True if counters in src should be accumulated into dst,
  *                  rather than copied.
  *
  * The dst and dst_enable_map MUST have been created from the same metadata as
- * returned from the call to kbase_hwcnt_gpu_metadata_create as was used to get
+ * returned from the call to kbase_hwcnt_jm_metadata_create as was used to get
  * the length of src.
  *
  * Return: 0 on success, else error code.
  */
-int kbase_hwcnt_gpu_dump_get(
-	struct kbase_hwcnt_dump_buffer *dst,
-	void *src,
+int kbase_hwcnt_jm_dump_get(struct kbase_hwcnt_dump_buffer *dst, void *src,
+			    const struct kbase_hwcnt_enable_map *dst_enable_map,
+			    const u64 pm_core_mask, bool accumulate);
+
+/**
+ * kbase_hwcnt_csf_dump_get() - Copy or accumulate enabled counters from the raw
+ *                              dump buffer in src into the dump buffer
+ *                              abstraction in dst.
+ * @dst:            Non-NULL pointer to dst dump buffer.
+ * @src:            Non-NULL pointer to src raw dump buffer, of same length
+ *                  as returned in out_dump_bytes parameter of
+ *                  kbase_hwcnt_csf_metadata_create.
+ * @dst_enable_map: Non-NULL pointer to enable map specifying enabled values.
+ * @accumulate:     True if counters in src should be accumulated into dst,
+ *                  rather than copied.
+ *
+ * The dst and dst_enable_map MUST have been created from the same metadata as
+ * returned from the call to kbase_hwcnt_csf_metadata_create as was used to get
+ * the length of src.
+ *
+ * Return: 0 on success, else error code.
+ */
+int kbase_hwcnt_csf_dump_get(
+	struct kbase_hwcnt_dump_buffer *dst, void *src,
 	const struct kbase_hwcnt_enable_map *dst_enable_map,
-	const u64 pm_core_mask,
 	bool accumulate);
 
 /**
@@ -204,7 +249,7 @@ int kbase_hwcnt_gpu_dump_get(
  * @src: Non-NULL pointer to src enable map abstraction.
  *
  * The src must have been created from a metadata returned from a call to
- * kbase_hwcnt_gpu_metadata_create.
+ * kbase_hwcnt_jm_metadata_create or kbase_hwcnt_csf_metadata_create.
  *
  * This is a lossy conversion, as the enable map abstraction has one bit per
  * individual counter block value, but the physical enable map uses 1 bit for
@@ -231,7 +276,7 @@ void kbase_hwcnt_gpu_set_to_physical(enum kbase_hwcnt_physical_set *dst,
  * @src: Non-NULL pointer to src physical enable map.
  *
  * The dst must have been created from a metadata returned from a call to
- * kbase_hwcnt_gpu_metadata_create.
+ * kbase_hwcnt_jm_metadata_create or kbase_hwcnt_csf_metadata_create.
  *
  * This is a lossy conversion, as the physical enable map can technically
  * support counter blocks with 128 counters each, but no hardware actually uses
@@ -250,7 +295,7 @@ void kbase_hwcnt_gpu_enable_map_from_physical(
  * @enable_map: Non-NULL pointer to enable map.
  *
  * The buf and enable_map must have been created from a metadata returned from
- * a call to kbase_hwcnt_gpu_metadata_create.
+ * a call to kbase_hwcnt_jm_metadata_create or kbase_hwcnt_csf_metadata_create.
  *
  * This function should be used before handing off a dump buffer over the
  * kernel-user boundary, to ensure the header is accurate for the enable map

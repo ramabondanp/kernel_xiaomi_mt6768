@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
@@ -576,8 +577,8 @@ static int kbase_csf_queue_group_suspend_prepare(
 	u64 end_addr = addr + suspend_buf->size - 1;
 	u64 last_page_addr = end_addr & PAGE_MASK;
 	int nr_pages = (last_page_addr - page_addr) / PAGE_SIZE + 1;
-	int pinned_pages;
-	int ret = 0;
+	int pinned_pages = 0, ret = 0;
+	struct kbase_va_region *reg;
 
 	lockdep_assert_held(&kctx->csf.kcpu_queues.lock);
 
@@ -604,17 +605,57 @@ static int kbase_csf_queue_group_suspend_prepare(
 		goto out_clean_sus_buf;
 	}
 
-	pinned_pages = get_user_pages_fast(page_addr, nr_pages, 1,
-			sus_buf->pages);
-	if (pinned_pages < 0) {
-		ret = pinned_pages;
-		goto out_clean_pages;
-	}
-	if (pinned_pages != nr_pages) {
-		ret = -EINVAL;
-		goto out_clean_pages;
+	/* Check if the page_addr is a valid GPU VA from SAME_VA zone,
+	 * otherwise consider it is a CPU VA corresponding to the Host
+	 * memory allocated by userspace.
+	 */
+	kbase_gpu_vm_lock(kctx);
+	reg = kbase_region_tracker_find_region_enclosing_address(kctx,
+							page_addr);
+
+	if (kbase_is_region_invalid_or_free(reg)) {
+		kbase_gpu_vm_unlock(kctx);
+		pinned_pages = get_user_pages_fast(page_addr, nr_pages, 1,
+							sus_buf->pages);
+		kbase_gpu_vm_lock(kctx);
+
+		if (pinned_pages < 0) {
+			ret = pinned_pages;
+			goto out_clean_pages;
+		}
+		if (pinned_pages != nr_pages) {
+			ret = -EINVAL;
+			goto out_clean_pages;
+		}
+	} else {
+		struct tagged_addr *page_array;
+		u64 start, end, i;
+
+		if (!(reg->flags & BASE_MEM_SAME_VA) ||
+				reg->nr_pages < nr_pages ||
+				kbase_reg_current_backed_size(reg) !=
+					reg->nr_pages) {
+			ret = -EINVAL;
+			goto out_clean_pages;
+		}
+
+		start = PFN_DOWN(page_addr) - reg->start_pfn;
+		end = start + nr_pages;
+
+		if (end > reg->nr_pages) {
+			ret = -EINVAL;
+			goto out_clean_pages;
+		}
+
+		sus_buf->cpu_alloc = kbase_mem_phy_alloc_get(reg->cpu_alloc);
+		page_array = kbase_get_cpu_phy_pages(reg);
+		page_array += start;
+
+		for (i = 0; i < nr_pages; i++, page_array++)
+			sus_buf->pages[i] = as_page(*page_array);
 	}
 
+	kbase_gpu_vm_unlock(kctx);
 	current_command->type = BASE_KCPU_COMMAND_TYPE_GROUP_SUSPEND;
 	current_command->info.suspend_buf_copy.sus_buf = sus_buf;
 	current_command->info.suspend_buf_copy.group_handle =
@@ -622,9 +663,11 @@ static int kbase_csf_queue_group_suspend_prepare(
 	return ret;
 
 out_clean_pages:
+	kbase_gpu_vm_unlock(kctx);
 	kfree(sus_buf->pages);
 out_clean_sus_buf:
 	kfree(sus_buf);
+
 	return ret;
 }
 
@@ -688,6 +731,8 @@ static int kbase_kcpu_cqs_wait_process(struct kbase_device *kbdev,
 				KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_CQS_WAIT_START(
 					kbdev, queue);
 				queue->command_started = true;
+				KBASE_KTRACE_ADD_CSF_KCPU(kbdev, CQS_WAIT_START,
+						   queue, cqs_wait->nr_objs, 0);
 			}
 
 			if (!evt) {
@@ -699,10 +744,18 @@ static int kbase_kcpu_cqs_wait_process(struct kbase_device *kbdev,
 
 			sig_set = evt[BASEP_EVENT_VAL_INDEX] > cqs_wait->objs[i].val;
 			if (sig_set) {
+				bool error = false;
+
 				bitmap_set(cqs_wait->signaled, i, 1);
 				if ((cqs_wait->inherit_err_flags & (1U << i)) &&
-				    evt[BASEP_EVENT_ERR_INDEX] > 0)
+				    evt[BASEP_EVENT_ERR_INDEX] > 0) {
 					queue->has_error = true;
+					error = true;
+				}
+
+				KBASE_KTRACE_ADD_CSF_KCPU(kbdev, CQS_WAIT_END,
+						queue, cqs_wait->objs[i].addr,
+						error);
 
 				KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_CQS_WAIT_END(
 					kbdev, queue,
@@ -813,6 +866,10 @@ static void kbase_kcpu_cqs_set_process(struct kbase_device *kbdev,
 			/* Set to signaled */
 			evt[BASEP_EVENT_VAL_INDEX]++;
 			kbase_phy_alloc_mapping_put(queue->kctx, mapping);
+
+			KBASE_KTRACE_ADD_CSF_KCPU(kbdev, CQS_SET,
+					queue, cqs_set->objs[i].addr,
+					evt[BASEP_EVENT_ERR_INDEX]);
 		}
 	}
 
@@ -872,6 +929,9 @@ static void kbase_csf_fence_wait_callback(struct dma_fence *fence,
 	struct kbase_kcpu_command_queue *kcpu_queue = fence_info->kcpu_queue;
 	struct kbase_context *const kctx = kcpu_queue->kctx;
 
+	KBASE_KTRACE_ADD_CSF_KCPU(kctx->kbdev, FENCE_WAIT_END, kcpu_queue,
+				  fence->context, fence->seqno);
+
 	/* Resume kcpu command queue processing. */
 	queue_work(kctx->csf.kcpu_queues.wq, &kcpu_queue->work);
 }
@@ -888,8 +948,13 @@ static void kbase_kcpu_fence_wait_cancel(
 		return;
 
 	if (kcpu_queue->fence_wait_processed) {
-		dma_fence_remove_callback(fence_info->fence,
+		bool removed = dma_fence_remove_callback(fence_info->fence,
 				&fence_info->fence_cb);
+
+		if (removed)
+			KBASE_KTRACE_ADD_CSF_KCPU(kctx->kbdev, FENCE_WAIT_END,
+					kcpu_queue, fence_info->fence->context,
+					fence_info->fence->seqno);
 	}
 
 	/* Release the reference which is kept by the kcpu_queue */
@@ -933,6 +998,9 @@ static int kbase_kcpu_fence_wait_process(
 			&fence_info->fence_cb,
 			kbase_csf_fence_wait_callback);
 
+		KBASE_KTRACE_ADD_CSF_KCPU(kcpu_queue->kctx->kbdev,
+					  FENCE_WAIT_START, kcpu_queue,
+					  fence->context, fence->seqno);
 		fence_status = cb_err;
 		if (cb_err == 0)
 			kcpu_queue->fence_wait_processed = true;
@@ -1002,6 +1070,10 @@ static int kbase_kcpu_fence_signal_process(
 		dev_warn(kctx->kbdev->dev,
 			"fence_signal() failed with %d\n", ret);
 	}
+
+	KBASE_KTRACE_ADD_CSF_KCPU(kctx->kbdev, FENCE_SIGNAL, kcpu_queue,
+				  fence_info->fence->context,
+				  fence_info->fence->seqno);
 
 	dma_fence_put(fence_info->fence);
 	fence_info->fence = NULL;
@@ -1111,6 +1183,9 @@ static int delete_queue(struct kbase_context *kctx, u32 id)
 	if ((id < KBASEP_MAX_KCPU_QUEUES) && kctx->csf.kcpu_queues.array[id]) {
 		struct kbase_kcpu_command_queue *queue =
 					kctx->csf.kcpu_queues.array[id];
+
+		KBASE_KTRACE_ADD_CSF_KCPU(kctx->kbdev, KCPU_QUEUE_DESTROY,
+			queue, queue->num_pending_cmds, queue->cqs_wait_count);
 
 		/* Drain the remaining work for this queue first and go past
 		 * all the waits.
@@ -1394,13 +1469,15 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_JIT_FREE_END(
 				kbdev, queue);
 			break;
-		case BASE_KCPU_COMMAND_TYPE_GROUP_SUSPEND:
+		case BASE_KCPU_COMMAND_TYPE_GROUP_SUSPEND: {
+			struct kbase_suspend_copy_buffer *sus_buf =
+					cmd->info.suspend_buf_copy.sus_buf;
+
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_GROUP_SUSPEND_START(
 				kbdev, queue);
 
 			status = kbase_csf_queue_group_suspend_process(
-					queue->kctx,
-					cmd->info.suspend_buf_copy.sus_buf,
+					queue->kctx, sus_buf,
 					cmd->info.suspend_buf_copy.group_handle);
 			if (status)
 				queue->has_error = true;
@@ -1408,9 +1485,19 @@ static void kcpu_queue_process(struct kbase_kcpu_command_queue *queue,
 			KBASE_TLSTREAM_TL_KBASE_KCPUQUEUE_EXECUTE_GROUP_SUSPEND_END(
 				kbdev, queue, status);
 
-			kfree(cmd->info.suspend_buf_copy.sus_buf->pages);
-			kfree(cmd->info.suspend_buf_copy.sus_buf);
+			if (!sus_buf->cpu_alloc) {
+				int i;
+
+				for (i = 0; i < sus_buf->nr_pages; i++)
+					put_page(sus_buf->pages[i]);
+			} else {
+				kbase_mem_phy_alloc_put(sus_buf->cpu_alloc);
+			}
+
+			kfree(sus_buf->pages);
+			kfree(sus_buf);
 			break;
+		}
 		default:
 			dev_warn(kbdev->dev,
 				"Unrecognized command type\n");
@@ -1798,6 +1885,7 @@ int kbase_csf_kcpu_queue_new(struct kbase_context *kctx,
 	INIT_LIST_HEAD(&queue->jit_blocked);
 	queue->has_error = false;
 	INIT_WORK(&queue->work, kcpu_queue_process_worker);
+	queue->id = idx;
 
 	newq->id = idx;
 
@@ -1806,6 +1894,9 @@ int kbase_csf_kcpu_queue_new(struct kbase_context *kctx,
 	 */
 	KBASE_TLSTREAM_TL_KBASE_NEW_KCPUQUEUE(
 		kctx->kbdev, queue, kctx->id, queue->num_pending_cmds);
+
+	KBASE_KTRACE_ADD_CSF_KCPU(kctx->kbdev, KCPU_QUEUE_NEW, queue,
+		queue->fence_context, 0);
 out:
 	mutex_unlock(&kctx->csf.kcpu_queues.lock);
 

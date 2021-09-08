@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -70,13 +71,7 @@ typedef unsigned int __poll_t;
 /* Allows us to perform ASM goto for the tracing
  * https://www.kernel.org/doc/Documentation/static-keys.txt
  */
-#if KERNEL_VERSION(4, 3, 0) <= LINUX_VERSION_CODE
 DEFINE_STATIC_KEY_FALSE(basep_kinstr_jm_reader_static_key);
-#else
-struct static_key basep_kinstr_jm_reader_static_key = STATIC_KEY_INIT_FALSE;
-#define static_branch_inc(key) static_key_slow_inc(key)
-#define static_branch_dec(key) static_key_slow_dec(key)
-#endif /* KERNEL_VERSION(4 ,3, 0) <= LINUX_VERSION_CODE */
 
 #define KBASE_KINSTR_JM_VERSION 1
 

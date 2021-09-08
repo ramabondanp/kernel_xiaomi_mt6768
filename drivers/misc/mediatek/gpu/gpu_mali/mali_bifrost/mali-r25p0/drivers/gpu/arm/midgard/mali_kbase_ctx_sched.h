@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2017-2018, 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2017-2018, 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -168,6 +187,21 @@ struct kbase_context *kbase_ctx_sched_as_to_ctx(struct kbase_device *kbdev,
 		size_t as_nr);
 
 /**
+ * kbase_ctx_sched_as_to_ctx_nolock - Lookup a context based on its current
+ * address space.
+ * @kbdev: The device for which the returned context must belong
+ * @as_nr: address space assigned to the context of interest
+ *
+ * The following lock must be held by the caller:
+ * * kbase_device::hwaccess_lock
+ *
+ * Return: a valid struct kbase_context on success or NULL on failure,
+ * indicating that no context was found in as_nr.
+ */
+struct kbase_context *kbase_ctx_sched_as_to_ctx_nolock(
+		struct kbase_device *kbdev, size_t as_nr);
+
+/**
  * kbase_ctx_sched_inc_refcount_nolock - Refcount a context as being busy,
  * preventing it from being scheduled out.
  * @kctx: Context to be refcounted
@@ -205,5 +239,26 @@ bool kbase_ctx_sched_inc_refcount(struct kbase_context *kctx);
  * kbase_device::hwaccess_lock is required NOT to be locked.
  */
 void kbase_ctx_sched_release_ctx_lock(struct kbase_context *kctx);
+
+#if MALI_USE_CSF
+/**
+ * kbase_ctx_sched_refcount_mmu_flush - Refcount the context for the MMU flush
+ *                                      operation.
+ *
+ * @kctx: Context to be refcounted.
+ * @sync: Flag passed to the caller function kbase_mmu_flush_invalidate().
+ *
+ * This function takes a reference on the context for the MMU flush operation.
+ * The refcount is taken only if the context is busy/active.
+ * If the context isn't active but has a GPU address space slot assigned to it
+ * then a flag is set to indicate that MMU flush operation is pending, which
+ * will be performed when the context becomes active.
+ *
+ * Return: true if refcount succeeded and the address space slot will not be
+ * reassigned, false if the refcount failed (because the context was inactive)
+ */
+bool kbase_ctx_sched_refcount_mmu_flush(struct kbase_context *kctx,
+					bool sync);
+#endif
 
 #endif /* _KBASE_CTX_SCHED_H_ */

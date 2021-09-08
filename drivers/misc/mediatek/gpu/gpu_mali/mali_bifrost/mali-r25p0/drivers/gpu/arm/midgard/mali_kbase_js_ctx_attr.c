@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2012-2016, 2018, 2020 ARM Limited. All rights reserved.
@@ -19,7 +20,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
-
 
 #include <mali_kbase.h>
 #include <mali_kbase_config.h>
@@ -211,7 +211,8 @@ void kbasep_js_ctx_attr_runpool_retain_ctx(struct kbase_device *kbdev, struct kb
 
 			/* We don't need to know about state changed, because retaining a
 			 * context occurs on scheduling it, and that itself will also try
-			 * to run new atoms */
+			 * to run new atoms
+			 */
 			CSTD_UNUSED(runpool_state_changed);
 		}
 	}
@@ -251,9 +252,9 @@ void kbasep_js_ctx_attr_ctx_retain_atom(struct kbase_device *kbdev, struct kbase
 		runpool_state_changed |= kbasep_js_ctx_attr_ctx_retain_attr(kbdev, kctx, KBASEP_JS_CTX_ATTR_COMPUTE_ALL_CORES);
 	}
 
-	/* We don't need to know about state changed, because retaining an
-	 * atom occurs on adding it, and that itself will also try to run
-	 * new atoms */
+	/* We don't need to know about state changed, because retaining an atom
+	 * occurs on adding it, and that itself will also try to run new atoms
+	 */
 	CSTD_UNUSED(runpool_state_changed);
 }
 

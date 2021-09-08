@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2015-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2015-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -80,6 +99,30 @@ void kbase_timeline_streams_flush(struct kbase_timeline *timeline);
  * @timeline:     Timeline instance
  */
 void kbase_timeline_streams_body_reset(struct kbase_timeline *timeline);
+
+/**
+ * kbase_timeline_post_kbase_context_create - Inform timeline that a new KBase
+ *                                            Context has been created.
+ * @kctx:    KBase Context
+ */
+void kbase_timeline_post_kbase_context_create(struct kbase_context *kctx);
+
+/**
+ * kbase_timeline_pre_kbase_context_destroy - Inform timeline that a KBase
+ *                                            Context is about to be destroyed.
+ * @kctx:    KBase Context
+ */
+void kbase_timeline_pre_kbase_context_destroy(struct kbase_context *kctx);
+
+/**
+ * kbase_timeline_post_kbase_context_destroy - Inform timeline that a KBase
+ *                                             Context has been destroyed.
+ * @kctx:    KBase Context
+ *
+ * Should be called immediately before the memory is freed, and the context ID
+ * and kbdev pointer should still be valid.
+ */
+void kbase_timeline_post_kbase_context_destroy(struct kbase_context *kctx);
 
 #if MALI_UNIT_TEST
 /**

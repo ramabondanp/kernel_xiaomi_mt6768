@@ -42,11 +42,19 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev,
 	registers.l2_features = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(L2_FEATURES));
 #if !MALI_USE_CSF
+	/* TGOx */
 	registers.core_features = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(CORE_FEATURES));
 #else /* !MALI_USE_CSF */
-	registers.core_features = 0;
-#endif /* !MALI_USE_CSF */
+	if (((registers.gpu_id & GPU_ID2_PRODUCT_MODEL) ==
+	     GPU_ID2_PRODUCT_TGRX) ||
+	    ((registers.gpu_id & GPU_ID2_PRODUCT_MODEL) ==
+	     GPU_ID2_PRODUCT_TVAX))
+		registers.core_features =
+			kbase_reg_read(kbdev, GPU_CONTROL_REG(CORE_FEATURES));
+	else
+		registers.core_features = 0;
+#endif /* MALI_USE_CSF */
 	registers.tiler_features = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(TILER_FEATURES));
 	registers.mem_features = kbase_reg_read(kbdev,
@@ -104,6 +112,16 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev,
 				GPU_CONTROL_REG(STACK_PRESENT_LO));
 	registers.stack_present_hi = kbase_reg_read(kbdev,
 				GPU_CONTROL_REG(STACK_PRESENT_HI));
+
+	if (registers.gpu_id >= GPU_ID2_PRODUCT_MAKE(11, 8, 5, 2)) {
+		registers.gpu_features_lo = kbase_reg_read(kbdev,
+					GPU_CONTROL_REG(GPU_FEATURES_LO));
+		registers.gpu_features_hi = kbase_reg_read(kbdev,
+					GPU_CONTROL_REG(GPU_FEATURES_HI));
+	} else {
+		registers.gpu_features_lo = 0;
+		registers.gpu_features_hi = 0;
+	}
 
 	if (!kbase_is_gpu_removed(kbdev)) {
 		*regdump = registers;

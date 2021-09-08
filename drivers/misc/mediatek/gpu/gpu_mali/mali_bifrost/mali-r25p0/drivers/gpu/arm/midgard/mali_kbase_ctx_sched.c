@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2017-2020 ARM Limited. All rights reserved.
@@ -44,7 +45,8 @@ int kbase_ctx_sched_init(struct kbase_device *kbdev)
 	int as_present = (1U << kbdev->nr_hw_address_spaces) - 1;
 
 	/* These two must be recalculated if nr_hw_address_spaces changes
-	 * (e.g. for HW workarounds) */
+	 * (e.g. for HW workarounds)
+	 */
 	kbdev->nr_user_address_spaces = kbdev->nr_hw_address_spaces;
 	kbdev->as_free = as_present; /* All ASs initially free */
 
@@ -259,7 +261,7 @@ struct kbase_context *kbase_ctx_sched_as_to_ctx_refcount(
 
 	found_kctx = kbdev->as_to_kctx[as_nr];
 
-	if (found_kctx != NULL)
+	if (!WARN_ON(found_kctx == NULL))
 		kbase_ctx_sched_retain_ctx_refcount(found_kctx);
 
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
@@ -273,22 +275,34 @@ struct kbase_context *kbase_ctx_sched_as_to_ctx(struct kbase_device *kbdev,
 	unsigned long flags;
 	struct kbase_context *found_kctx;
 
+	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+
+	found_kctx = kbase_ctx_sched_as_to_ctx_nolock(kbdev, as_nr);
+
+	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+
+	return found_kctx;
+}
+
+struct kbase_context *kbase_ctx_sched_as_to_ctx_nolock(
+		struct kbase_device *kbdev, size_t as_nr)
+{
+	struct kbase_context *found_kctx;
+
 	if (WARN_ON(kbdev == NULL))
 		return NULL;
 
 	if (WARN_ON(as_nr >= BASE_MAX_NR_AS))
 		return NULL;
 
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+	lockdep_assert_held(&kbdev->hwaccess_lock);
 
 	found_kctx = kbdev->as_to_kctx[as_nr];
 
 	if (found_kctx) {
-		if (WARN_ON(atomic_read(&found_kctx->refcount) <= 0))
+		if (atomic_read(&found_kctx->refcount) <= 0)
 			found_kctx = NULL;
 	}
-
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 
 	return found_kctx;
 }
@@ -351,3 +365,45 @@ void kbase_ctx_sched_release_ctx_lock(struct kbase_context *kctx)
 
 	spin_unlock_irqrestore(&kctx->kbdev->hwaccess_lock, flags);
 }
+
+#if MALI_USE_CSF
+bool kbase_ctx_sched_refcount_mmu_flush(struct kbase_context *kctx,
+					bool sync)
+{
+	struct kbase_device *kbdev;
+	bool added_ref = false;
+	unsigned long flags;
+
+	if (WARN_ON(kctx == NULL))
+		return added_ref;
+
+	kbdev = kctx->kbdev;
+
+	if (WARN_ON(kbdev == NULL))
+		return added_ref;
+
+	mutex_lock(&kbdev->mmu_hw_mutex);
+	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
+
+	added_ref = kbase_ctx_sched_inc_refcount_nolock(kctx);
+
+	WARN_ON(added_ref &&
+		(kctx->mmu_flush_pend_state != KCTX_MMU_FLUSH_NOT_PEND));
+
+	if (!added_ref && (kctx->as_nr != KBASEP_AS_NR_INVALID)) {
+		enum kbase_ctx_mmu_flush_pending_state new_state =
+					sync ? KCTX_MMU_FLUSH_PEND_SYNC :
+					       KCTX_MMU_FLUSH_PEND_NO_SYNC;
+
+		WARN_ON(kctx != kbdev->as_to_kctx[kctx->as_nr]);
+
+		if (kctx->mmu_flush_pend_state != KCTX_MMU_FLUSH_PEND_SYNC)
+			kctx->mmu_flush_pend_state = new_state;
+	}
+
+	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
+	mutex_unlock(&kbdev->mmu_hw_mutex);
+
+	return added_ref;
+}
+#endif

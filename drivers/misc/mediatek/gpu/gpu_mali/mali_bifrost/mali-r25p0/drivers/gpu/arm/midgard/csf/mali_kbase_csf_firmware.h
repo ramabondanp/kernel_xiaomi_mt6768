@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -78,6 +97,9 @@
 #define MIN_SUPPORTED_STREAMS_PER_GROUP 8
 /* Maximum CSs per csg. */
 #define MAX_SUPPORTED_STREAMS_PER_GROUP 32
+
+/* Waiting timeout for status change acknowledgment, in milliseconds */
+#define CSF_FIRMWARE_TIMEOUT_MS (800) /* Relaxed to 800ms from 100ms */
 
 struct kbase_device;
 
@@ -518,26 +540,32 @@ void kbase_csf_firmware_global_reinit(struct kbase_device *kbdev,
 bool kbase_csf_firmware_global_reinit_complete(struct kbase_device *kbdev);
 
 /**
- * kbase_csf_firmware_update_core_mask - Send the Global configuration request
- *                                  to update the mask of enabled shader cores.
+ * kbase_csf_firmware_update_core_attr - Send the Global configuration request
+ *                                       to update the requested core attribute
+ *                                       changes.
  *
  * @kbdev: Instance of a GPU platform device that implements a CSF interface.
- * @new_core_mask: New mask of the enabled cores.
+ * @update_core_pwroff_timer: If true, signal the firmware needs to update
+ *                            the MCU power-off timer value.
+ * @update_core_mask:         If true, need to do the core_mask update with
+ *                            the supplied core_mask value.
+ * @core_mask:                New core mask value if update_core_mask is true,
+ *                            otherwise unused.
  */
-void kbase_csf_firmware_update_core_mask(struct kbase_device *kbdev,
-					 u64 new_core_mask);
+void kbase_csf_firmware_update_core_attr(struct kbase_device *kbdev,
+		bool update_core_pwroff_timer, bool update_core_mask, u64 core_mask);
 
 /**
- * kbase_csf_firmware_core_mask_updated - Check the Global configuration
+ * kbase_csf_firmware_core_attr_updated - Check the Global configuration
  *                  request has completed or not, that was sent to update
- *                  to update the mask of enabled shader cores.
+ *                  the core attributes.
  *
- * Return: true if the Global configuration request to update the mask of
- *         enabled shader cores has completed, otherwise false.
+ * Return: true if the Global configuration request to update the core
+ *         attributes has completed, otherwise false.
  *
  * @kbdev: Instance of a GPU platform device that implements a CSF interface.
  */
-bool kbase_csf_firmware_core_mask_updated(struct kbase_device *kbdev);
+bool kbase_csf_firmware_core_attr_updated(struct kbase_device *kbdev);
 
 /**
  * Request the global control block of CSF interface capabilities
@@ -712,5 +740,60 @@ u32 kbase_csf_firmware_get_gpu_idle_hysteresis_time(struct kbase_device *kbdev);
  * Return: the actual internally configured hysteresis field value.
  */
 u32 kbase_csf_firmware_set_gpu_idle_hysteresis_time(struct kbase_device *kbdev, u32 dur);
+
+/**
+ * kbase_csf_firmware_get_mcu_core_pwroff_time - Get the MCU core power-off
+ *                                               time value
+ *
+ * @kbdev:   Instance of a GPU platform device that implements a CSF interface.
+ *
+ * Return: the internally recorded MCU core power-off (nominal) value. The unit
+ *         of the value is in micro-seconds.
+ */
+u32 kbase_csf_firmware_get_mcu_core_pwroff_time(struct kbase_device *kbdev);
+
+/**
+ * kbase_csf_firmware_set_mcu_core_pwroff_time - Set the MCU core power-off
+ *                                               time value
+ *
+ * @kbdev:   Instance of a GPU platform device that implements a CSF interface.
+ * @dur:     The duration value (unit: micro-seconds) for configuring MCU
+ *           core power-off timer, when the shader cores' power
+ *           transitions are delegated to the MCU (normal operational
+ *           mode)
+ *
+ * The supplied value will be recorded internally without any change. But the
+ * actual field value will be subject to core power-off timer source frequency
+ * scaling and maximum value limiting. The default source will be
+ * SYSTEM_TIMESTAMP counter. But in case the platform is not able to supply it,
+ * the GPU CYCLE_COUNTER source will be used as an alternative. Bit-31 on the
+ * returned value is the source configuration flag, and it is set to '1'
+ * when CYCLE_COUNTER alternative source is used.
+ *
+ * The configured MCU core power-off timer will only have effect when the host
+ * driver has delegated the shader cores' power management to MCU.
+ *
+ * Return: the actual internal core power-off timer value in register defined
+ *         format.
+ */
+u32 kbase_csf_firmware_set_mcu_core_pwroff_time(struct kbase_device *kbdev, u32 dur);
+
+/**
+ * kbase_csf_interface_version - Helper function to build the full firmware
+ *                               interface version in a format compatible with
+ *                               with GLB_VERSION register
+ *
+ * @major:     major version of csf interface
+ * @minor:     minor version of csf interface
+ * @patch:     patch version of csf interface
+ *
+ * Return: firmware interface version
+ */
+static inline u32 kbase_csf_interface_version(u32 major, u32 minor, u32 patch)
+{
+	return ((major << GLB_VERSION_MAJOR_SHIFT) |
+		(minor << GLB_VERSION_MINOR_SHIFT) |
+		(patch << GLB_VERSION_PATCH_SHIFT));
+}
 
 #endif

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
@@ -34,11 +35,7 @@
 #endif
 #include "backend/gpu/mali_kbase_clk_rate_trace_mgr.h"
 
-#if MALI_USE_CSF
-#include "mali_kbase_ctx_sched.h"
-#else
 #include "backend/gpu/mali_kbase_pm_internal.h"
-#endif
 
 /**
  * struct kbase_hwcnt_backend_jm_info - Information used to create an instance
@@ -94,6 +91,47 @@ struct kbase_hwcnt_backend_jm {
 };
 
 /**
+ * kbase_hwcnt_gpu_info_init() - Initialise an info structure used to create the
+ *                               hwcnt metadata.
+ * @kbdev: Non-NULL pointer to kbase device.
+ * @info:  Non-NULL pointer to data structure to be filled in.
+ *
+ * The initialised info struct will only be valid for use while kbdev is valid.
+ */
+int kbase_hwcnt_gpu_info_init(struct kbase_device *kbdev,
+			      struct kbase_hwcnt_gpu_info *info)
+{
+	size_t clk;
+
+	if (!kbdev || !info)
+		return -EINVAL;
+
+#ifdef CONFIG_MALI_NO_MALI
+	info->l2_count = KBASE_DUMMY_MODEL_MAX_MEMSYS_BLOCKS;
+	info->core_mask = (1ull << KBASE_DUMMY_MODEL_MAX_SHADER_CORES) - 1;
+#else /* CONFIG_MALI_NO_MALI */
+	{
+		const struct base_gpu_props *props = &kbdev->gpu_props.props;
+		const size_t l2_count = props->l2_props.num_l2_slices;
+		const size_t core_mask =
+			props->coherency_info.group[0].core_mask;
+
+		info->l2_count = l2_count;
+		info->core_mask = core_mask;
+	}
+#endif /* CONFIG_MALI_NO_MALI */
+
+	/* Determine the number of available clock domains. */
+	for (clk = 0; clk < BASE_MAX_NR_CLOCKS_REGULATORS; clk++) {
+		if (kbdev->pm.clk_rtm.clks[clk] == NULL)
+			break;
+	}
+	info->clk_cnt = clk;
+
+	return 0;
+}
+
+/**
  * kbasep_hwcnt_backend_jm_on_freq_change() - On freq change callback
  *
  * @rate_listener:    Callback state
@@ -135,10 +173,8 @@ static void kbasep_hwcnt_backend_jm_cc_enable(
 
 	if (kbase_hwcnt_clk_enable_map_enabled(
 		    clk_enable_map, KBASE_CLOCK_DOMAIN_TOP)) {
-#if !MALI_USE_CSF
 		/* turn on the cycle counter */
 		kbase_pm_request_gpu_cycle_counter_l2_is_on(kbdev);
-#endif
 		/* Read cycle count for top clock domain. */
 		kbase_backend_get_gpu_time_norequest(
 			kbdev, &cycle_count, NULL, NULL);
@@ -191,13 +227,12 @@ static void kbasep_hwcnt_backend_jm_cc_disable(
 	struct kbase_clk_rate_trace_manager *rtm = &kbdev->pm.clk_rtm;
 	u64 clk_enable_map = backend_jm->clk_enable_map;
 
-#if !MALI_USE_CSF
 	if (kbase_hwcnt_clk_enable_map_enabled(
 		clk_enable_map, KBASE_CLOCK_DOMAIN_TOP)) {
 		/* turn off the cycle counter */
 		kbase_pm_release_gpu_cycle_counter(kbdev);
 	}
-#endif
+
 	if (kbase_hwcnt_clk_enable_map_enabled(
 		clk_enable_map, KBASE_CLOCK_DOMAIN_SHADER_CORES)) {
 
@@ -427,9 +462,9 @@ static int kbasep_hwcnt_backend_jm_dump_get(
 		dst->clk_cnt_buf[clk] = backend_jm->cycle_count_elapsed[clk];
 	}
 
-	return kbase_hwcnt_gpu_dump_get(
-		dst, backend_jm->cpu_dump_va, dst_enable_map,
-		backend_jm->pm_core_mask, accumulate);
+	return kbase_hwcnt_jm_dump_get(dst, backend_jm->cpu_dump_va,
+				       dst_enable_map, backend_jm->pm_core_mask,
+				       accumulate);
 }
 
 /**
@@ -497,9 +532,6 @@ static void kbasep_hwcnt_backend_jm_destroy(
 		return;
 
 	if (backend->kctx) {
-#if MALI_USE_CSF
-		unsigned long flags;
-#endif
 		struct kbase_context *kctx = backend->kctx;
 		struct kbase_device *kbdev = kctx->kbdev;
 
@@ -510,13 +542,7 @@ static void kbasep_hwcnt_backend_jm_destroy(
 			kbasep_hwcnt_backend_jm_dump_free(
 				kctx, backend->gpu_dump_va);
 
-#if MALI_USE_CSF
-		spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
-		kbase_ctx_sched_release_ctx(kctx);
-		spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
-#else
 		kbasep_js_release_privileged_ctx(kbdev, kctx);
-#endif
 		kbase_destroy_context(kctx);
 	}
 
@@ -534,9 +560,6 @@ static int kbasep_hwcnt_backend_jm_create(
 	const struct kbase_hwcnt_backend_jm_info *info,
 	struct kbase_hwcnt_backend_jm **out_backend)
 {
-#if MALI_USE_CSF
-	unsigned long flags;
-#endif
 	int errcode;
 	struct kbase_device *kbdev;
 	struct kbase_hwcnt_backend_jm *backend = NULL;
@@ -557,17 +580,7 @@ static int kbasep_hwcnt_backend_jm_create(
 	if (!backend->kctx)
 		goto alloc_error;
 
-#if MALI_USE_CSF
-	kbase_pm_context_active(kbdev);
-	mutex_lock(&kbdev->mmu_hw_mutex);
-	spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
-	kbase_ctx_sched_retain_ctx(backend->kctx);
-	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
-	mutex_unlock(&kbdev->mmu_hw_mutex);
-	kbase_pm_context_idle(kbdev);
-#else
 	kbasep_js_schedule_privileged_ctx(kbdev, backend->kctx);
-#endif
 
 	errcode = kbasep_hwcnt_backend_jm_dump_alloc(
 		info, backend->kctx, &backend->gpu_dump_va);
@@ -595,6 +608,16 @@ alloc_error:
 error:
 	kbasep_hwcnt_backend_jm_destroy(backend);
 	return errcode;
+}
+
+/* JM backend implementation of kbase_hwcnt_backend_metadata_fn */
+static const struct kbase_hwcnt_metadata *
+kbasep_hwcnt_backend_jm_metadata(const struct kbase_hwcnt_backend_info *info)
+{
+	if (!info)
+		return NULL;
+
+	return ((const struct kbase_hwcnt_backend_jm_info *)info)->metadata;
 }
 
 /* JM backend implementation of kbase_hwcnt_backend_init_fn */
@@ -641,7 +664,7 @@ static void kbasep_hwcnt_backend_jm_info_destroy(
 	if (!info)
 		return;
 
-	kbase_hwcnt_gpu_metadata_destroy(info->metadata);
+	kbase_hwcnt_jm_metadata_destroy(info->metadata);
 	kfree(info);
 }
 
@@ -682,10 +705,10 @@ static int kbasep_hwcnt_backend_jm_info_create(
 	info->counter_set = KBASE_HWCNT_SET_PRIMARY;
 #endif
 
-	errcode = kbase_hwcnt_gpu_metadata_create(&hwcnt_gpu_info,
-						  info->counter_set,
-						  &info->metadata,
-						  &info->dump_bytes);
+	errcode = kbase_hwcnt_jm_metadata_create(&hwcnt_gpu_info,
+						 info->counter_set,
+						 &info->metadata,
+						 &info->dump_bytes);
 	if (errcode)
 		goto error;
 
@@ -712,8 +735,8 @@ int kbase_hwcnt_backend_jm_create(
 	if (errcode)
 		return errcode;
 
-	iface->metadata = info->metadata;
 	iface->info = (struct kbase_hwcnt_backend_info *)info;
+	iface->metadata = kbasep_hwcnt_backend_jm_metadata;
 	iface->init = kbasep_hwcnt_backend_jm_init;
 	iface->term = kbasep_hwcnt_backend_jm_term;
 	iface->timestamp_ns = kbasep_hwcnt_backend_jm_timestamp_ns;

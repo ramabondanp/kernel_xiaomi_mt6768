@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -277,6 +296,17 @@ void __kbase_tlstream_aux_jit_stats(
 	u32 allocs,
 	u32 va_pages,
 	u32 ph_pages);
+void __kbase_tlstream_aux_tiler_heap_stats(
+	struct kbase_tlstream *stream,
+	u32 ctx_nr,
+	u64 heap_id,
+	u32 va_pages,
+	u32 ph_pages,
+	u32 max_chunks,
+	u32 chunk_size,
+	u32 chunk_count,
+	u32 target_in_flight,
+	u32 nr_in_flight);
 void __kbase_tlstream_aux_event_job_slot(
 	struct kbase_tlstream *stream,
 	const void *ctx,
@@ -1497,6 +1527,42 @@ struct kbase_tlstream;
 			__kbase_tlstream_aux_jit_stats(	\
 				__TL_DISPATCH_STREAM(kbdev, aux),	\
 				ctx_nr, bid, max_allocs, allocs, va_pages, ph_pages);	\
+	} while (0)
+
+/**
+ * KBASE_TLSTREAM_AUX_TILER_HEAP_STATS -
+ *   Tiler Heap statistics
+ *
+ * @kbdev: Kbase device
+ * @ctx_nr: Kernel context number
+ * @heap_id: Unique id used to represent a heap under a context
+ * @va_pages: Number of virtual pages allocated in this bin
+ * @ph_pages: Number of physical pages allocated in this bin
+ * @max_chunks: The maximum number of chunks that the heap should be allowed to use
+ * @chunk_size: Size of each chunk in tiler heap, in bytes
+ * @chunk_count: The number of chunks currently allocated in the tiler heap
+ * @target_in_flight: Number of render-passes that the driver should attempt
+ * to keep in flight for which allocation of new chunks is allowed
+ * @nr_in_flight: Number of render-passes that are in flight
+ */
+#define KBASE_TLSTREAM_AUX_TILER_HEAP_STATS(	\
+	kbdev,	\
+	ctx_nr,	\
+	heap_id,	\
+	va_pages,	\
+	ph_pages,	\
+	max_chunks,	\
+	chunk_size,	\
+	chunk_count,	\
+	target_in_flight,	\
+	nr_in_flight	\
+	)	\
+	do {	\
+		int enabled = atomic_read(&kbdev->timeline_flags);	\
+		if (enabled & TLSTREAM_ENABLED)	\
+			__kbase_tlstream_aux_tiler_heap_stats(	\
+				__TL_DISPATCH_STREAM(kbdev, aux),	\
+				ctx_nr, heap_id, va_pages, ph_pages, max_chunks, chunk_size, chunk_count, target_in_flight, nr_in_flight);	\
 	} while (0)
 
 /**

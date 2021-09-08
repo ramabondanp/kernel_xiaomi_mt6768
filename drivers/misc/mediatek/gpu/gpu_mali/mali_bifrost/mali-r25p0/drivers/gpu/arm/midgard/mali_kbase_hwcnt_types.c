@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2018, 2020 ARM Limited. All rights reserved.
@@ -21,7 +22,8 @@
  */
 
 #include "mali_kbase_hwcnt_types.h"
-#include "mali_kbase.h"
+
+#include <linux/slab.h>
 
 /* Minimum alignment of each block of hardware counters */
 #define KBASE_HWCNT_BLOCK_BYTE_ALIGNMENT \
@@ -175,13 +177,11 @@ int kbase_hwcnt_metadata_create(
 	*out_metadata = metadata;
 	return 0;
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_metadata_create);
 
 void kbase_hwcnt_metadata_destroy(const struct kbase_hwcnt_metadata *metadata)
 {
 	kfree(metadata);
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_metadata_destroy);
 
 int kbase_hwcnt_enable_map_alloc(
 	const struct kbase_hwcnt_metadata *metadata,
@@ -205,7 +205,6 @@ int kbase_hwcnt_enable_map_alloc(
 	enable_map->hwcnt_enable_map = enable_map_buf;
 	return 0;
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_enable_map_alloc);
 
 void kbase_hwcnt_enable_map_free(struct kbase_hwcnt_enable_map *enable_map)
 {
@@ -216,7 +215,6 @@ void kbase_hwcnt_enable_map_free(struct kbase_hwcnt_enable_map *enable_map)
 	enable_map->hwcnt_enable_map = NULL;
 	enable_map->metadata = NULL;
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_enable_map_free);
 
 int kbase_hwcnt_dump_buffer_alloc(
 	const struct kbase_hwcnt_metadata *metadata,
@@ -243,7 +241,6 @@ int kbase_hwcnt_dump_buffer_alloc(
 
 	return 0;
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_alloc);
 
 void kbase_hwcnt_dump_buffer_free(struct kbase_hwcnt_dump_buffer *dump_buf)
 {
@@ -253,7 +250,6 @@ void kbase_hwcnt_dump_buffer_free(struct kbase_hwcnt_dump_buffer *dump_buf)
 	kfree(dump_buf->dump_buf);
 	memset(dump_buf, 0, sizeof(*dump_buf));
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_free);
 
 int kbase_hwcnt_dump_buffer_array_alloc(
 	const struct kbase_hwcnt_metadata *metadata,
@@ -309,7 +305,6 @@ int kbase_hwcnt_dump_buffer_array_alloc(
 
 	return 0;
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_array_alloc);
 
 void kbase_hwcnt_dump_buffer_array_free(
 	struct kbase_hwcnt_dump_buffer_array *dump_bufs)
@@ -321,7 +316,6 @@ void kbase_hwcnt_dump_buffer_array_free(
 	free_pages(dump_bufs->page_addr, dump_bufs->page_order);
 	memset(dump_bufs, 0, sizeof(*dump_bufs));
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_array_free);
 
 void kbase_hwcnt_dump_buffer_zero(
 	struct kbase_hwcnt_dump_buffer *dst,
@@ -356,7 +350,6 @@ void kbase_hwcnt_dump_buffer_zero(
 	memset(dst->clk_cnt_buf, 0,
 		sizeof(*dst->clk_cnt_buf) * metadata->clk_cnt);
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_zero);
 
 void kbase_hwcnt_dump_buffer_zero_strict(
 	struct kbase_hwcnt_dump_buffer *dst)
@@ -369,7 +362,6 @@ void kbase_hwcnt_dump_buffer_zero_strict(
 	memset(dst->clk_cnt_buf, 0,
 		sizeof(*dst->clk_cnt_buf) * dst->metadata->clk_cnt);
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_zero_strict);
 
 void kbase_hwcnt_dump_buffer_zero_non_enabled(
 	struct kbase_hwcnt_dump_buffer *dst,
@@ -409,7 +401,6 @@ void kbase_hwcnt_dump_buffer_zero_non_enabled(
 		}
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_zero_non_enabled);
 
 void kbase_hwcnt_dump_buffer_copy(
 	struct kbase_hwcnt_dump_buffer *dst,
@@ -455,7 +446,6 @@ void kbase_hwcnt_dump_buffer_copy(
 			dst->clk_cnt_buf[clk] = src->clk_cnt_buf[clk];
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_copy);
 
 void kbase_hwcnt_dump_buffer_copy_strict(
 	struct kbase_hwcnt_dump_buffer *dst,
@@ -502,7 +492,6 @@ void kbase_hwcnt_dump_buffer_copy_strict(
 		dst->clk_cnt_buf[clk] = clk_enabled ? src->clk_cnt_buf[clk] : 0;
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_copy_strict);
 
 void kbase_hwcnt_dump_buffer_accumulate(
 	struct kbase_hwcnt_dump_buffer *dst,
@@ -552,7 +541,6 @@ void kbase_hwcnt_dump_buffer_accumulate(
 			dst->clk_cnt_buf[clk] += src->clk_cnt_buf[clk];
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_accumulate);
 
 void kbase_hwcnt_dump_buffer_accumulate_strict(
 	struct kbase_hwcnt_dump_buffer *dst,
@@ -601,4 +589,3 @@ void kbase_hwcnt_dump_buffer_accumulate_strict(
 			dst->clk_cnt_buf[clk] = 0;
 	}
 }
-KBASE_EXPORT_TEST_API(kbase_hwcnt_dump_buffer_accumulate_strict);

@@ -21,8 +21,6 @@
  *
  */
 
-
-
 /*
  * Base kernel property query APIs
  */
@@ -48,7 +46,7 @@ static void kbase_gpuprops_construct_coherent_groups(
 	u64 first_set, first_set_prev;
 	u32 num_groups = 0;
 
-	KBASE_DEBUG_ASSERT(NULL != props);
+	KBASE_DEBUG_ASSERT(props != NULL);
 
 	props->coherency_info.coherency = props->raw_props.mem_features;
 	props->coherency_info.num_core_groups = hweight64(props->raw_props.l2_present);
@@ -124,8 +122,8 @@ static int kbase_gpuprops_get_props(struct base_gpu_props * const gpu_props,
 	int i;
 	int err;
 
-	KBASE_DEBUG_ASSERT(NULL != kbdev);
-	KBASE_DEBUG_ASSERT(NULL != gpu_props);
+	KBASE_DEBUG_ASSERT(kbdev != NULL);
+	KBASE_DEBUG_ASSERT(gpu_props != NULL);
 
 	/* Dump relevant registers */
 	err = kbase_backend_gpuprops_get(kbdev, &regdump);
@@ -165,6 +163,10 @@ static int kbase_gpuprops_get_props(struct base_gpu_props * const gpu_props,
 	gpu_props->raw_props.thread_max_workgroup_size = regdump.thread_max_workgroup_size;
 	gpu_props->raw_props.thread_features = regdump.thread_features;
 	gpu_props->raw_props.thread_tls_alloc = regdump.thread_tls_alloc;
+
+	gpu_props->raw_props.gpu_features =
+		((u64) regdump.gpu_features_hi << 32) +
+		regdump.gpu_features_lo;
 
 	return 0;
 }
@@ -217,7 +219,8 @@ static void kbase_gpuprops_calculate_props(
 
 	/* Field with number of l2 slices is added to MEM_FEATURES register
 	 * since t76x. Below code assumes that for older GPU reserved bits will
-	 * be read as zero. */
+	 * be read as zero.
+	 */
 	gpu_props->l2_props.num_l2_slices =
 		KBASE_UBFX32(gpu_props->raw_props.mem_features, 8U, 4) + 1;
 
@@ -305,7 +308,7 @@ void kbase_gpuprops_set(struct kbase_device *kbdev)
 	struct kbase_gpu_props *gpu_props;
 	struct gpu_raw_gpu_props *raw;
 
-	KBASE_DEBUG_ASSERT(NULL != kbdev);
+	KBASE_DEBUG_ASSERT(kbdev != NULL);
 	gpu_props = &kbdev->gpu_props;
 	raw = &gpu_props->props.raw_props;
 
@@ -365,12 +368,25 @@ int kbase_gpuprops_set_features(struct kbase_device *kbdev)
  * in sysfs.
  */
 static u8 override_l2_size;
-module_param(override_l2_size, byte, 0);
+module_param(override_l2_size, byte, 0000);
 MODULE_PARM_DESC(override_l2_size, "Override L2 size config for testing");
 
 static u8 override_l2_hash;
-module_param(override_l2_hash, byte, 0);
+module_param(override_l2_hash, byte, 0000);
 MODULE_PARM_DESC(override_l2_hash, "Override L2 hash config for testing");
+
+static u32 l2_hash_values[ASN_HASH_COUNT] = {
+	0,
+};
+static int num_override_l2_hash_values;
+module_param_array(l2_hash_values, uint, &num_override_l2_hash_values, 0000);
+MODULE_PARM_DESC(l2_hash_values, "Override L2 hash values config for testing");
+
+enum l2_config_override_result {
+	L2_CONFIG_OVERRIDE_FAIL = -1,
+	L2_CONFIG_OVERRIDE_NONE,
+	L2_CONFIG_OVERRIDE_OK,
+};
 
 /**
  * kbase_read_l2_config_from_dt - Read L2 configuration
@@ -380,15 +396,17 @@ MODULE_PARM_DESC(override_l2_hash, "Override L2 hash config for testing");
  * Override values in module parameters take priority over override values in
  * device tree.
  *
- * Return: true if either size or hash was overridden, false if no overrides
- * were found.
+ * Return: L2_CONFIG_OVERRIDE_OK if either size or hash, or both was properly
+ *         overridden, L2_CONFIG_OVERRIDE_NONE if no overrides are provided.
+ *         L2_CONFIG_OVERRIDE_FAIL otherwise.
  */
-static bool kbase_read_l2_config_from_dt(struct kbase_device * const kbdev)
+static enum l2_config_override_result
+kbase_read_l2_config_from_dt(struct kbase_device *const kbdev)
 {
 	struct device_node *np = kbdev->dev->of_node;
 
 	if (!np)
-		return false;
+		return L2_CONFIG_OVERRIDE_NONE;
 
 	if (override_l2_size)
 		kbdev->l2_size_override = override_l2_size;
@@ -400,10 +418,41 @@ static bool kbase_read_l2_config_from_dt(struct kbase_device * const kbdev)
 	else if (of_property_read_u8(np, "l2-hash", &kbdev->l2_hash_override))
 		kbdev->l2_hash_override = 0;
 
-	if (kbdev->l2_size_override || kbdev->l2_hash_override)
-		return true;
+	kbdev->l2_hash_values_override = false;
+	if (num_override_l2_hash_values) {
+		int i;
 
-	return false;
+		kbdev->l2_hash_values_override = true;
+		for (i = 0; i < num_override_l2_hash_values; i++)
+			kbdev->l2_hash_values[i] = l2_hash_values[i];
+	} else if (!of_property_read_u32_array(np, "l2-hash-values",
+					       kbdev->l2_hash_values,
+					       ASN_HASH_COUNT))
+		kbdev->l2_hash_values_override = true;
+
+	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_ASN_HASH) &&
+	    (kbdev->l2_hash_override)) {
+		dev_err(kbdev->dev, "l2-hash not supported\n");
+		return L2_CONFIG_OVERRIDE_FAIL;
+	}
+
+	if (!kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_ASN_HASH) &&
+	    (kbdev->l2_hash_values_override)) {
+		dev_err(kbdev->dev, "l2-hash-values not supported\n");
+		return L2_CONFIG_OVERRIDE_FAIL;
+	}
+
+	if (kbdev->l2_hash_override && kbdev->l2_hash_values_override) {
+		dev_err(kbdev->dev,
+			"both l2-hash & l2-hash-values not supported\n");
+		return L2_CONFIG_OVERRIDE_FAIL;
+	}
+
+	if (kbdev->l2_size_override || kbdev->l2_hash_override ||
+	    kbdev->l2_hash_values_override)
+		return L2_CONFIG_OVERRIDE_OK;
+
+	return L2_CONFIG_OVERRIDE_NONE;
 }
 
 int kbase_gpuprops_update_l2_features(struct kbase_device *kbdev)
@@ -415,8 +464,15 @@ int kbase_gpuprops_update_l2_features(struct kbase_device *kbdev)
 		struct base_gpu_props *gpu_props = &kbdev->gpu_props.props;
 
 		/* Check for L2 cache size & hash overrides */
-		if (!kbase_read_l2_config_from_dt(kbdev))
-			return 0;
+		switch (kbase_read_l2_config_from_dt(kbdev)) {
+		case L2_CONFIG_OVERRIDE_FAIL:
+			err = -EIO;
+			goto exit;
+		case L2_CONFIG_OVERRIDE_NONE:
+			goto exit;
+		default:
+			break;
+		}
 
 		/* Need L2 to get powered to reflect to L2_FEATURES */
 		kbase_pm_context_active(kbdev);
@@ -440,8 +496,9 @@ int kbase_gpuprops_update_l2_features(struct kbase_device *kbdev)
 idle_gpu:
 		/* Let GPU idle */
 		kbase_pm_context_idle(kbdev);
-	}
+}
 
+exit:
 	return err;
 }
 
@@ -521,7 +578,7 @@ static struct {
 	PROP(RAW_THREAD_FEATURES,         raw_props.thread_features),
 	PROP(RAW_THREAD_TLS_ALLOC,        raw_props.thread_tls_alloc),
 	PROP(RAW_COHERENCY_MODE,          raw_props.coherency_mode),
-
+	PROP(RAW_GPU_FEATURES,            raw_props.gpu_features),
 	PROP(COHERENCY_NUM_GROUPS,        coherency_info.num_groups),
 	PROP(COHERENCY_NUM_CORE_GROUPS,   coherency_info.num_core_groups),
 	PROP(COHERENCY_COHERENCY,         coherency_info.coherency),

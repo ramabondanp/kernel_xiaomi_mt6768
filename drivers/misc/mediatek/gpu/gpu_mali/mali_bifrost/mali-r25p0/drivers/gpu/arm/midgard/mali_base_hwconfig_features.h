@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU licence.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -56,6 +75,7 @@ enum base_hw_feature {
 	BASE_HW_FEATURE_CLEAN_ONLY_SAFE,
 	BASE_HW_FEATURE_IDVS_GROUP_SIZE,
 	BASE_HW_FEATURE_L2_CONFIG,
+	BASE_HW_FEATURE_ASN_HASH,
 	BASE_HW_FEATURE_END
 };
 
@@ -480,6 +500,7 @@ static const enum base_hw_feature base_hw_features_tTUx[] = {
 	BASE_HW_FEATURE_AARCH64_MMU,
 	BASE_HW_FEATURE_L2_CONFIG,
 	BASE_HW_FEATURE_CLEAN_ONLY_SAFE,
+	BASE_HW_FEATURE_ASN_HASH,
 	BASE_HW_FEATURE_END
 };
 

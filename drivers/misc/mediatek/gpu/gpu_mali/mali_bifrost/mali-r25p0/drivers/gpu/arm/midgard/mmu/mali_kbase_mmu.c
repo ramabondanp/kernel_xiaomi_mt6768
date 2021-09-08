@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
@@ -1616,6 +1617,16 @@ static void kbase_mmu_flush_invalidate_as(struct kbase_device *kbdev,
 		 */
 		dev_err(kbdev->dev, "Flush for GPU page table update did not complete. Issueing GPU soft-reset to recover\n");
 
+#if MALI_USE_CSF
+		/* A GPU hang could mean hardware counters will stop working.
+		 * Put the backend into the unrecoverable error state to cause
+		 * current and subsequent counter operations to immediately
+		 * fail, avoiding the risk of a hang.
+		 */
+		kbase_hwcnt_backend_csf_on_unrecoverable_error(
+			&kbdev->hwcnt_gpu_iface);
+#endif /* MALI_USE_CSF */
+
 		if (kbase_prepare_to_reset_gpu(kbdev))
 			kbase_reset_gpu(kbdev);
 	}
@@ -1649,10 +1660,10 @@ static void kbase_mmu_flush_invalidate(struct kbase_context *kctx,
 	kbdev = kctx->kbdev;
 #if !MALI_USE_CSF
 	mutex_lock(&kbdev->js_data.queue_mutex);
-#endif /* !MALI_USE_CSF */
 	ctx_is_in_runpool = kbase_ctx_sched_inc_refcount(kctx);
-#if !MALI_USE_CSF
 	mutex_unlock(&kbdev->js_data.queue_mutex);
+#else
+	ctx_is_in_runpool = kbase_ctx_sched_refcount_mmu_flush(kctx, sync);
 #endif /* !MALI_USE_CSF */
 
 	if (ctx_is_in_runpool) {
@@ -1674,6 +1685,11 @@ void kbase_mmu_update(struct kbase_device *kbdev,
 	KBASE_DEBUG_ASSERT(as_nr != KBASEP_AS_NR_INVALID);
 
 	kbdev->mmu_mode->update(kbdev, mmut, as_nr);
+
+#if MALI_USE_CSF
+	if (mmut->kctx)
+		mmut->kctx->mmu_flush_pend_state = KCTX_MMU_FLUSH_NOT_PEND;
+#endif
 }
 KBASE_EXPORT_TEST_API(kbase_mmu_update);
 
@@ -1695,6 +1711,7 @@ void kbase_mmu_disable(struct kbase_context *kctx)
 	KBASE_DEBUG_ASSERT(kctx->as_nr != KBASEP_AS_NR_INVALID);
 
 	lockdep_assert_held(&kctx->kbdev->hwaccess_lock);
+	lockdep_assert_held(&kctx->kbdev->mmu_hw_mutex);
 
 	/*
 	 * The address space is being disabled, drain all knowledge of it out
@@ -1706,6 +1723,10 @@ void kbase_mmu_disable(struct kbase_context *kctx)
 	kbase_mmu_flush_invalidate_noretain(kctx, 0, ~0, true);
 
 	kctx->kbdev->mmu_mode->disable_as(kctx->kbdev, kctx->as_nr);
+
+#if MALI_USE_CSF
+	kctx->mmu_flush_pend_state = KCTX_MMU_FLUSH_NOT_PEND;
+#endif
 }
 KBASE_EXPORT_TEST_API(kbase_mmu_disable);
 
@@ -2295,3 +2316,30 @@ void kbase_flush_mmu_wqs(struct kbase_device *kbdev)
 		flush_workqueue(as->pf_wq);
 	}
 }
+
+#if MALI_USE_CSF
+void kbase_mmu_deferred_flush_invalidate(struct kbase_context *kctx)
+{
+	struct kbase_device *kbdev = kctx->kbdev;
+
+	lockdep_assert_held(&kbdev->mmu_hw_mutex);
+
+	if (kctx->as_nr == KBASEP_AS_NR_INVALID)
+		return;
+
+	if (kctx->mmu_flush_pend_state == KCTX_MMU_FLUSH_NOT_PEND)
+		return;
+
+	WARN_ON(!atomic_read(&kctx->refcount));
+
+	/* Specify the entire address space as the locked region.
+	 * The flush of entire L2 cache and complete TLB invalidation will
+	 * anyways happen for the exisiting CSF GPUs, regardless of the locked
+	 * range. This may have to be revised later on.
+	 */
+	kbase_mmu_flush_invalidate_noretain(kctx, 0, ~0,
+		kctx->mmu_flush_pend_state == KCTX_MMU_FLUSH_PEND_SYNC);
+
+	kctx->mmu_flush_pend_state = KCTX_MMU_FLUSH_NOT_PEND;
+}
+#endif

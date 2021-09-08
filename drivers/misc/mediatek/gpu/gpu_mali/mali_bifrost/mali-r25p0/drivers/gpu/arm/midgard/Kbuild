@@ -24,7 +24,7 @@ include $(src)/platform/mtk_platform_common/Kbuild
 
 
 # Driver version string which is returned to userspace via an ioctl
-MALI_RELEASE_NAME ?= "r28p0-01eac0"
+MALI_RELEASE_NAME ?= "r29p0-01eac0"
 
 # Paths required for build
 
@@ -99,7 +99,6 @@ SRC := \
 	mali_kbase_config.c \
 	mali_kbase_vinstr.c \
 	mali_kbase_hwcnt.c \
-	mali_kbase_hwcnt_backend_jm.c \
 	mali_kbase_hwcnt_gpu.c \
 	mali_kbase_hwcnt_legacy.c \
 	mali_kbase_hwcnt_types.c \
@@ -137,6 +136,8 @@ SRC := \
 
 ifeq ($(MALI_USE_CSF),1)
 	SRC += \
+		mali_kbase_hwcnt_backend_csf.c \
+		mali_kbase_hwcnt_backend_csf_if_fw.c \
 		debug/backend/mali_kbase_debug_ktrace_csf.c \
 		device/backend/mali_kbase_device_csf.c \
 		device/backend/mali_kbase_device_hw_csf.c \
@@ -146,6 +147,7 @@ ifeq ($(MALI_USE_CSF),1)
 		context/backend/mali_kbase_context_csf.c
 else
 	SRC += \
+		mali_kbase_hwcnt_backend_jm.c \
 		mali_kbase_dummy_job_wa.c \
 		mali_kbase_debug_job_fault.c \
 		mali_kbase_event.c \

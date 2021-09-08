@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2014-2020 ARM Limited. All rights reserved.
@@ -19,7 +20,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
-
 
 /*
  * Register-based HW access backend specific job scheduler APIs
@@ -48,7 +48,8 @@ static inline bool timer_callback_should_run(struct kbase_device *kbdev)
 
 	/* nr_contexts_pullable is updated with the runpool_mutex. However, the
 	 * locking in the caller gives us a barrier that ensures
-	 * nr_contexts_pullable is up-to-date for reading */
+	 * nr_contexts_pullable is up-to-date for reading
+	 */
 	nr_running_ctxs = atomic_read(&kbdev->js_data.nr_contexts_runnable);
 
 #ifdef CONFIG_MALI_DEBUG
@@ -114,7 +115,8 @@ static enum hrtimer_restart timer_callback(struct hrtimer *timer)
 
 		if (atom != NULL) {
 			/* The current version of the model doesn't support
-			 * Soft-Stop */
+			 * Soft-Stop
+			 */
 			if (!kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_5736)) {
 				u32 ticks = atom->ticks++;
 
@@ -142,7 +144,8 @@ static enum hrtimer_restart timer_callback(struct hrtimer *timer)
 				 * new soft_stop timeout. This ensures that
 				 * atoms do not miss any of the timeouts due to
 				 * races between this worker and the thread
-				 * changing the timeouts. */
+				 * changing the timeouts.
+				 */
 				if (backend->timeouts_updated &&
 						ticks > soft_stop_ticks)
 					ticks = atom->ticks = soft_stop_ticks;
@@ -172,10 +175,11 @@ static enum hrtimer_restart timer_callback(struct hrtimer *timer)
 					 *
 					 * Similarly, if it's about to be
 					 * decreased, the last job from another
-					 * context has already finished, so it's
-					 * not too bad that we observe the older
-					 * value and register a disjoint event
-					 * when we try soft-stopping */
+					 * context has already finished, so
+					 * it's not too bad that we observe the
+					 * older value and register a disjoint
+					 * event when we try soft-stopping
+					 */
 					if (js_devdata->nr_user_contexts_running
 							>= disjoint_threshold)
 						softstop_flags |=
@@ -287,11 +291,12 @@ void kbase_backend_ctx_count_changed(struct kbase_device *kbdev)
 		spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 		backend->timer_running = false;
 		spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
-		/* From now on, return value of timer_callback_should_run() will
-		 * also cause the timer to not requeue itself. Its return value
-		 * cannot change, because it depends on variables updated with
-		 * the runpool_mutex held, which the caller of this must also
-		 * hold */
+		/* From now on, return value of timer_callback_should_run()
+		 * will also cause the timer to not requeue itself. Its return
+		 * value cannot change, because it depends on variables updated
+		 * with the runpool_mutex held, which the caller of this must
+		 * also hold
+		 */
 		hrtimer_cancel(&backend->scheduling_timer);
 	}
 

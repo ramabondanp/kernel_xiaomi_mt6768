@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -66,18 +85,36 @@ enum kbase_csf_queue_bind_state {
  * enum kbase_csf_reset_gpu_state - state of the gpu reset
  *
  * @KBASE_CSF_RESET_GPU_NOT_PENDING: Set when the GPU reset isn't pending
+ *
+ * @KBASE_CSF_RESET_GPU_PREPARED: Set when kbase_prepare_to_reset_gpu() has
+ * been called. This is just for debugging checks to encourage callers to call
+ * kbase_prepare_to_reset_gpu() before kbase_reset_gpu().
+ *
+ * @KBASE_CSF_RESET_GPU_COMMITTED: Set when the GPU reset process has been
+ * committed and so will definitely happen, but the procedure to reset the GPU
+ * has not yet begun. Other threads must finish accessing the HW before we
+ * reach %KBASE_CSF_RESET_GPU_HAPPENING.
+ *
  * @KBASE_CSF_RESET_GPU_HAPPENING: Set when the GPU reset process is occurring
- * @KBASE_CSF_RESET_GPU_SILENT: Set when the GPU reset process is occurring,
- * used when resetting the GPU as part of normal behavior (e.g. when exiting
- * protected mode).
+ * (silent or otherwise), and is actively accessing the HW. Any changes to the
+ * HW in other threads might get lost, overridden, or corrupted.
+ *
+ * @KBASE_CSF_RESET_GPU_COMMITTED_SILENT: Set when the GPU reset process has
+ * been committed but has not started happening. This is used when resetting
+ * the GPU as part of normal behavior (e.g. when exiting protected mode).
+ * Other threads must finish accessing the HW before we reach
+ * %KBASE_CSF_RESET_GPU_HAPPENING.
+ *
  * @KBASE_CSF_RESET_GPU_FAILED: Set when an error is encountered during the
  * GPU reset process. No more work could then be executed on GPU, unloading
  * the Driver module is the only option.
  */
 enum kbase_csf_reset_gpu_state {
 	KBASE_CSF_RESET_GPU_NOT_PENDING,
+	KBASE_CSF_RESET_GPU_PREPARED,
+	KBASE_CSF_RESET_GPU_COMMITTED,
 	KBASE_CSF_RESET_GPU_HAPPENING,
-	KBASE_CSF_RESET_GPU_SILENT,
+	KBASE_CSF_RESET_GPU_COMMITTED_SILENT,
 	KBASE_CSF_RESET_GPU_FAILED,
 };
 
@@ -202,6 +239,24 @@ enum kbase_csf_scheduler_state {
 };
 
 /**
+ * enum kbase_queue_group_priority - Kbase internal relative priority list.
+ *
+ * @KBASE_QUEUE_GROUP_PRIORITY_REALTIME:  The realtime queue group priority.
+ * @KBASE_QUEUE_GROUP_PRIORITY_HIGH:      The high queue group priority.
+ * @KBASE_QUEUE_GROUP_PRIORITY_MEDIUM:    The medium queue group priority.
+ * @KBASE_QUEUE_GROUP_PRIORITY_LOW:       The low queue group priority.
+ * @KBASE_QUEUE_GROUP_PRIORITY_COUNT:     The number of priority levels.
+ */
+enum kbase_queue_group_priority {
+	KBASE_QUEUE_GROUP_PRIORITY_REALTIME = 0,
+	KBASE_QUEUE_GROUP_PRIORITY_HIGH,
+	KBASE_QUEUE_GROUP_PRIORITY_MEDIUM,
+	KBASE_QUEUE_GROUP_PRIORITY_LOW,
+	KBASE_QUEUE_GROUP_PRIORITY_COUNT
+};
+
+
+/**
  * struct kbase_csf_notification - Event or error generated as part of command
  *                                 queue execution
  *
@@ -248,7 +303,7 @@ struct kbase_csf_notification {
  * @base_addr:      Base address of the CS buffer.
  * @size:           Size of the CS buffer.
  * @priority:       Priority of this queue within the group.
- * @bind_state:     Bind state of the queue.
+ * @bind_state:     Bind state of the queue as enum @kbase_csf_queue_bind_state
  * @csi_index:      The ID of the assigned CS hardware interface.
  * @enabled:        Indicating whether the CS is running, or not.
  * @status_wait:    Value of CS_STATUS_WAIT register of the CS will
@@ -267,6 +322,10 @@ struct kbase_csf_notification {
  *                  sync wait. CS_STATUS_WAIT_SYNC_VALUE contains the value
  *                  tested against the synchronization object.
  *                  Valid only when @status_wait is set.
+ * @sb_status:      Value indicates which of the scoreboard entries in the queue
+ *                  are non-zero
+ * @blocked_reason: Value shows if the queue is blocked, and if so,
+ *                  the reason why it is blocked
  * @error:          GPU command queue fatal information to pass to user space.
  */
 struct kbase_queue {
@@ -285,12 +344,14 @@ struct kbase_queue {
 	u64 base_addr;
 	u32 size;
 	u8 priority;
-	u8 bind_state;
 	s8 csi_index;
+	enum kbase_csf_queue_bind_state bind_state;
 	bool enabled;
 	u32 status_wait;
 	u64 sync_ptr;
 	u32 sync_value;
+	u32 sb_status;
+	u32 blocked_reason;
 	struct kbase_csf_notification error;
 };
 
@@ -484,14 +545,17 @@ struct kbase_csf_heap_context_allocator {
  * @kbase_context. It is not the same as a heap context structure allocated by
  * the kernel for use by the firmware.
  *
- * @lock:      Lock preventing concurrent access to the tiler heaps.
- * @list:      List of tiler heaps.
- * @ctx_alloc: Allocator for heap context structures.
+ * @lock:        Lock preventing concurrent access to the tiler heaps.
+ * @list:        List of tiler heaps.
+ * @ctx_alloc:   Allocator for heap context structures.
+ * @nr_of_heaps: Total number of tiler heaps that were added during the
+ *               life time of the context.
  */
 struct kbase_csf_tiler_heap_context {
 	struct mutex lock;
 	struct list_head list;
 	struct kbase_csf_heap_context_allocator ctx_alloc;
+	u64 nr_of_heaps;
 };
 
 /**
@@ -499,7 +563,7 @@ struct kbase_csf_tiler_heap_context {
  *                                      context for a GPU address space.
  *
  * @runnable_groups:    Lists of runnable GPU command queue groups in the kctx,
- *                      one per queue group priority level.
+ *                      one per queue group  relative-priority level.
  * @num_runnable_grps:  Total number of runnable groups across all priority
  *                      levels in @runnable_groups.
  * @idle_wait_groups:   A list of GPU command queue groups in which all enabled
@@ -517,7 +581,7 @@ struct kbase_csf_tiler_heap_context {
  *                      'groups_to_schedule' list of scheduler instance.
  */
 struct kbase_csf_scheduler_context {
-	struct list_head runnable_groups[BASE_QUEUE_GROUP_PRIORITY_COUNT];
+	struct list_head runnable_groups[KBASE_QUEUE_GROUP_PRIORITY_COUNT];
 	u32 num_runnable_grps;
 	struct list_head idle_wait_groups;
 	u32 num_idle_wait_grps;
@@ -606,21 +670,26 @@ struct kbase_csf_context {
  * @workq:         Workqueue to execute the GPU reset work item @work.
  * @work:          Work item for performing the GPU reset.
  * @wait:          Wait queue used to wait for the GPU reset completion.
+ * @sem:           RW Semaphore to ensure no other thread attempts to use the
+ *                 GPU whilst a reset is in process. Unlike traditional
+ *                 semaphores and wait queues, this allows Linux's lockdep
+ *                 mechanism to check for deadlocks involving reset waits.
  * @state:         Tracks if the GPU reset is in progress or not.
+ *                 The state is represented by enum @kbase_csf_reset_gpu_state.
  */
 struct kbase_csf_reset_gpu {
 	struct workqueue_struct *workq;
 	struct work_struct work;
 	wait_queue_head_t wait;
+	struct rw_semaphore sem;
 	atomic_t state;
 };
 
 /**
  * struct kbase_csf_csg_slot - Object containing members for tracking the state
  *                             of CSG slots.
- * @resident_group:   pointer to the queue group that is resident on the
- *                    CSG slot.
- * @state:            state of the slot as per enum kbase_csf_csg_slot_state.
+ * @resident_group:   pointer to the queue group that is resident on the CSG slot.
+ * @state:            state of the slot as per enum @kbase_csf_csg_slot_state.
  * @trigger_jiffies:  value of jiffies when change in slot state is recorded.
  * @priority:         dynamic priority assigned to CSG slot.
  */
@@ -689,9 +758,12 @@ struct kbase_csf_csg_slot {
  *                          then it will only perform scheduling under the
  *                          influence of external factors e.g., IRQs, IOCTLs.
  * @wq:                     Dedicated workqueue to execute the @tick_work.
- * @tick_work:              Work item that would perform the schedule on tick
- *                          operation to implement the time slice based
- *                          scheduling.
+ * @tick_timer:             High-resolution timer employed to schedule tick
+ *                          workqueue items (kernel-provided delayed_work
+ *                          items do not use hrtimer and for some reason do
+ *                          not provide sufficiently reliable periodicity).
+ * @tick_work:              Work item that performs the "schedule on tick"
+ *                          operation to implement timeslice-based scheduling.
  * @tock_work:              Work item that would perform the schedule on tock
  *                          operation to implement the asynchronous scheduling.
  * @ping_work:              Work item that would ping the firmware at regular
@@ -733,6 +805,14 @@ struct kbase_csf_csg_slot {
  *                          becomes 0. It is used to enable the power up of MCU
  *                          after GPU and L2 cache have been powered up. So when
  *                          this count is zero, MCU will not be powered up.
+ * @csg_scheduling_period_ms: Duration of Scheduling tick in milliseconds.
+ * @tick_timer_active:      Indicates whether the @tick_timer is effectively
+ *                          active or not, as the callback function of
+ *                          @tick_timer will enqueue @tick_work only if this
+ *                          flag is true. This is mainly useful for the case
+ *                          when scheduling tick needs to be advanced from
+ *                          interrupt context, without actually deactivating
+ *                          the @tick_timer first and then enqueing @tick_work.
  */
 struct kbase_csf_scheduler {
 	struct mutex lock;
@@ -754,7 +834,8 @@ struct kbase_csf_scheduler {
 	unsigned long last_schedule;
 	bool timer_enabled;
 	struct workqueue_struct *wq;
-	struct delayed_work tick_work;
+	struct hrtimer tick_timer;
+	struct work_struct tick_work;
 	struct delayed_work tock_work;
 	struct delayed_work ping_work;
 	struct kbase_context *top_ctx;
@@ -763,11 +844,13 @@ struct kbase_csf_scheduler {
 	bool tock_pending_request;
 	struct kbase_queue_group *active_protm_grp;
 	bool gpu_idle_fw_timer_enabled;
-	struct delayed_work gpu_idle_work;
+	struct work_struct gpu_idle_work;
 	atomic_t non_idle_offslot_grps;
 	u32 non_idle_scanout_grps;
 	bool apply_async_protm;
 	u32 pm_active_count;
+	unsigned int csg_scheduling_period_ms;
+	bool tick_timer_active;
 };
 
 /**
@@ -784,18 +867,20 @@ struct kbase_csf_scheduler {
 	GLB_PROGRESS_TIMER_TIMEOUT_SCALE)
 
 /**
- * Number of GPU cycles per unit of the global poweroff timeout.
+ * Default GLB_PWROFF_TIMER_TIMEOUT value in unit of micro-seconds.
  */
-#define GLB_PWROFF_TIMER_TIMEOUT_SCALE ((u64)1024)
+#define DEFAULT_GLB_PWROFF_TIMEOUT_US (800)
 
 /**
- * Minimum number of GPU cycles for which shader cores must be idle before they
- * are powered off.
- * Value chosen is equivalent to the hysteresis delay used in the shader cores
- * state machine of JM GPUs, which is ~800 micro seconds. It is assumed the GPU
- * is usually clocked at ~500 MHZ.
+ * In typical operations, the management of the shader core power transitions
+ * is delegated to the MCU/firmware. However, if the host driver is configured
+ * to take direct control, one needs to disable the MCU firmware GLB_PWROFF
+ * timer.
  */
-#define DEFAULT_GLB_PWROFF_TIMER_TIMEOUT ((u64)800 * 500)
+#define DISABLE_GLB_PWROFF_TIMER (0)
+
+/* Index of the GPU_ACTIVE counter within the CSHW counter block */
+#define GPU_ACTIVE_CNT_IDX (4)
 
 /**
  * Maximum number of sessions that can be managed by the IPA Control component.
@@ -863,14 +948,18 @@ struct kbase_ipa_control_prfcnt {
 /**
  * struct kbase_ipa_control_session - Session for an IPA Control client
  *
- * @prfcnts:     Sessions for individual performance counters.
- * @num_prfcnts: Number of performance counters.
- * @active:      Status of the session.
+ * @prfcnts:        Sessions for individual performance counters.
+ * @num_prfcnts:    Number of performance counters.
+ * @active:         Indicates whether this slot is in use or not
+ * @last_query_time:     Time of last query, in ns
+ * @protm_time:     Amount of time (in ns) that GPU has been in protected
  */
 struct kbase_ipa_control_session {
 	struct kbase_ipa_control_prfcnt prfcnts[KBASE_IPA_CONTROL_MAX_COUNTERS];
 	size_t num_prfcnts;
 	bool active;
+	u64 last_query_time;
+	u64 protm_time;
 };
 
 /**
@@ -918,6 +1007,7 @@ struct kbase_ipa_control_prfcnt_block {
  * @cur_gpu_rate:        Current GPU top-level operating frequency, in Hz.
  * @rtm_listener_data:   Private data for allocating a GPU frequency change
  *                       listener.
+ * @protm_start:         Time (in ns) at which the GPU entered protected mode
  */
 struct kbase_ipa_control {
 	struct kbase_ipa_control_prfcnt_block blocks[KBASE_IPA_CORE_TYPE_NUM];
@@ -927,6 +1017,21 @@ struct kbase_ipa_control {
 	void *rtm_listener_data;
 	size_t num_active_sessions;
 	u32 cur_gpu_rate;
+	u64 protm_start;
+};
+
+/**
+ * struct kbase_csf_hwcnt - Object containing members for handling the dump of
+ *                          HW counters.
+ *
+ * @request_pending:        Flag set when HWC requested and used for HWC sample
+ *                          done interrupt.
+ * @enable_pending:         Flag set when HWC enable status change and used for
+ *                          enable done interrupt.
+ */
+struct kbase_csf_hwcnt {
+	bool request_pending;
+	bool enable_pending;
 };
 
 /**
@@ -1003,6 +1108,11 @@ struct kbase_ipa_control {
  *                          in GPU reset has completed.
  * @firmware_reload_needed: Flag for indicating that the firmware needs to be
  *                          reloaded as part of the GPU reset action.
+ * @firmware_hctl_core_pwr: Flag for indicating that the host diver is in
+ *                          charge of the shader core's power transitions, and
+ *                          the mcu_core_pwroff timeout feature is disabled
+ *                          (i.e. configured 0 in the register field). If
+ *                          false, the control is delegated to the MCU.
  * @firmware_reload_work:   Work item for facilitating the procedural actions
  *                          on reloading the firmware.
  * @glb_init_request_pending: Flag to indicate that Global requests have been
@@ -1011,12 +1121,26 @@ struct kbase_ipa_control {
  * @fw_error_work:          Work item for handling the firmware internal error
  *                          fatal event.
  * @ipa_control:            IPA Control component manager.
+ * @mcu_core_pwroff_dur_us: Sysfs attribute for the glb_pwroff timeout input
+ *                          in unit of micro-seconds. The firmware does not use
+ *                          it directly.
+ * @mcu_core_pwroff_dur_count: The counterpart of the glb_pwroff timeout input
+ *                             in interface required format, ready to be used
+ *                             directly in the firmware.
+ * @mcu_core_pwroff_reg_shadow: The actual value that has been programed into
+ *                              the glb_pwoff register. This is separated from
+ *                              the @p mcu_core_pwroff_dur_count as an update
+ *                              to the latter is asynchronous.
  * @gpu_idle_hysteresis_ms: Sysfs attribute for the idle hysteresis time
  *                          window in unit of ms. The firmware does not use it
  *                          directly.
  * @gpu_idle_dur_count:     The counterpart of the hysteresis time window in
  *                          interface required format, ready to be used
  *                          directly in the firmware.
+ * @fw_timeout_ms:          Timeout value (in milliseconds) used when waiting
+ *                          for any request sent to the firmware.
+ * @hwcnt:                  Contain members required for handling the dump of
+ *                          HW counters.
  */
 struct kbase_csf_device {
 	struct kbase_mmu_table mcu_mmu;
@@ -1043,12 +1167,18 @@ struct kbase_csf_device {
 	bool firmware_inited;
 	bool firmware_reloaded;
 	bool firmware_reload_needed;
+	bool firmware_hctl_core_pwr;
 	struct work_struct firmware_reload_work;
 	bool glb_init_request_pending;
 	struct work_struct fw_error_work;
 	struct kbase_ipa_control ipa_control;
+	u32 mcu_core_pwroff_dur_us;
+	u32 mcu_core_pwroff_dur_count;
+	u32 mcu_core_pwroff_reg_shadow;
 	u32 gpu_idle_hysteresis_ms;
 	u32 gpu_idle_dur_count;
+	unsigned int fw_timeout_ms;
+	struct kbase_csf_hwcnt hwcnt;
 };
 
 /**

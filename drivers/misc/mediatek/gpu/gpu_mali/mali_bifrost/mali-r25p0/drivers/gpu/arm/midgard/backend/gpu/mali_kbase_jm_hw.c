@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2010-2020 ARM Limited. All rights reserved.
@@ -205,7 +206,8 @@ void kbase_job_hw_submit(struct kbase_device *kbdev,
 	affinity = kbase_job_write_affinity(kbdev, katom->core_req, js);
 
 	/* start MMU, medium priority, cache clean/flush on end, clean/flush on
-	 * start */
+	 * start
+	 */
 	cfg = kctx->as_nr;
 
 	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_FLUSH_REDUCTION) &&
@@ -331,7 +333,8 @@ static void kbasep_job_slot_update_head_start_timestamp(
 			/* Only update the timestamp if it's a better estimate
 			 * than what's currently stored. This is because our
 			 * estimate that accounts for the throttle time may be
-			 * too much of an overestimate */
+			 * too much of an overestimate
+			 */
 			katom->start_timestamp = end_timestamp;
 		}
 	}
@@ -374,9 +377,9 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 		/* treat failed slots as finished slots */
 		u32 finished = (done & 0xFFFF) | failed;
 
-		/* Note: This is inherently unfair, as we always check
-		 * for lower numbered interrupts before the higher
-		 * numbered ones.*/
+		/* Note: This is inherently unfair, as we always check for lower
+		 * numbered interrupts before the higher numbered ones.
+		 */
 		i = ffs(finished) - 1;
 		KBASE_DEBUG_ASSERT(i >= 0);
 
@@ -388,7 +391,8 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 
 			if (failed & (1u << i)) {
 				/* read out the job slot status code if the job
-				 * slot reported failure */
+				 * slot reported failure
+				 */
 				completion_code = kbase_reg_read(kbdev,
 					JOB_SLOT_REG(i, JS_STATUS));
 
@@ -402,7 +406,8 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 
 					/* Soft-stopped job - read the value of
 					 * JS<n>_TAIL so that the job chain can
-					 * be resumed */
+					 * be resumed
+					 */
 					job_tail = (u64)kbase_reg_read(kbdev,
 						JOB_SLOT_REG(i, JS_TAIL_LO)) |
 						((u64)kbase_reg_read(kbdev,
@@ -411,18 +416,21 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 				} else if (completion_code ==
 						BASE_JD_EVENT_NOT_STARTED) {
 					/* PRLAM-10673 can cause a TERMINATED
-					 * job to come back as NOT_STARTED, but
-					 * the error interrupt helps us detect
-					 * it */
+					 * job to come back as NOT_STARTED,
+					 * but the error interrupt helps us
+					 * detect it
+					 */
 					completion_code =
 						BASE_JD_EVENT_TERMINATED;
 				}
 
 				kbase_gpu_irq_evict(kbdev, i, completion_code);
 
-				/* Some jobs that encounter a BUS FAULT may result in corrupted
-				 * state causing future jobs to hang. Reset GPU before
-				 * allowing any other jobs on the slot to continue. */
+				/* Some jobs that encounter a BUS FAULT may
+				 * result in corrupted state causing future
+				 * jobs to hang. Reset GPU before allowing
+				 * any other jobs on the slot to continue.
+				 */
 				if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_TTRX_3076)) {
 					if (completion_code == BASE_JD_EVENT_JOB_BUS_FAULT) {
 						if (kbase_prepare_to_reset_gpu_locked(kbdev))
@@ -483,7 +491,8 @@ void kbase_job_done(struct kbase_device *kbdev, u32 done)
 
 				if ((rawstat >> (i + 16)) & 1) {
 					/* There is a failed job that we've
-					 * missed - add it back to active */
+					 * missed - add it back to active
+					 */
 					active |= (1u << i);
 				}
 			}
@@ -585,7 +594,8 @@ void kbasep_job_slot_soft_or_hard_stop_do_action(struct kbase_device *kbdev,
 		}
 
 		/* We are about to issue a soft stop, so mark the atom as having
-		 * been soft stopped */
+		 * been soft stopped
+		 */
 		target_katom->atom_flags |= KBASE_KATOM_FLAG_BEEN_SOFT_STOPPED;
 
 		/* Mark the point where we issue the soft-stop command */
@@ -1020,6 +1030,33 @@ void kbase_job_check_leave_disjoint(struct kbase_device *kbdev,
 	}
 }
 
+int kbase_reset_gpu_prevent_and_wait(struct kbase_device *kbdev)
+{
+	WARN(true, "%s Not implemented for JM GPUs", __func__);
+	return -EINVAL;
+}
+
+int kbase_reset_gpu_try_prevent(struct kbase_device *kbdev)
+{
+	WARN(true, "%s Not implemented for JM GPUs", __func__);
+	return -EINVAL;
+}
+
+void kbase_reset_gpu_allow(struct kbase_device *kbdev)
+{
+	WARN(true, "%s Not implemented for JM GPUs", __func__);
+}
+
+void kbase_reset_gpu_assert_prevented(struct kbase_device *kbdev)
+{
+	WARN(true, "%s Not implemented for JM GPUs", __func__);
+}
+
+void kbase_reset_gpu_assert_failed_or_prevented(struct kbase_device *kbdev)
+{
+	WARN(true, "%s Not implemented for JM GPUs", __func__);
+}
+
 static void kbase_debug_dump_registers(struct kbase_device *kbdev)
 {
 	int i;
@@ -1086,13 +1123,15 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 
 	/* Make sure the timer has completed - this cannot be done from
 	 * interrupt context, so this cannot be done within
-	 * kbasep_try_reset_gpu_early. */
+	 * kbasep_try_reset_gpu_early.
+	 */
 	hrtimer_cancel(&kbdev->hwaccess.backend.reset_timer);
 
 	if (kbase_pm_context_active_handle_suspend(kbdev,
 				KBASE_PM_SUSPEND_HANDLER_DONT_REACTIVATE)) {
 		/* This would re-activate the GPU. Since it's already idle,
-		 * there's no need to reset it */
+		 * there's no need to reset it
+		 */
 		atomic_set(&kbdev->hwaccess.backend.reset_gpu,
 						KBASE_RESET_GPU_NOT_PENDING);
 		kbase_disjoint_state_down(kbdev);
@@ -1113,14 +1152,16 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 	kbdev->irq_reset_flush = true;
 
 	/* Disable IRQ to avoid IRQ handlers to kick in after releasing the
-	 * spinlock; this also clears any outstanding interrupts */
+	 * spinlock; this also clears any outstanding interrupts
+	 */
 	kbase_pm_disable_interrupts_nolock(kbdev);
 
 	spin_unlock(&kbdev->mmu_mask_change);
 	spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 
 	/* Ensure that any IRQ handlers have finished
-	 * Must be done without any locks IRQ handlers will take */
+	 * Must be done without any locks IRQ handlers will take
+	 */
 	kbase_synchronize_irqs(kbdev);
 
 	/* Flush out any in-flight work items */
@@ -1131,7 +1172,8 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 
 	if (kbase_hw_has_issue(kbdev, BASE_HW_ISSUE_TMIX_8463)) {
 		/* Ensure that L2 is not transitioning when we send the reset
-		 * command */
+		 * command
+		 */
 		while (--max_loops && kbase_pm_get_trans_cores(kbdev,
 				KBASE_PM_CORE_L2))
 			;
@@ -1146,14 +1188,16 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 	/* All slot have been soft-stopped and we've waited
 	 * SOFT_STOP_RESET_TIMEOUT for the slots to clear, at this point we
 	 * assume that anything that is still left on the GPU is stuck there and
-	 * we'll kill it when we reset the GPU */
+	 * we'll kill it when we reset the GPU
+	 */
 
 	if (!silent)
 		dev_err(kbdev->dev, "Resetting GPU (allowing up to %d ms)",
 								RESET_TIMEOUT);
 
 	/* Output the state of some interesting registers to help in the
-	 * debugging of GPU resets */
+	 * debugging of GPU resets
+	 */
 	if (!silent)
 		kbase_debug_dump_registers(kbdev);
 
@@ -1192,7 +1236,8 @@ static void kbasep_reset_timeout_worker(struct work_struct *data)
 	kbase_pm_update_cores_state(kbdev);
 
 	/* Synchronously request and wait for those cores, because if
-	 * instrumentation is enabled it would need them immediately. */
+	 * instrumentation is enabled it would need them immediately.
+	 */
 	kbase_pm_wait_for_desired_state(kbdev);
 
 	mutex_unlock(&kbdev->pm.lock);
@@ -1269,7 +1314,8 @@ static void kbasep_try_reset_gpu_early_locked(struct kbase_device *kbdev)
 
 	/* Check that the reset has been committed to (i.e. kbase_reset_gpu has
 	 * been called), and that no other thread beat this thread to starting
-	 * the reset */
+	 * the reset
+	 */
 	if (atomic_cmpxchg(&kbdev->hwaccess.backend.reset_gpu,
 			KBASE_RESET_GPU_COMMITTED, KBASE_RESET_GPU_HAPPENING) !=
 						KBASE_RESET_GPU_COMMITTED) {
@@ -1362,7 +1408,8 @@ void kbase_reset_gpu(struct kbase_device *kbdev)
 	KBASE_DEBUG_ASSERT(kbdev);
 
 	/* Note this is an assert/atomic_set because it is a software issue for
-	 * a race to be occuring here */
+	 * a race to be occurring here
+	 */
 	KBASE_DEBUG_ASSERT(atomic_read(&kbdev->hwaccess.backend.reset_gpu) ==
 						KBASE_RESET_GPU_PREPARED);
 	atomic_set(&kbdev->hwaccess.backend.reset_gpu,
@@ -1385,7 +1432,8 @@ void kbase_reset_gpu_locked(struct kbase_device *kbdev)
 	KBASE_DEBUG_ASSERT(kbdev);
 
 	/* Note this is an assert/atomic_set because it is a software issue for
-	 * a race to be occuring here */
+	 * a race to be occurring here
+	 */
 	KBASE_DEBUG_ASSERT(atomic_read(&kbdev->hwaccess.backend.reset_gpu) ==
 						KBASE_RESET_GPU_PREPARED);
 	atomic_set(&kbdev->hwaccess.backend.reset_gpu,

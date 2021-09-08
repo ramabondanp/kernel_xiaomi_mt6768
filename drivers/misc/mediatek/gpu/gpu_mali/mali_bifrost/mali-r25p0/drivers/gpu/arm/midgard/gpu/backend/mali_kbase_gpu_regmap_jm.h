@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -139,8 +158,8 @@
 #define JS_AFFINITY_LO         0x10	/* (RO) Core affinity mask for job slot n, low word */
 #define JS_AFFINITY_HI         0x14	/* (RO) Core affinity mask for job slot n, high word */
 #define JS_CONFIG              0x18	/* (RO) Configuration settings for job slot n */
-#define JS_XAFFINITY           0x1C	/* (RO) Extended affinity mask for job
-					   slot n */
+/* (RO) Extended affinity mask for job slot n*/
+#define JS_XAFFINITY           0x1C
 
 #define JS_COMMAND             0x20	/* (WO) Command register for job slot n */
 #define JS_STATUS              0x24	/* (RO) Status register for job slot n */
@@ -151,8 +170,8 @@
 #define JS_AFFINITY_NEXT_LO    0x50	/* (RW) Next core affinity mask for job slot n, low word */
 #define JS_AFFINITY_NEXT_HI    0x54	/* (RW) Next core affinity mask for job slot n, high word */
 #define JS_CONFIG_NEXT         0x58	/* (RW) Next configuration settings for job slot n */
-#define JS_XAFFINITY_NEXT      0x5C	/* (RW) Next extended affinity mask for
-					   job slot n */
+/* (RW) Next extended affinity mask for job slot n */
+#define JS_XAFFINITY_NEXT      0x5C
 
 #define JS_COMMAND_NEXT        0x60	/* (RW) Next command register for job slot n */
 

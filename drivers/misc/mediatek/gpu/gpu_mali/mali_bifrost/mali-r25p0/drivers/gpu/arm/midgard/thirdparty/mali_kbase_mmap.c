@@ -208,7 +208,8 @@ check_current:
 			return -ENOMEM;
 		if (gap_start <= high_limit && gap_end - gap_start >= length) {
 			/* We found a suitable gap. Clip it with the original
-			 * high_limit. */
+			 * high_limit.
+			 */
 			if (gap_end > info->high_limit)
 				gap_end = info->high_limit;
 
@@ -324,7 +325,8 @@ unsigned long kbase_context_get_unmapped_area(struct kbase_context *const kctx,
 				/* kbase_check_alloc_sizes() already satisfies
 				 * these checks, but they're here to avoid
 				 * maintenance hazards due to the assumptions
-				 * involved */
+				 * involved
+				 */
 				WARN_ON(reg->extension >
 					(ULONG_MAX >> PAGE_SHIFT));
 				WARN_ON(reg->initial_commit > (ULONG_MAX >> PAGE_SHIFT));

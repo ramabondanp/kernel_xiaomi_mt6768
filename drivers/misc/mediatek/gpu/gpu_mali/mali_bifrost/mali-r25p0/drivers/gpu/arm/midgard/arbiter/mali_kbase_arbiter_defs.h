@@ -19,7 +19,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  *//* SPDX-License-Identifier: GPL-2.0 */
-
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -37,7 +36,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
- *
  *
  */
 
@@ -66,7 +64,6 @@
  * @vm_resume_work:  Work item for vm_arb_wq to resume current work on GPU
  * @vm_arb_starting: Work queue resume in progress
  * @vm_arb_stopping: Work queue suspend in progress
- * @vm_arb_users_waiting: Count of users waiting for GPU
  */
 struct kbase_arbiter_vm_state {
 	struct kbase_device *kbdev;
@@ -78,7 +75,6 @@ struct kbase_arbiter_vm_state {
 	struct work_struct vm_resume_work;
 	bool vm_arb_starting;
 	bool vm_arb_stopping;
-	int vm_arb_users_waiting;
 };
 
 /**

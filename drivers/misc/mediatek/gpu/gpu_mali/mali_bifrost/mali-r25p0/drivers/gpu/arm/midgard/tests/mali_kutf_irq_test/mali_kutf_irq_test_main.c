@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2016-2018, 2020 ARM Limited. All rights reserved.
@@ -242,7 +243,7 @@ int mali_kutf_irq_test_main_init(void)
 
 	irq_app = kutf_create_application("irq");
 
-	if (NULL == irq_app) {
+	if (irq_app == NULL) {
 		pr_warn("Creation of test application failed!\n");
 		return -ENOMEM;
 	}
@@ -251,7 +252,7 @@ int mali_kutf_irq_test_main_init(void)
 			1, mali_kutf_irq_default_create_fixture,
 			mali_kutf_irq_default_remove_fixture);
 
-	if (NULL == suite) {
+	if (suite == NULL) {
 		pr_warn("Creation of test suite failed!\n");
 		kutf_destroy_application(irq_app);
 		return -ENOMEM;

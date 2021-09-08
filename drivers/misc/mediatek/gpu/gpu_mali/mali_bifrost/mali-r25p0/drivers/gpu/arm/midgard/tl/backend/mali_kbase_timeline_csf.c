@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2019-2020 ARM Limited. All rights reserved.
@@ -60,7 +61,7 @@ void kbase_create_timeline_objects(struct kbase_device *kbdev)
 	/* Lock the context list, to ensure no changes to the list are made
 	 * while we're summarizing the contexts and their contents.
 	 */
-	mutex_lock(&kbdev->kctx_list_lock);
+	mutex_lock(&timeline->tl_kctx_list_lock);
 
 	/* Hold the scheduler lock while we emit the current state
 	 * We also need to continue holding the lock until after the first body
@@ -90,7 +91,7 @@ void kbase_create_timeline_objects(struct kbase_device *kbdev)
 	mutex_unlock(&kbdev->csf.scheduler.lock);
 
 	/* For each context in the device... */
-	list_for_each_entry(kctx, &kbdev->kctx_list, kctx_list_link) {
+	list_for_each_entry(kctx, &timeline->tl_kctx_list, tl_kctx_list_node) {
 		size_t i;
 		struct kbase_tlstream *body =
 			&timeline->streams[TL_STREAM_TYPE_OBJ];
@@ -162,7 +163,7 @@ void kbase_create_timeline_objects(struct kbase_device *kbdev)
 		 */
 	};
 
-	mutex_unlock(&kbdev->kctx_list_lock);
+	mutex_unlock(&timeline->tl_kctx_list_lock);
 
 	/* Static object are placed into summary packet that needs to be
 	 * transmitted first. Flush all streams to make it available to

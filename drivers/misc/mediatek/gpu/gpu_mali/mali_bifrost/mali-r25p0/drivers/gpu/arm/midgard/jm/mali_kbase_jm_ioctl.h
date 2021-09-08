@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -114,9 +133,12 @@
  * - Added kernel side cache ops needed hint
  * 11.29:
  * - Reserve ioctl 52
+ * 11.30:
+ * - Add a new priority level BASE_JD_PRIO_REALTIME
+ * - Add ioctl 54: This controls the priority setting.
  */
 #define BASE_UK_VERSION_MAJOR 11
-#define BASE_UK_VERSION_MINOR 29
+#define BASE_UK_VERSION_MINOR 30
 
 /**
  * struct kbase_ioctl_version_check - Check version compatibility between
@@ -133,8 +155,6 @@ struct kbase_ioctl_version_check {
 #define KBASE_IOCTL_VERSION_CHECK \
 	_IOWR(KBASE_IOCTL_TYPE, 0, struct kbase_ioctl_version_check)
 
-#define KBASE_IOCTL_VERSION_CHECK_RESERVED \
-	_IOWR(KBASE_IOCTL_TYPE, 52, struct kbase_ioctl_version_check)
 
 /**
  * struct kbase_ioctl_job_submit - Submit jobs/atoms to the kernel
@@ -212,5 +232,9 @@ union kbase_kinstr_jm_fd {
 
 #define KBASE_IOCTL_KINSTR_JM_FD \
 	_IOWR(KBASE_IOCTL_TYPE, 51, union kbase_kinstr_jm_fd)
+
+
+#define KBASE_IOCTL_VERSION_CHECK_RESERVED \
+	_IOWR(KBASE_IOCTL_TYPE, 52, struct kbase_ioctl_version_check)
 
 #endif /* _KBASE_JM_IOCTL_H_ */

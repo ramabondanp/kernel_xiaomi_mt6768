@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2016-2020 ARM Limited. All rights reserved.
@@ -19,6 +20,7 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
+
 #include <linux/thermal.h>
 
 #include "mali_kbase_ipa_counter_common_jm.h"
@@ -455,6 +457,7 @@ static const struct kbase_ipa_group ipa_groups_def_tbax[] = {
 		.init = kbase_ ## init_token ## _power_model_init, \
 		.term = kbase_ipa_vinstr_common_model_term, \
 		.get_dynamic_coeff = kbase_ipa_vinstr_dynamic_coeff, \
+		.reset_counter_data = kbase_ipa_vinstr_reset_data, \
 	}; \
 	KBASE_EXPORT_TEST_API(kbase_ ## gpu ## _ipa_model_ops)
 

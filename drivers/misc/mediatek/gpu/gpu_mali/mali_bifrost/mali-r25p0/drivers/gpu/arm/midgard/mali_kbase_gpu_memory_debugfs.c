@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
- * (C) COPYRIGHT 2012-2017, 2019 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2012-2017, 2019-2020 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -74,7 +75,8 @@ static int kbasep_gpu_memory_seq_show(struct seq_file *sfile, void *data)
 
 		list_for_each_entry(kctx, &kbdev->kctx_list, kctx_list_link) {
 			/* output the memory usage and cap for each kctx
-			* opened on this device */
+			* opened on this device
+			*/
 			seq_printf(sfile, "  %s-0x%p %10u %10u\n",
 				"kctx",
 				kctx,

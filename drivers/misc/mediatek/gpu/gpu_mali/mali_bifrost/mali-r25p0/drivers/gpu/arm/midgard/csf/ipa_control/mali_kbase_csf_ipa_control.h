@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -213,5 +232,33 @@ void kbase_ipa_control_handle_gpu_reset_post(struct kbase_device *kbdev);
 void kbase_ipa_control_rate_change_notify_test(struct kbase_device *kbdev,
 					       u32 clk_index, u32 clk_rate_hz);
 #endif /* MALI_UNIT_TEST */
+
+/**
+ * kbase_ipa_control_protm_entered - Tell IPA_CONTROL that protected mode
+ * has been entered.
+ *
+ * @kbdev:		Pointer to kbase device.
+ *
+ * This function provides a means through which IPA_CONTROL can be informed
+ * that the GPU has entered protected mode. Since the GPU cannot access
+ * performance counters while in this mode, this information is useful as
+ * it implies (a) the values of these registers cannot change, so theres no
+ * point trying to read them, and (b) IPA_CONTROL has a means through which
+ * to record the duration of time the GPU is in protected mode, which can
+ * then be forwarded on to clients, who may wish, for example, to assume
+ * that the GPU was busy 100% of the time while in this mode.
+ */
+void kbase_ipa_control_protm_entered(struct kbase_device *kbdev);
+
+/**
+ * kbase_ipa_control_protm_exited - Tell IPA_CONTROL that protected mode
+ * has been exited.
+ *
+ * @kbdev:		Pointer to kbase device
+ *
+ * This function provides a means through which IPA_CONTROL can be informed
+ * that the GPU has exited from protected mode.
+ */
+void kbase_ipa_control_protm_exited(struct kbase_device *kbdev);
 
 #endif /* _KBASE_CSF_IPA_CONTROL_H_ */

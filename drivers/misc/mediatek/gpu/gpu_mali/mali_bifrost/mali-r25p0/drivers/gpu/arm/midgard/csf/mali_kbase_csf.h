@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -39,9 +58,6 @@
 /* Indicate invalid user doorbell number for a GPU command queue
  */
 #define KBASEP_USER_DB_NR_INVALID ((s8)-1)
-
-/* Waiting timeout for global request completion acknowledgment */
-#define GLB_REQ_WAIT_TIMEOUT_MS (300) /* 300 milliseconds */
 
 #define FIRMWARE_PING_INTERVAL_MS (2000) /* 2 seconds */
 
@@ -267,6 +283,16 @@ int kbase_csf_queue_bind(struct kbase_context *kctx,
 void kbase_csf_queue_unbind(struct kbase_queue *queue);
 
 /**
+ * kbase_csf_queue_unbind_stopped - Unbind a GPU command queue in the case
+ *                                  where it was never started.
+ * @queue:      Pointer to queue to be unbound.
+ *
+ * Variant of kbase_csf_queue_unbind() for use on error paths for cleaning up
+ * queues that failed to fully bind.
+ */
+void kbase_csf_queue_unbind_stopped(struct kbase_queue *queue);
+
+/**
  * kbase_csf_queue_kick - Schedule a GPU command queue on the firmware
  *
  * @kctx:	The kbase context.
@@ -350,14 +376,27 @@ int kbase_csf_queue_group_suspend(struct kbase_context *kctx,
 	struct kbase_suspend_copy_buffer *sus_buf, u8 group_handle);
 
 /**
- * kbase_csf_add_fatal_error_to_kctx - Add a fatal error to per-ctx error list.
+ * kbase_csf_add_group_fatal_error - Report a fatal group error to userspace
  *
  * @group:       GPU command queue group.
  * @err_payload: Error payload to report.
  */
-void kbase_csf_add_fatal_error_to_kctx(
+void kbase_csf_add_group_fatal_error(
 	struct kbase_queue_group *const group,
 	struct base_gpu_queue_group_error const *const err_payload);
+
+/**
+ * kbase_csf_add_queue_fatal_error - Report a fatal queue error to userspace
+ *
+ * @queue:         Pointer to queue for which fatal event was received.
+ * @cs_fatal:      Fault information
+ * @cs_fatal_info: Additional fault information
+ *
+ * If a queue has already been in fatal error status,
+ * subsequent fatal error on the queue should never take place.
+ */
+void kbase_csf_add_queue_fatal_error(struct kbase_queue *const queue,
+				     u32 cs_fatal, u64 cs_fatal_info);
 
 /**
  * kbase_csf_interrupt - Handle interrupts issued by CSF firmware.
@@ -448,9 +487,16 @@ void kbase_csf_ring_csg_slots_doorbell(struct kbase_device *kbdev,
  * @csi_index: ID of the CSI assigned to the GPU queue.
  * @csg_nr:    Index of the CSG slot assigned to the queue
  *             group to which the GPU queue is bound.
+ * @ring_csg_doorbell: Flag to indicate if the CSG doorbell needs to be rung
+ *                     after updating the CSG_DB_REQ. So if this flag is false
+ *                     the doorbell interrupt will not be sent to FW.
+ *                     The flag is supposed be false only when the input page
+ *                     for bound GPU queues is programmed at the time of
+ *                     starting/resuming the group on a CSG slot.
  */
 void kbase_csf_ring_cs_kernel_doorbell(struct kbase_device *kbdev,
-				       int csi_index, int csg_nr);
+				       int csi_index, int csg_nr,
+				       bool ring_csg_doorbell);
 
 /**
  * kbase_csf_ring_cs_user_doorbell - ring the user doorbell allocated for a
@@ -481,5 +527,55 @@ void kbase_csf_ring_cs_user_doorbell(struct kbase_device *kbdev,
  */
 void kbase_csf_active_queue_groups_reset(struct kbase_device *kbdev,
 			struct kbase_context *kctx);
+
+/**
+ * kbase_csf_priority_check - Check the priority requested
+ *
+ * @kbdev:        Device pointer
+ * @req_priority: Requested priority
+ *
+ * This will determine whether the requested priority can be satisfied.
+ *
+ * Return: The same or lower priority than requested.
+ */
+u8 kbase_csf_priority_check(struct kbase_device *kbdev, u8 req_priority);
+
+extern const u8 kbasep_csf_queue_group_priority_to_relative[BASE_QUEUE_GROUP_PRIORITY_COUNT];
+extern const u8 kbasep_csf_relative_to_queue_group_priority[KBASE_QUEUE_GROUP_PRIORITY_COUNT];
+
+/**
+ * kbase_csf_priority_relative_to_queue_group_priority - Convert relative to base priority
+ *
+ * @priority: kbase relative priority
+ *
+ * This will convert the monotonically increasing realtive priority to the
+ * fixed base priority list.
+ *
+ * Return: base_queue_group_priority priority.
+ */
+static inline u8 kbase_csf_priority_relative_to_queue_group_priority(u8 priority)
+{
+	if (priority >= KBASE_QUEUE_GROUP_PRIORITY_COUNT)
+		priority = KBASE_QUEUE_GROUP_PRIORITY_LOW;
+	return kbasep_csf_relative_to_queue_group_priority[priority];
+}
+
+/**
+ * kbase_csf_priority_queue_group_priority_to_relative - Convert base priority to relative
+ *
+ * @priority: base_queue_group_priority priority
+ *
+ * This will convert the fixed base priority list to monotonically increasing realtive priority.
+ *
+ * Return: kbase relative priority.
+ */
+static inline u8 kbase_csf_priority_queue_group_priority_to_relative(u8 priority)
+{
+	/* Apply low priority in case of invalid priority */
+	if (priority >= BASE_QUEUE_GROUP_PRIORITY_COUNT)
+		priority = BASE_QUEUE_GROUP_PRIORITY_LOW;
+	return kbasep_csf_queue_group_priority_to_relative[priority];
+}
+
 
 #endif /* _KBASE_CSF_H_ */

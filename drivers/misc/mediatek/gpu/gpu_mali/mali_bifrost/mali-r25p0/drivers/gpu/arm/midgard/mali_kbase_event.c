@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *
  * (C) COPYRIGHT 2010-2016,2018-2020 ARM Limited. All rights reserved.
@@ -19,8 +20,6 @@
  * SPDX-License-Identifier: GPL-2.0
  *
  */
-
-
 
 #include <mali_kbase.h>
 #include <mali_kbase_debug.h>
@@ -154,7 +153,8 @@ static int kbase_event_coalesce(struct kbase_context *kctx)
 	const int event_count = kctx->event_coalesce_count;
 
 	/* Join the list of pending events onto the tail of the main list
-	   and reset it */
+	 * and reset it
+	 */
 	list_splice_tail_init(&kctx->event_coalesce_list, &kctx->event_list);
 	kctx->event_coalesce_count = 0;
 
@@ -237,7 +237,7 @@ int kbase_event_init(struct kbase_context *kctx)
 	kctx->event_coalesce_count = 0;
 	kctx->event_workq = alloc_workqueue("kbase_event", WQ_MEM_RECLAIM, 1);
 
-	if (NULL == kctx->event_workq)
+	if (kctx->event_workq == NULL)
 		return -EINVAL;
 
 	return 0;

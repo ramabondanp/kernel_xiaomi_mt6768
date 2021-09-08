@@ -1,6 +1,6 @@
 /*
  *
- * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -17,6 +17,25 @@
  * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  * SPDX-License-Identifier: GPL-2.0
+ *
+ *//* SPDX-License-Identifier: GPL-2.0 */
+/*
+ *
+ * (C) COPYRIGHT 2018-2020 ARM Limited. All rights reserved.
+ *
+ * This program is free software and is provided to you under the terms of the
+ * GNU General Public License version 2 as published by the Free Software
+ * Foundation, and any use by you of this program is subject to the terms
+ * of such GNU license.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can access it online at
+ * http://www.gnu.org/licenses/gpl-2.0.html.
  *
  */
 
@@ -145,12 +164,14 @@ struct kbase_kcpu_command_jit_free_info {
  *		the user buffer.
  * @nr_pages:	number of pages.
  * @offset:	offset into the pages
+ * @cpu_alloc:	Reference to physical pages of suspend buffer allocation.
  */
 struct kbase_suspend_copy_buffer {
 	size_t size;
 	struct page **pages;
 	int nr_pages;
 	size_t offset;
+	struct kbase_mem_phy_alloc *cpu_alloc;
 };
 
 /**
@@ -201,6 +222,7 @@ struct kbase_kcpu_command {
  *				commands enqueued into a kcpu command queue;
  *				part of kernel API for processing workqueues
  * @start_offset:		Index of the command to be executed next
+ * @id:				KCPU command queue ID.
  * @num_pending_cmds:		The number of commands enqueued but not yet
  *				executed or pending
  * @cqs_wait_count:		Tracks the number of CQS wait commands enqueued
@@ -233,6 +255,7 @@ struct kbase_kcpu_command_queue {
 	struct kbase_kcpu_command commands[KBASEP_KCPU_QUEUE_SIZE];
 	struct work_struct work;
 	u8 start_offset;
+	u8 id;
 	u16 num_pending_cmds;
 	u32 cqs_wait_count;
 	u64 fence_context;
