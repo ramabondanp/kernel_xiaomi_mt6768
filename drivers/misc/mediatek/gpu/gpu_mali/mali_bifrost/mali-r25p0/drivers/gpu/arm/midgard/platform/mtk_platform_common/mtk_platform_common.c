@@ -65,7 +65,7 @@ void mtk_kbase_set_gpu_meminfo(ssize_t index, int pid, int used_pages)
 	g_mtk_gpu_meminfo[index].used_pages = used_pages;
 }
 
-KBASE_EXPORT_TEST_API(mtk_kbase_dump_gpu_memory_usage)
+KBASE_EXPORT_TEST_API(mtk_kbase_dump_gpu_memory_usage);
 bool mtk_kbase_dump_gpu_memory_usage(void)
 {
 	int i = 0;
@@ -87,7 +87,7 @@ bool mtk_kbase_dump_gpu_memory_usage(void)
 	return true;
 }
 
-KBASE_EXPORT_TEST_API(mtk_kbase_report_gpu_memory_usage)
+KBASE_EXPORT_TEST_API(mtk_kbase_report_gpu_memory_usage);
 unsigned int mtk_kbase_report_gpu_memory_usage(void)
 {
 	return (g_mtk_gpu_total_memory_usage_in_pages_debugfs * 4096);
