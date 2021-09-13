@@ -51,7 +51,7 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-if [[ ! -n $2 ]]; then
+if [[ -z $2 ]]; then
   echo "ERROR: Enter all needed parameters"
   usage
   exit
@@ -63,9 +63,9 @@ TOKEN=$2
 echo "This is your setup config"
 echo
 echo "Using defconfig: ""$CONFIG""_defconfig"
-echo "Clone dependencies: $([[ ! -z "$CLONE" ]] && echo "true" || echo "false")"
-echo "Enable LTO Clang: $([[ ! -z "$LTO" ]] && echo "true" || echo "false")"
-echo "Copy dtbo.img: $([[ ! -z "$DTBO" ]] && echo "true" || echo "false")"
+echo "Clone dependencies: $([[ -n "$CLONE" ]] && echo "true" || echo "false")"
+echo "Enable LTO Clang: $([[ -n "$LTO" ]] && echo "true" || echo "false")"
+echo "Copy dtbo.img: $([[ -n "$DTBO" ]] && echo "true" || echo "false")"
 echo
 read -p "Are you sure? " -n 1 -r
 ! [[ $REPLY =~ ^[Yy]$ ]] && exit
@@ -93,10 +93,10 @@ tg_post_build() {
 
 zipping() {
   cd "$OUTDIR"/AnyKernel || exit 1
-  rm *.zip *-dtb *dtbo.img
+  rm -- *.zip *-dtb *dtbo.img
   [[ $DTBO == true ]] && cp "$OUTDIR"/arch/arm64/boot/dtbo.img .
   cp "$OUTDIR"/arch/arm64/boot/Image.gz-dtb .
-  zip -r9 "$ZIPNAME"-"${DATE}".zip *
+  zip -r9 "$ZIPNAME"-"${DATE}".zip -- *
   cd - || exit
 }
 
@@ -128,7 +128,7 @@ then
   mkdir "$OUTDIR"/clang-llvm
   mkdir "$OUTDIR"/gcc64-aosp
   mkdir "$OUTDIR"/gcc32-aosp
-  ! [[ -f "$OUTDIR"/clang-r428724.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r433403.tar.gz -P "$OUTDIR"
+  ! [[ -f "$OUTDIR"/clang-r433403.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r433403.tar.gz -P "$OUTDIR"
   tar -C "$OUTDIR"/clang-llvm/ -zxvf "$OUTDIR"/clang-r433403.tar.gz
   ! [[ -f "$OUTDIR"/android-11.0.0_r35.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-11.0.0_r35.tar.gz -P "$OUTDIR"
   tar -C "$OUTDIR"/gcc64-aosp/ -zxvf "$OUTDIR"/android-11.0.0_r35.tar.gz
@@ -188,7 +188,7 @@ then
 <b>Build took : </b>$((DIFF / 60)) minute(s) and $((DIFF % 60)) second(s)
 <b>Kernel Version : </b>$KERVER
 <b>Compiler: </b>$(grep LINUX_COMPILER ${OUTDIR}/include/generated/compile.h  |  sed -e 's/.*LINUX_COMPILER "//' -e 's/"$//')
-<b>Enable LTO Clang: </b>$([[ ! -z "$LTO" ]] && echo "true" || echo "false")
+<b>Enable LTO Clang: </b>$([[ -n "$LTO" ]] && echo "true" || echo "false")
 <b>MD5 Checksum : </b><code>$MD5CHECK</code>
 "
 else
