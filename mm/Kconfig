@@ -654,6 +654,7 @@ config MAX_STACK_SIZE_MB
 
 config BALANCE_ANON_FILE_RECLAIM
 	bool "During reclaim treat anon and file backed pages equally"
+	default y
 	depends on SWAP
 	help
 	  When performing memory reclaim treat anonymous and file backed pages
