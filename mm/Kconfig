@@ -793,6 +793,11 @@ config PROCESS_RECLAIM
 
 	 Any other value is ignored.
 
+config DIRECT_RECLAIM_FILE_PAGES_ONLY
+	bool "Reclaim file pages only on direct reclaim path"
+	depends on SWAP
+	default y
+
 config KSWAPD_CPU
 	hex "Set kswapd cpu affinity by default"
 	default 0x3F
