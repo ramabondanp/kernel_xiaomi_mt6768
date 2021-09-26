@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 echo "Cloning dependencies"
-git clone --depth=1 https://github.com/xyz-prjkt/xRageTC-clang
+git clone --depth=1 https://github.com/xyz-prjkt/xRageTC-clang clang
 git clone --depth=1 https://github.com/sohamxda7/AnyKernel3 AnyKernel
 echo "Done"
 IMAGE=$(pwd)/out/arch/arm64/boot/Image.gz-dtb
@@ -47,7 +47,7 @@ function finerr() {
 }
 # Compile plox
 function compile() {
-    make O=out ARCH=arm64 lavender_defconfig
+    make O=out ARCH=arm64 merlin_defconfig
     make -j$(nproc --all) O=out \
                     ARCH=arm64 \
                     CC=clang \
