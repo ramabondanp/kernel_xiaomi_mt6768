@@ -2,6 +2,7 @@
  * mtk-afe-fe-dais.h  --  Mediatek afe fe dai operator definition
  *
  * Copyright (c) 2016 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Author: Garlic Tseng <garlic.tseng@mediatek.com>
  *
  * This program is free software; you can redistribute it and/or modify
