@@ -1,4 +1,4 @@
-subdir-ccflags-y += -Werror
+#subdir-ccflags-y += -Werror
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/
 ccflags-y += -I$(srctree)/drivers/input/touchscreen/mediatek
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
@@ -21,4 +21,12 @@ obj-$(CONFIG_TOUCHSCREEN_FT5X26)	+=  FT5X26/
 obj-$(CONFIG_TOUCHSCREEN_MTK_GT5688)	+=  GT5688/
 obj-$(CONFIG_TOUCHSCREEN_HIMAX_I2C)	+=  hxchipset/
 obj-$(CONFIG_TOUCHSCREEN_MTK_FOCALTECH_FHD)	+=  focaltech_fhd_touch/
+
+obj-$(CONFIG_TOUCHSCREEN_NT36xxx_HOSTDL_SPI)	+=  NT36xxx_HOSTDL_SPI/
+obj-$(CONFIG_TOUCHSCREEN_FTS)	+=  focaltech_touch/
+obj-$(CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE)	+=  xiaomi/
+obj-$(CONFIG_TOUCHSCREEN_MTK_NT36672)	+=  NT36672/
+obj-$(CONFIG_TOUCHSCREEN_MTK_FT8719P)	+=  FT8719P/
+
 obj-$(CONFIG_TOUCHSCREEN_MTK_GT9157)    +=  GT9157/
+
