@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -2530,10 +2531,22 @@ static void ddp_cmdq_cb(struct cmdq_cb_data data)
 	}
 	CRTC_MMP_MARK(id, frame_cfg, ovl_status, 0);
 
-	mtk_crtc_release_input_layer_fence(crtc, session_id);
+	if (session_id > 0)
+		mtk_crtc_release_input_layer_fence(crtc, session_id);
+
+#ifdef MTK_DRM_DELAY_PRESENT_FENCE
+	// release present fence
+	if (drm_crtc_index(crtc) != 2 && session_id > 0) {
+		struct cmdq_pkt_buffer *cmdq_buf = &(mtk_crtc->gce_obj.buf);
+		unsigned int fence_idx = *(unsigned int *)(cmdq_buf->va_base +
+				DISP_SLOT_PRESENT_FENCE(drm_crtc_index(crtc)));
+
+		mtk_release_present_fence(session_id, fence_idx);
+	}
+#endif
 
 	DDP_MUTEX_LOCK(&mtk_crtc->lock, __func__, __LINE__);
-	if (!mtk_crtc_is_dc_mode(crtc))
+	if (!mtk_crtc_is_dc_mode(crtc) && session_id > 0)
 		mtk_crtc_release_output_buffer_fence(crtc, session_id);
 
 	mtk_crtc_update_hrt_qos(crtc, cb_data->misc);
@@ -5162,7 +5175,7 @@ static void mtk_drm_crtc_atomic_flush(struct drm_crtc *crtc,
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_drm_private *priv = crtc->dev->dev_private;
-	unsigned int index = drm_crtc_index(crtc);
+	int index = drm_crtc_index(crtc);
 	unsigned int pending_planes = 0;
 	unsigned int i, j;
 	unsigned int ret = 0;
@@ -5245,19 +5258,19 @@ static void mtk_drm_crtc_atomic_flush(struct drm_crtc *crtc,
 				BACKUP_OVL_STATUS, NULL);
 	}
 
+#ifdef MTK_DRM_DELAY_PRESENT_FENCE
 	/* backup present fence */
 	if (state->prop_val[CRTC_PROP_PRES_FENCE_IDX] != (unsigned int)-1) {
 		struct cmdq_pkt_buffer *cmdq_buf = &(mtk_crtc->gce_obj.buf);
 		dma_addr_t addr =
 			cmdq_buf->pa_base +
-			DISP_SLOT_PRESENT_FENCE(index);
+			DISP_SLOT_PRESENT_FENCE(drm_crtc_index(crtc));
 
 		cmdq_pkt_write(cmdq_handle,
 			mtk_crtc->gce_obj.base, addr,
 			state->prop_val[CRTC_PROP_PRES_FENCE_IDX], ~0);
-		CRTC_MMP_MARK(index, update_present_fence, 0,
-			state->prop_val[CRTC_PROP_PRES_FENCE_IDX]);
 	}
+#endif
 
 	atomic_set(&mtk_crtc->delayed_trig, 1);
 	cb_data->state = old_crtc_state;
@@ -5284,6 +5297,11 @@ static void mtk_drm_crtc_atomic_flush(struct drm_crtc *crtc,
 	ddp_cmdq_cb_blocking(cb_data);
 #endif
 
+#ifdef MTK_DRM_FENCE_SUPPORT
+	if (state->prop_val[CRTC_PROP_PRES_FENCE_IDX] != (unsigned int)-1)
+		mtk_drm_fence_update(state->prop_val[CRTC_PROP_PRES_FENCE_IDX],
+		index);
+#endif
 
 	/* When open VDS path switch feature, After VDS created
 	 * we need take away the OVL0_2L from main display.
@@ -5722,38 +5740,6 @@ static int dc_main_path_commit_thread(void *data)
 	return 0;
 }
 
-static int mtk_drm_pf_release_thread(void *data)
-{
-	struct sched_param param = {.sched_priority = 87};
-	struct mtk_drm_private *private;
-	struct mtk_drm_crtc *mtk_crtc = (struct mtk_drm_crtc *)data;
-	struct drm_crtc *crtc;
-	struct cmdq_pkt_buffer *cmdq_buf;
-	unsigned int fence_idx, crtc_idx;
-
-	crtc = &mtk_crtc->base;
-	private = crtc->dev->dev_private;
-	crtc_idx = drm_crtc_index(crtc);
-	sched_setscheduler(current, SCHED_RR, &param);
-
-	while (!kthread_should_stop()) {
-		wait_event_interruptible(mtk_crtc->present_fence_wq,
-				 atomic_read(&mtk_crtc->pf_event));
-		atomic_set(&mtk_crtc->pf_event, 0);
-
-		mutex_lock(&private->commit.lock);
-		cmdq_buf = &(mtk_crtc->gce_obj.buf);
-		fence_idx = *(unsigned int *)(cmdq_buf->va_base +
-				DISP_SLOT_PRESENT_FENCE(crtc_idx));
-
-		mtk_release_present_fence(private->session_id[crtc_idx],
-					  fence_idx);
-		mutex_unlock(&private->commit.lock);
-	}
-
-	return 0;
-}
-
 int mtk_drm_crtc_create(struct drm_device *drm_dev,
 			const struct mtk_crtc_path_data *path_data)
 {
@@ -6037,12 +6023,6 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 		mutex_init(&mtk_crtc->blank_lock);
 		init_waitqueue_head(&mtk_crtc->state_wait_queue);
 	}
-
-	init_waitqueue_head(&mtk_crtc->present_fence_wq);
-	atomic_set(&mtk_crtc->pf_event, 0);
-	mtk_crtc->pf_release_thread =
-		kthread_run(mtk_drm_pf_release_thread,
-						mtk_crtc, "pf_release_thread");
 
 	/* init wakelock resources */
 	{
@@ -6723,7 +6703,8 @@ void mtk_need_vds_path_switch(struct drm_crtc *crtc)
 			cmdq_pkt_flush(cmdq_handle);
 			cmdq_pkt_destroy(cmdq_handle);
 			/* unprepare ovl 2l */
-			mtk_ddp_comp_unprepare(comp_ovl0_2l);
+			if (atomic_read(&mtk_crtc->already_config))
+				mtk_ddp_comp_unprepare(comp_ovl0_2l);
 
 			CRTC_MMP_MARK(index, path_switch, 0xFFFF, 1);
 			DDPMSG("Switch vds: Switch ovl0_2l to vds\n");
@@ -6750,6 +6731,7 @@ void mtk_need_vds_path_switch(struct drm_crtc *crtc)
 			int width = crtc->state->adjusted_mode.hdisplay;
 			int height = crtc->state->adjusted_mode.vdisplay;
 			struct cmdq_pkt *cmdq_handle;
+			int keep_first_layer = false;
 
 			cmdq_handle =
 				cmdq_pkt_create(mtk_crtc->gce_obj.client[CLIENT_CFG]);
@@ -6779,6 +6761,12 @@ void mtk_need_vds_path_switch(struct drm_crtc *crtc)
 			/* Switch back need reprepare ovl0_2l */
 			mtk_ddp_comp_prepare(comp_ovl0_2l);
 			mtk_ddp_comp_start(comp_ovl0_2l, cmdq_handle);
+			/* ovl 2l should not have old config, so disable
+			 * all ovl 2l layer when flush first frame after
+			 * switch ovl 2l back to main disp
+			 */
+			mtk_ddp_comp_io_cmd(comp_ovl0_2l, cmdq_handle,
+				OVL_ALL_LAYER_OFF, &keep_first_layer);
 
 			cmdq_pkt_flush(cmdq_handle);
 			cmdq_pkt_destroy(cmdq_handle);

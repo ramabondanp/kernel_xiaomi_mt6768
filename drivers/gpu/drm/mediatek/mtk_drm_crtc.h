@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -629,10 +630,6 @@ struct mtk_drm_crtc {
 	wait_queue_head_t state_wait_queue;
 	bool crtc_blank;
 	struct mutex blank_lock;
-
-	wait_queue_head_t present_fence_wq;
-	struct task_struct *pf_release_thread;
-	atomic_t pf_event;
 };
 
 struct mtk_crtc_state {

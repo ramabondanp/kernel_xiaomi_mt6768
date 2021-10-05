@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -645,12 +646,13 @@ static void mtk_dsi_phy_timconfig(struct mtk_dsi *dsi,
 		mtk_dsi_cphy_timconfig(dsi, handle);
 	else
 		mtk_dsi_dphy_timconfig(dsi, handle);
+
 }
 
 static void mtk_dsi_enable(struct mtk_dsi *dsi)
 {
 	mtk_dsi_mask(dsi, DSI_CON_CTRL, DSI_EN, DSI_EN);
-#if !defined(CONFIG_MACH_MT6885) && !defined(CONFIG_MACH_MT6893)
+#if !defined(CONFIG_MACH_MT6885)
 	mtk_dsi_mask(dsi, DSI_CON_CTRL, DSI_CM_WAIT_FIFO_FULL_EN,
 		DSI_CM_WAIT_FIFO_FULL_EN);
 #endif
@@ -677,6 +679,7 @@ static void mtk_dsi_clear_rxrd_irq(struct mtk_dsi *dsi)
 {
 	mtk_dsi_mask(dsi, DSI_INTSTA, LPRX_RD_RDY_INT_FLAG, 0);
 }
+
 static unsigned int mtk_dsi_default_rate(struct mtk_dsi *dsi)
 {
 	u32 data_rate;
@@ -741,18 +744,16 @@ static int mtk_dsi_set_LFR(struct mtk_dsi *dsi, struct mtk_ddp_comp *comp,
 	unsigned int lfr_enable = 1;
 	unsigned int lfr_skip_num = 0;
 
-	if (dsi->ext->params->lfr_enable == 0)
-		return -1;
-
 	if (mtk_dsi_is_cmd_mode(&dsi->ddp_comp))
 		return -1;
 
 	//Settings lfr settings to LFR_CON_REG
 	if (dsi->ext && dsi->ext->params &&
-		dsi->ext->params->lfr_minimum_fps != 0) {
+		dsi->ext->params->dyn_fps.lfr_minimum_fps != 0 &&
+		dsi->ext->params->dyn_fps.lfr_enable == 1) {
 		lfr_skip_num =
 			(dsi->ext->params->dyn_fps.vact_timing_fps /
-			dsi->ext->params->lfr_minimum_fps) - 1;
+			dsi->ext->params->dyn_fps.lfr_minimum_fps) - 1;
 	}
 
 	if (lfr_dbg) {
@@ -784,9 +785,6 @@ static int mtk_dsi_LFR_update(struct mtk_dsi *dsi, struct mtk_ddp_comp *comp,
 	void *handle)
 {
 	u32 val = 0, mask = 0;
-
-	if (dsi->ext->params->lfr_enable == 0)
-		return -1;
 
 	if (mtk_dsi_is_cmd_mode(&dsi->ddp_comp))
 		return -1;
@@ -824,11 +822,16 @@ static int mtk_dsi_LFR_status_check(struct mtk_dsi *dsi)
 	return 0;
 }
 
-static int mtk_dsi_set_data_rate(struct mtk_dsi *dsi)
+static int mtk_dsi_poweron(struct mtk_dsi *dsi)
 {
+	struct device *dev = dsi->dev;
+	int ret;
 	unsigned int data_rate;
 	unsigned long mipi_tx_rate;
-	int ret = 0;
+
+	DDPDBG("%s+\n", __func__);
+	if (++dsi->clk_refcnt != 1)
+		return 0;
 
 	data_rate = mtk_dsi_default_rate(dsi);
 	mipi_tx_rate = data_rate * 1000000;
@@ -838,19 +841,6 @@ static int mtk_dsi_set_data_rate(struct mtk_dsi *dsi)
 
 	DDPDBG("set mipitx's data rate: %lu Hz\n", mipi_tx_rate);
 	ret = clk_set_rate(dsi->hs_clk, mipi_tx_rate);
-	return ret;
-}
-
-static int mtk_dsi_poweron(struct mtk_dsi *dsi)
-{
-	struct device *dev = dsi->dev;
-	int ret;
-
-	DDPDBG("%s+\n", __func__);
-	if (++dsi->clk_refcnt != 1)
-		return 0;
-
-	ret = mtk_dsi_set_data_rate(dsi);
 	if (ret < 0) {
 		dev_err(dev, "Failed to set data rate: %d\n", ret);
 		goto err_refcount;
@@ -1568,6 +1558,7 @@ static void mtk_dsi_enter_ulps(struct mtk_dsi *dsi)
 
 	/* reset enter_ulps_done before waiting */
 	reset_dsi_wq(&dsi->enter_ulps_done);
+
 	/* config and trigger enter ulps mode */
 	mtk_dsi_mask(dsi, DSI_INTEN, SLEEPIN_ULPS_DONE_INT_FLAG,
 		     SLEEPIN_ULPS_DONE_INT_FLAG);
@@ -4247,6 +4238,7 @@ static void mtk_dsi_cmd_timing_change(struct mtk_dsi *dsi,
 {
 	struct cmdq_pkt *cmdq_handle;
 	struct cmdq_pkt *cmdq_handle2;
+	int clk_refcnt = 0;
 	struct mtk_crtc_state *state =
 	    to_mtk_crtc_state(mtk_crtc->base.state);
 	struct mtk_crtc_state *old_mtk_state =
@@ -4285,22 +4277,20 @@ static void mtk_dsi_cmd_timing_change(struct mtk_dsi *dsi,
 			dst_mode, BEFORE_DSI_POWERDOWN);
 
 	/* Power off DSI */
-	phy_power_off(dsi->phy);
+	clk_refcnt = dsi->clk_refcnt;
+	while (dsi->clk_refcnt != 1)
+		mtk_dsi_ddp_unprepare(&dsi->ddp_comp);
+	mtk_dsi_enter_idle(dsi);
 
 	if (dsi->ext && dsi->ext->funcs &&
 		dsi->ext->funcs->ext_param_set)
 		dsi->ext->funcs->ext_param_set(dsi->panel,
 			state->prop_val[CRTC_PROP_DISP_MODE_IDX]);
 
-	/* Power on DSI */
-	mtk_dsi_set_data_rate(dsi);
-	phy_power_on(dsi->phy);
-	mtk_dsi_phy_timconfig(dsi, NULL);
-	//[FIXME] sw control enable will be set to 1 by mipi_tx_pll_prepare,
-	//and it needs to clear to 0
-	mtk_mipi_tx_sw_control_en(dsi->phy, 0);
-	//[FIXME] It's a temp workaround for cmd mode.
-	writel(0x0001023c, dsi->regs + DSI_TXRX_CTRL);
+	/* Power on & re-config DSI*/
+	mtk_dsi_leave_idle(dsi);
+	while (dsi->clk_refcnt != clk_refcnt)
+		mtk_dsi_ddp_prepare(&dsi->ddp_comp);
 
 skip_change_mipi:
 	/*  send lcm cmd after DSI power on if needed */

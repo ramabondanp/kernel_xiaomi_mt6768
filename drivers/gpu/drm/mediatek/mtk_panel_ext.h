@@ -206,6 +206,9 @@ struct dynamic_fps_params {
 	unsigned int switch_en;
 	unsigned int vact_timing_fps;
 	struct dfps_switch_cmd dfps_cmd_table[MAX_DYN_CMD_NUM];
+
+	unsigned int lfr_enable;
+	unsigned int lfr_minimum_fps;
 };
 
 struct mtk_panel_params {
@@ -242,10 +245,6 @@ struct mtk_panel_params {
 	unsigned int lcm_index;
 	unsigned int wait_sof_before_dec_vfp;
 	unsigned int doze_delay;
-
-//Settings for LFR Function:
-	unsigned int lfr_enable;
-	unsigned int lfr_minimum_fps;
 };
 
 struct mtk_panel_ext {
