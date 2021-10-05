@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/netfilter.h>
@@ -745,11 +746,6 @@ static int mddp_f_tag_packet(
 				skb_tag->v2.lan_netif_id,
 				skb_tag->v2.port, skb_tag->v2.ip,
 				skb);
-
-		mddp_enqueue_dstate(MDDP_DSTATE_ID_NEW_TAG,
-					cpu_to_be32(skb_tag->v2.ip),
-					cpu_to_be16(skb_tag->v2.port));
-
 	} else { /* downlink */
 		if (mddp_f_is_support_lan_dev(cb->dev->name) == true) {
 			MDDP_F_LOG(MDDP_LL_NOTICE,
@@ -785,9 +781,6 @@ static int mddp_f_tag_packet(
 				skb, fake_skb);
 
 		dev_queue_xmit(fake_skb);
-
-		mddp_enqueue_dstate(MDDP_DSTATE_ID_NEW_TAG,
-					skb_tag->v2.ip, skb_tag->v2.port);
 	}
 
 	return ret;
@@ -1955,8 +1948,6 @@ int32_t mddp_f_suspend_tag(void)
 	app = mddp_get_app_inst(MDDP_APP_TYPE_WH);
 	mddp_ipc_send_md(app, md_msg, MDFPM_USER_ID_MDFPM);
 
-	mddp_enqueue_dstate(MDDP_DSTATE_ID_SUSPEND_TAG);
-
 	return 0;
 }
 
@@ -1981,8 +1972,6 @@ int32_t mddp_f_resume_tag(void)
 
 	app = mddp_get_app_inst(MDDP_APP_TYPE_WH);
 	mddp_ipc_send_md(app, md_msg, MDFPM_USER_ID_MDFPM);
-
-	mddp_enqueue_dstate(MDDP_DSTATE_ID_RESUME_TAG);
 
 	return 0;
 }

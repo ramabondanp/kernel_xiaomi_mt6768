@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2019 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -255,9 +256,8 @@ void apusys_clk_path_update_pwr(enum DVFS_USER user, enum DVFS_VOLTAGE voltage)
 			dvfs_clk_path_max_vol[user][path_volt_index] :
 			voltage);
 
-			PWR_LOG_INF("%s, volt=%d, user_path_volt[%s][%d]=%d\n",
+			PWR_LOG_INF("%s, user_path_volt[%s][%d]=%d\n",
 			__func__,
-			voltage,
 			user_str[user],
 			path_volt_index,
 			apusys_opps.user_path_volt[user][path_volt_index]);

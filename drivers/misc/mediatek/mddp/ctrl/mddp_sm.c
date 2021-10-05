@@ -3,6 +3,7 @@
  * mddp_sm.c - MDDP state machine.
  *
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>

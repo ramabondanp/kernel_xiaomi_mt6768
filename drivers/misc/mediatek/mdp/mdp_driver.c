@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -1252,7 +1253,7 @@ static int cmdq_probe(struct platform_device *pDevice)
 	cmdq_core_initialize();
 
 	/* init cmdq context */
-	cmdq_mdp_init(pDevice);
+	cmdq_mdp_init();
 #if 0
 	cmdqCoreInitialize();
 #endif

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -97,7 +98,8 @@ static int qos_prefetch_cpuhp_online(unsigned int cpu)
 
 	if (is_qos_prefetch_enabled()) {
 		val = QOS_PREFETCH_VALUE(prefetch_val, cpu);
-		qos_prefetch_update_single(cpu, val);
+		if (val)
+			qos_prefetch_update_single(cpu, val);
 	}
 
 	spin_unlock_irqrestore(&qos_prefetch_cpumask_lock,
@@ -348,7 +350,9 @@ void qos_prefetch_update_all(void)
 		cpu_live = qos_prefetch_cpumask & BIT(i);
 		if (cpu_live) {
 			val = QOS_PREFETCH_VALUE(prefetch_val, i);
-			qos_prefetch_update_single(i, val);
+
+			if (val)
+				qos_prefetch_update_single(i, val);
 		}
 	}
 
@@ -420,7 +424,9 @@ void qos_prefetch_tick(int cpu)
 		return;
 
 	val = QOS_PREFETCH_VALUE(prefetch_val, cpu);
-	qos_prefetch_update_single(cpu, val);
+
+	if (val)
+		qos_prefetch_update_single(cpu, val);
 }
 EXPORT_SYMBOL(qos_prefetch_tick);
 
@@ -454,7 +460,7 @@ void qos_prefetch_init(void)
 			qos_cpu_power_ratio_dn);
 #endif /* CONFIG_MTK_TINYSYS_SSPM_SUPPORT */
 
-	qos_prefetch_enable(1);
+	qos_prefetch_enable(0);
 }
 EXPORT_SYMBOL(qos_prefetch_init);
 

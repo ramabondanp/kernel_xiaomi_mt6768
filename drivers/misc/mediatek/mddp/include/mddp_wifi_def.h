@@ -3,6 +3,7 @@
  * mddp_wifi_def.h -- Data structure of MD WiFi module.
  *
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef __MDDP_WIFI_DEF_H

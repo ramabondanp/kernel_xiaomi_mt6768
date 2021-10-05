@@ -3,6 +3,7 @@
  * mddp_debug.h - Public API/structure provided for logging.
  *
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 
@@ -10,7 +11,7 @@
 #define __MDDP_DEBUG_H
 
 //------------------------------------------------------------------------------
-// Define marco - log level/class.
+// Define marco.
 // -----------------------------------------------------------------------------
 extern uint32_t mddp_debug_log_class_s;
 extern uint32_t mddp_debug_log_level_s;
@@ -31,7 +32,7 @@ extern uint32_t mddp_debug_log_level_s;
 	_MDDP_DEBUG(MDDP_LC_USAGE, _lv, _fmt, _args)
 
 //------------------------------------------------------------------------------
-// Struct definition - log level/class.
+// Struct definition.
 // -----------------------------------------------------------------------------
 #define MDDP_DEBUG_LOG_CLASS_MASK       0xF0
 #define MDDP_IS_VALID_LOG_CLASS(_class) \
@@ -59,45 +60,6 @@ enum mddp_log_level_e {
 };
 #define MDDP_LL_ENG_DEF                 MDDP_LL_NOTICE
 #define MDDP_LL_NON_ENG_DEF             MDDP_LL_WARN
-
-//------------------------------------------------------------------------------
-// Define marco.
-// -----------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-// Struct definition.
-// -----------------------------------------------------------------------------
-enum mddp_dstate_id_e {
-	MDDP_DSTATE_ID_START,
-	MDDP_DSTATE_ID_STOP,
-	MDDP_DSTATE_ID_NEW_TAG,
-	MDDP_DSTATE_ID_SUSPEND_TAG,
-	MDDP_DSTATE_ID_RESUME_TAG,
-	MDDP_DSTATE_ID_GET_OFFLOAD_STATS,
-
-	MDDP_DSTATE_ID_NUM,
-};
-
-#define MDDP_DSTATE_STR_SZ 96
-struct mddp_dstate_t {
-	enum mddp_dstate_id_e   id;
-	uint8_t                 str[MDDP_DSTATE_STR_SZ];
-};
-
-static struct mddp_dstate_t mddp_dstate_temp_s[] = {
-	{MDDP_DSTATE_ID_START,
-	"==================== [%s] START DSTATE ===================="},
-	{MDDP_DSTATE_ID_STOP,
-	"==================== [%s] STOP DSTATE ===================="},
-	{MDDP_DSTATE_ID_NEW_TAG,
-	"[%s] New connection, ip(%x) port(%d)"},
-	{MDDP_DSTATE_ID_SUSPEND_TAG,
-	"[%s] Suspend tag"},
-	{MDDP_DSTATE_ID_RESUME_TAG,
-	"[%s] Resume tag"},
-	{MDDP_DSTATE_ID_GET_OFFLOAD_STATS,
-	"[%s] Get offload stats, rx(%08llu), tx(%08llu)"},
-};
 
 //------------------------------------------------------------------------------
 // Public functions.

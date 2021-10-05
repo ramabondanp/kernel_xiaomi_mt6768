@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -223,6 +224,8 @@ static int rsu_get_cpu_usage(__u32 pid)
 	int i;
 	int opp;
 	int ret = 0;
+	struct cpufreq_policy *policy;
+	struct cpumask *cpus_mask;
 
 	ceiling_idx =
 		kcalloc(nr_cpuclusters, sizeof(unsigned int), GFP_KERNEL);
@@ -231,7 +234,23 @@ static int rsu_get_cpu_usage(__u32 pid)
 		return -1;
 
 	for (i = 0; i < nr_cpuclusters; i++) {
-		clus_max_idx = mt_ppm_userlimit_freq_limit_by_others(i);
+		if (mt_ppm_userlimit_freq_limit_by_others)
+			clus_max_idx = mt_ppm_userlimit_freq_limit_by_others(i);
+		else {
+
+			arch_get_cluster_cpus(cpus_mask, i);
+			policy = cpufreq_cpu_get(
+				cpumask_first(cpus_mask));
+
+			for (opp = 0; opp < NR_FREQ_CPU; opp++)
+				if (policy->max ==
+					mt_cpufreq_get_freq_by_idx(i, opp)) {
+					clus_max_idx = opp;
+					break;
+				}
+			cpufreq_cpu_put(policy);
+		}
+
 		clus_max_idx = clamp(clus_max_idx, 0, NR_FREQ_CPU - 1);
 
 		ceiling_idx[i] =

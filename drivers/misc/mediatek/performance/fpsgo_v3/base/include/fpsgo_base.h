@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -24,7 +25,7 @@
 #include <linux/workqueue.h>
 
 #define WINDOW 20
-#define RESCUE_TIMER_NUM 3
+#define RESCUE_TIMER_NUM 2
 
 /* EARA job type */
 enum HW_EVENT4RENDER {
@@ -90,15 +91,6 @@ struct fbt_boost_info {
 	int f_iter;
 };
 
-struct uboost {
-	unsigned long long vsync_u_runtime;
-	unsigned long long checkp_u_runtime;
-	unsigned long long timer_period;
-	int uboosting;
-	struct hrtimer timer;
-	struct work_struct work;
-};
-
 struct render_info {
 	struct rb_node render_key_node;
 	struct list_head bufferid_list;
@@ -136,9 +128,6 @@ struct render_info {
 
 	/*TODO: EARA mid list*/
 	unsigned long long mid;
-
-	/*uboost*/
-	struct uboost uboost_info;
 
 	struct mutex thr_mlock;
 };
@@ -201,8 +190,6 @@ void fpsgo_main_trace(const char *fmt, ...);
 void fpsgo_clear_uclamp_boost(void);
 void fpsgo_clear_llf_cpu_policy(int orig_llf);
 void fpsgo_del_linger(struct render_info *thr);
-int fpsgo_uboost_traverse(unsigned long long ts);
-int fpsgo_base_is_finished(struct render_info *thr);
 
 int init_fpsgo_common(void);
 

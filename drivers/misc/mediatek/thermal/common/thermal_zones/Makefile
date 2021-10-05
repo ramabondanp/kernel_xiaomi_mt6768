@@ -5,8 +5,6 @@
 
 ifeq ($(CONFIG_MACH_MT6833),y)
 	PDIR = mt6833
-else ifeq ($(CONFIG_MACH_MT6893),y)
-	PDIR = mt6893
 else
 	PDIR = $(MTK_PLATFORM)
 endif
@@ -382,6 +380,7 @@ obj-$(CONFIG_THERMAL) += mtk_tsAll.o
 obj-$(CONFIG_THERMAL) += mtk_ts_imgsensor.o
 obj-$(CONFIG_THERMAL) += mtk_ts_dctm.o
 obj-$(CONFIG_THERMAL) += mtk_ts_pmic.o
+obj-$(CONFIG_THERMAL) += mtk_ts_blk_ntc.o
 
 ifneq ($(CONFIG_MTK_BIF_SUPPORT),)
 #obj-$(CONFIG_THERMAL) += mtk_ts_bif.o

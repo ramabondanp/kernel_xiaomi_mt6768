@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -78,9 +79,6 @@ struct plist_head qos_mdp_module_request_list[MDP_TOTAL_THREAD];
 struct plist_head qos_isp_module_request_list[MDP_TOTAL_THREAD];
 #endif	/* CONFIG_MTK_SMI_EXT */
 #endif	/* PMQOS_VERSION2 */
-
-u32 dre30_hist_sram_start;
-#define LEGACY_DRE30_HIST_SRAM_START	1024
 
 #define CMDQ_LOG_PMQOS(string, args...) \
 do {			\
@@ -855,26 +853,15 @@ static s32 cmdq_mdp_find_free_thread(struct cmdqRecStruct *handle)
 	bool conflict;
 	s32 thread = CMDQ_INVALID_THREAD;
 	u32 index;
-	struct mdp_thread *threads = mdp_ctx.thread;
+	struct mdp_thread *threads;
 	const u32 max_thd = cmdq_dev_get_thread_count();
 
 #ifdef CMDQ_SECURE_PATH_SUPPORT
 	if (cmdq_mdp_check_engine_waiting_unlock(handle) < 0)
 		return CMDQ_INVALID_THREAD;
 
-	if (handle->secData.is_secure) {
-		thread = cmdq_mdp_get_sec_thread();
-
-		if (threads[thread].task_count >=
-			CMDQ_MAX_SECURE_THREAD_COUNT) {
-			CMDQ_LOG(
-				"[warn] too many task for secure path thread:%d count:%u\n",
-				thread, threads[thread].task_count);
-			return CMDQ_INVALID_THREAD;
-		}
-
-		return thread;
-	}
+	if (handle->secData.is_secure)
+		return cmdq_mdp_get_sec_thread();
 #endif
 	conflict = cmdq_mdp_check_engine_conflict(handle, &thread);
 	if (conflict) {
@@ -888,6 +875,7 @@ static s32 cmdq_mdp_find_free_thread(struct cmdqRecStruct *handle)
 		return thread;
 
 	/* dispatch from free threads */
+	threads = mdp_ctx.thread;
 	for (index = MDP_THREAD_START; index < max_thd; index++) {
 		if (!threads[index].acquired || threads[index].engine_flag ||
 			threads[index].task_count ||
@@ -2020,10 +2008,9 @@ static void cmdq_mdp_init_pmqos(void)
 #endif	/* CONFIG_MTK_SMI_EXT */
 }
 
-void cmdq_mdp_init(struct platform_device *pdev)
+void cmdq_mdp_init(void)
 {
 	struct cmdqMDPFuncStruct *mdp_func = cmdq_mdp_get_func();
-	s32 ret;
 
 	CMDQ_LOG("%s\n", __func__);
 
@@ -2067,11 +2054,6 @@ void cmdq_mdp_init(struct platform_device *pdev)
 
 	mdp_pool.limit = &mdp_pool_limit;
 	mdp_pool.cnt = &mdp_pool_cnt;
-
-	ret = of_property_read_u32(pdev->dev.of_node,
-		"dre30_hist_sram_start", &dre30_hist_sram_start);
-	if (ret != 0 || !dre30_hist_sram_start)
-		dre30_hist_sram_start = LEGACY_DRE30_HIST_SRAM_START;
 
 	cmdq_mdp_pool_create();
 }
@@ -2490,7 +2472,6 @@ static void cmdq_mdp_begin_task_virtual(struct cmdqRecStruct *handle,
 	u32 mdp_curr_pixel_size = 0;
 	u32 total_pixel = 0;
 	bool first_task = true;
-	bool expired;
 
 #ifdef MDP_MMPATH
 	/* For MMpath */
@@ -2511,21 +2492,13 @@ static void cmdq_mdp_begin_task_virtual(struct cmdqRecStruct *handle,
 
 	do_gettimeofday(&curr_time);
 
+	CMDQ_LOG_PMQOS("enter %s with handle:0x%p engine:0x%llx thread:%u\n",
+		__func__, handle, handle->engineFlag, handle->thread);
+
 	mdp_curr_pmqos = (struct mdp_pmqos *)handle->prop_addr;
 	pmqos_curr_record->submit_tm = curr_time;
 	pmqos_curr_record->end_tm.tv_sec = mdp_curr_pmqos->tv_sec;
 	pmqos_curr_record->end_tm.tv_usec = mdp_curr_pmqos->tv_usec;
-
-	expired = curr_time.tv_sec > mdp_curr_pmqos->tv_sec ||
-		(curr_time.tv_sec == mdp_curr_pmqos->tv_sec &&
-		curr_time.tv_usec > mdp_curr_pmqos->tv_usec);
-	CMDQ_LOG_PMQOS(
-		"%s%s handle:0x%p engine:0x%llx thread:%u cur:%lu.%lu end:%lu.%lu run:%u\n",
-		__func__, expired ? " expired" : "",
-		handle, handle->engineFlag, handle->thread,
-		curr_time.tv_sec, curr_time.tv_usec,
-		mdp_curr_pmqos->tv_sec, mdp_curr_pmqos->tv_usec,
-		size);
 
 	CMDQ_LOG_PMQOS(
 		"[MDP]mdp %d pixel, mdp %d byte, isp %d pixel, isp %d byte, submit %06ld us, end %06ld us\n",
@@ -2815,31 +2788,22 @@ static void cmdq_mdp_end_task_virtual(struct cmdqRecStruct *handle,
 	u32 total_pixel = 0;
 	bool update_isp_throughput = false;
 	bool update_isp_bandwidth = false;
-	bool expired;
 
 #if 0
 #if IS_ENABLED(CONFIG_MTK_SMI_EXT) && IS_ENABLED(CONFIG_MACH_MT6771)
 	smi_larb_mon_act_cnt();
 #endif
 #endif
+	do_gettimeofday(&curr_time);
+	CMDQ_LOG_PMQOS("enter %s with handle:0x%p engine:0x%llx\n", __func__,
+		handle, handle->engineFlag);
+
 	if (!handle->prop_addr)
 		return;
-
-	do_gettimeofday(&curr_time);
 
 	mdp_curr_pmqos = (struct mdp_pmqos *)handle->prop_addr;
 	pmqos_curr_record = (struct mdp_pmqos_record *)handle->user_private;
 	pmqos_curr_record->submit_tm = curr_time;
-
-	expired = curr_time.tv_sec > mdp_curr_pmqos->tv_sec ||
-		(curr_time.tv_sec == mdp_curr_pmqos->tv_sec &&
-		curr_time.tv_usec > mdp_curr_pmqos->tv_usec);
-	CMDQ_LOG_PMQOS("%s%s handle:0x%p engine:0x%llx cur:%lu.%lu end:%lu.%lu run:%u\n",
-		__func__, expired ? " expired" : "",
-		handle, handle->engineFlag,
-		curr_time.tv_sec, curr_time.tv_usec,
-		mdp_curr_pmqos->tv_sec, mdp_curr_pmqos->tv_usec,
-		size);
 
 	for (i = 0; i < size; i++) {
 		struct cmdqRecStruct *curTask = handle_list[i];
@@ -3161,7 +3125,9 @@ void cmdq_mdp_compose_readback_virtual(struct cmdqRecStruct *handle,
 #define MDP_AAL_DUAL_PIPE_00	0x500
 #define MDP_AAL_DUAL_PIPE_08	0x544
 
+#define DRE30_HIST_START	1152
 #define MDP_AAL_SRAM_RW_IF_2_MASK	0x01FFF
+#define MDP_AAL_SRAM_START		4096
 #define MDP_AAL_SRAM_CNT		768
 #define MDP_AAL_SRAM_STATUS_BIT		BIT(17)
 #define MDP_AAL_DRE_BITS(_param)	(_param & 0xF)
@@ -3220,7 +3186,7 @@ static void mdp_readback_aal_virtual(struct cmdqRecStruct *handle,
 	 * spr1 = AAL_SRAM_START
 	 * gpr_p4 = out_pa
 	 */
-	cmdq_pkt_assign_command(pkt, idx_addr, dre30_hist_sram_start);
+	cmdq_pkt_assign_command(pkt, idx_addr, DRE30_HIST_START);
 	cmdq_pkt_move(pkt, idx_gpr_out, pa);
 
 	/* loop again here */
@@ -3244,9 +3210,13 @@ static void mdp_readback_aal_virtual(struct cmdqRecStruct *handle,
 	lop.reg = true;
 	lop.idx = idx_addr;
 	rop.reg = false;
-	rop.value = dre30_hist_sram_start + 4 * (MDP_AAL_SRAM_CNT - 1);
+	rop.value = DRE30_HIST_START + 4 * (MDP_AAL_SRAM_CNT - 1);
+	condi_offset = pkt->cmd_buf_size;
 	cmdq_pkt_assign_command(pkt, CMDQ_THR_SPR_IDX0, 0);
-	condi_offset = pkt->cmd_buf_size - CMDQ_INST_SIZE;
+	condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt, condi_offset);
+	if (condi_inst[1] == 0x10000001)
+		condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt,
+			condi_offset + 8);
 	cmdq_pkt_cond_jump_abs(pkt, CMDQ_THR_SPR_IDX0, &lop, &rop,
 		CMDQ_GREATER_THAN_AND_EQUAL);
 
@@ -3264,11 +3234,6 @@ static void mdp_readback_aal_virtual(struct cmdqRecStruct *handle,
 	cmdq_pkt_logic_command(pkt, CMDQ_LOGIC_ADD, idx_out_low, &lop, &rop);
 
 	cmdq_pkt_jump_addr(pkt, begin_pa);
-
-	condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt, condi_offset);
-	if (condi_inst[1] == 0x10000001)
-		condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt,
-			condi_offset + CMDQ_INST_SIZE);
 	*condi_inst = (u32)CMDQ_REG_SHIFT_ADDR(cmdq_pkt_get_curr_buf_pa(pkt));
 
 	pa = pa + MDP_AAL_SRAM_CNT * 4;
@@ -3360,8 +3325,12 @@ static void mdp_readback_hdr_virtual(struct cmdqRecStruct *handle,
 	lop.idx = idx_counter;
 	rop.reg = false;
 	rop.value =  MDP_HDR_HIST_CNT - 1;
+	condi_offset = pkt->cmd_buf_size;
 	cmdq_pkt_assign_command(pkt, CMDQ_THR_SPR_IDX0, 0);
-	condi_offset = pkt->cmd_buf_size - CMDQ_INST_SIZE;
+	condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt, condi_offset);
+	if (condi_inst[1] == 0x10000001)
+		condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt,
+			condi_offset + 8);
 	cmdq_pkt_cond_jump_abs(pkt, CMDQ_THR_SPR_IDX0, &lop, &rop,
 		CMDQ_GREATER_THAN_AND_EQUAL);
 
@@ -3379,10 +3348,6 @@ static void mdp_readback_hdr_virtual(struct cmdqRecStruct *handle,
 	cmdq_pkt_logic_command(pkt, CMDQ_LOGIC_ADD, idx_out_low, &lop, &rop);
 
 	cmdq_pkt_jump_addr(pkt, begin_pa);
-	condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt, condi_offset);
-	if (condi_inst[1] == 0x10000001)
-		condi_inst = (u32 *)cmdq_pkt_get_va_by_offset(pkt,
-			condi_offset + 8);
 	*condi_inst = (u32)CMDQ_REG_SHIFT_ADDR(cmdq_pkt_get_curr_buf_pa(pkt));
 
 	pa = pa + MDP_HDR_HIST_CNT * 4;

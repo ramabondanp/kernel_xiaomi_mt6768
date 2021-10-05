@@ -3,6 +3,7 @@
  * mddp_if.h - Structure/API provided by mddp_if.c
  *
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef __MDDP_IF_H

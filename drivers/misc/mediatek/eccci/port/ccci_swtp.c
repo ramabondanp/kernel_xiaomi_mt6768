@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -29,7 +30,6 @@
 
 const struct of_device_id swtp_of_match[] = {
 	{ .compatible = SWTP_COMPATIBLE_DEVICE_ID, },
-	{ .compatible = SWTP1_COMPATIBLE_DEVICE_ID,},
 	{},
 };
 #define SWTP_MAX_SUPPORT_MD 1
@@ -62,10 +62,10 @@ int switch_MD2_Tx_Power(unsigned int mode)
 	return switch_Tx_Power(1, mode);
 }
 
-static int swtp_switch_mode(int irq, struct swtp_t *swtp)
+static int swtp_switch_mode(struct swtp_t *swtp)
 {
 	unsigned long flags;
-	int val;
+	int ret = 0;
 
 	if (swtp == NULL) {
 		CCCI_LEGACY_ERR_LOG(-1, SYS, "%s data is null\n", __func__);
@@ -73,29 +73,25 @@ static int swtp_switch_mode(int irq, struct swtp_t *swtp)
 	}
 
 	spin_lock_irqsave(&swtp->spinlock, flags);
-	val = swtp->irq[0] == irq ? 0:1;
-	if (swtp->curr_mode[val] == SWTP_EINT_PIN_PLUG_IN) {
-		if (swtp->eint_type[val] == IRQ_TYPE_LEVEL_HIGH)
-			irq_set_irq_type(swtp->irq[val], IRQ_TYPE_LEVEL_HIGH);
+	if (swtp->curr_mode == SWTP_EINT_PIN_PLUG_IN) {
+		if (swtp->eint_type == IRQ_TYPE_LEVEL_HIGH)
+			irq_set_irq_type(swtp->irq, IRQ_TYPE_LEVEL_HIGH);
 		else
-			irq_set_irq_type(swtp->irq[val], IRQ_TYPE_LEVEL_LOW);
-	} else {
-		if (swtp->eint_type[val] == IRQ_TYPE_LEVEL_HIGH)
-			irq_set_irq_type(swtp->irq[val], IRQ_TYPE_LEVEL_LOW);
-		else
-			irq_set_irq_type(swtp->irq[val], IRQ_TYPE_LEVEL_HIGH);
-	}
-	swtp->curr_mode[val] = !swtp->curr_mode[val];
+			irq_set_irq_type(swtp->irq, IRQ_TYPE_LEVEL_LOW);
 
-	if (swtp->curr_mode[0] | swtp->curr_mode[1])
-		swtp->final_mode = SWTP_EINT_PIN_PLUG_IN;
-	else
-		swtp->final_mode = SWTP_EINT_PIN_PLUG_OUT;
+		swtp->curr_mode = SWTP_EINT_PIN_PLUG_OUT;
+	} else {
+		if (swtp->eint_type == IRQ_TYPE_LEVEL_HIGH)
+			irq_set_irq_type(swtp->irq, IRQ_TYPE_LEVEL_LOW);
+		else
+			irq_set_irq_type(swtp->irq, IRQ_TYPE_LEVEL_HIGH);
+		swtp->curr_mode = SWTP_EINT_PIN_PLUG_IN;
+	}
 	CCCI_LEGACY_ALWAYS_LOG(swtp->md_id, SYS, "%s mode %d\n",
-		__func__, swtp->final_mode);
+		__func__, swtp->curr_mode);
 	spin_unlock_irqrestore(&swtp->spinlock, flags);
 
-	return swtp->final_mode;
+	return ret;
 }
 
 static int swtp_send_tx_power_mode(struct swtp_t *swtp)
@@ -114,7 +110,7 @@ static int swtp_send_tx_power_mode(struct swtp_t *swtp)
 		goto __ERR_HANDLE__;
 	}
 	if (swtp->md_id == 0)
-		ret = switch_MD1_Tx_Power(swtp->final_mode);
+		ret = switch_MD1_Tx_Power(swtp->curr_mode);
 	else {
 		CCCI_LEGACY_ERR_LOG(swtp->md_id, SYS,
 			"%s md is no support\n", __func__);
@@ -125,7 +121,7 @@ static int swtp_send_tx_power_mode(struct swtp_t *swtp)
 	if (ret >= 0)
 		CCCI_LEGACY_ALWAYS_LOG(swtp->md_id, SYS,
 			"%s send swtp to md ret=%d, mode=%d, rety_cnt=%d\n",
-			__func__, ret, swtp->final_mode, swtp->retry_cnt);
+			__func__, ret, swtp->curr_mode, swtp->retry_cnt);
 	spin_lock_irqsave(&swtp->spinlock, flags);
 	if (ret >= 0)
 		swtp->retry_cnt = 0;
@@ -151,7 +147,7 @@ static irqreturn_t swtp_irq_func(int irq, void *data)
 	struct swtp_t *swtp = (struct swtp_t *)data;
 	int ret = 0;
 
-	ret = swtp_switch_mode(irq, swtp);
+	ret = swtp_switch_mode(swtp);
 	if (ret < 0) {
 		CCCI_LEGACY_ERR_LOG(swtp->md_id, SYS,
 			"%s swtp_switch_mode failed in irq, ret=%d\n",
@@ -194,7 +190,8 @@ int swtp_md_tx_power_req_hdlr(int md_id, int data)
 
 int swtp_init(int md_id)
 {
-	int i, ret = 0;
+	int ret = 0;
+	struct device_node *node = NULL;
 #ifdef CONFIG_MTK_EIC
 	u32 ints[2] = { 0, 0 };
 	u32 ints1[2] = { 0, 0 };
@@ -202,7 +199,6 @@ int swtp_init(int md_id)
 	u32 ints[1] = { 0 };
 	u32 ints1[4] = { 0, 0, 0, 0 };
 #endif
-	struct device_node *node = NULL;
 
 	if (md_id < 0 || md_id >= SWTP_MAX_SUPPORT_MD) {
 		CCCI_LEGACY_ERR_LOG(-1, SYS,
@@ -210,11 +206,11 @@ int swtp_init(int md_id)
 		return -1;
 	}
 	swtp_data[md_id].md_id = md_id;
+	swtp_data[md_id].curr_mode = SWTP_EINT_PIN_PLUG_OUT;
 	spin_lock_init(&swtp_data[md_id].spinlock);
-	for (i = 0; i < 2; i++) {
-		swtp_data[md_id].curr_mode[i] = SWTP_EINT_PIN_PLUG_OUT;
 	INIT_DELAYED_WORK(&swtp_data[md_id].delayed_work, swtp_tx_work);
-		node = of_find_matching_node(NULL, &swtp_of_match[i]);
+
+	node = of_find_matching_node(NULL, swtp_of_match);
 	if (node) {
 		ret = of_property_read_u32_array(node, "debounce",
 				ints, ARRAY_SIZE(ints));
@@ -225,37 +221,34 @@ int swtp_init(int md_id)
 				"%s get property fail\n", __func__);
 
 #ifdef CONFIG_MTK_EIC /* for chips before mt6739 */
-			swtp_data[md_id].gpiopin[i] = ints[0];
-			swtp_data[md_id].setdebounce[i] = ints[1];
-			swtp_data[md_id].eint_type[i] = ints1[1];
+		swtp_data[md_id].gpiopin = ints[0];
+		swtp_data[md_id].setdebounce = ints[1];
+		swtp_data[md_id].eint_type = ints1[1];
 #else /* for mt6739,and chips after mt6739 */
-			swtp_data[md_id].setdebounce[i] = ints[0];
-			swtp_data[md_id].gpiopin[i] =
-				of_get_named_gpio(node, "deb-gpios", 0);
-			swtp_data[md_id].eint_type[i] = ints1[1];
+		swtp_data[md_id].setdebounce = ints[0];
+		swtp_data[md_id].gpiopin =
+			of_get_named_gpio(node, "deb-gpios", 0);
+		swtp_data[md_id].eint_type = ints1[1];
 #endif
-			gpio_set_debounce(swtp_data[md_id].gpiopin[i],
-			swtp_data[md_id].setdebounce[i]);
-			swtp_data[md_id].irq[i] = irq_of_parse_and_map(node, 0);
-			ret = request_irq(swtp_data[md_id].irq[i],
-				swtp_irq_func, IRQF_TRIGGER_NONE,
-				(i == 0 ? "swtp0-eint" : "swtp1-eint"),
-				&swtp_data[md_id]);
+		gpio_set_debounce(swtp_data[md_id].gpiopin,
+			swtp_data[md_id].setdebounce);
+		swtp_data[md_id].irq = irq_of_parse_and_map(node, 0);
+		ret = request_irq(swtp_data[md_id].irq, swtp_irq_func,
+			IRQF_TRIGGER_NONE, "swtp-eint", &swtp_data[md_id]);
 		if (ret != 0) {
 			CCCI_LEGACY_ERR_LOG(md_id, SYS,
-				"swtp%d-eint IRQ LINE NOT AVAILABLE\n", i);
+				"swtp-eint IRQ LINE NOT AVAILABLE\n");
 		} else {
 			CCCI_LEGACY_ALWAYS_LOG(md_id, SYS,
-				"swtp%d-eint set EINT finished, irq=%d, setdebounce=%d, eint_type=%d\n",
-				i, swtp_data[md_id].irq[i],
-				swtp_data[md_id].setdebounce[i],
-				swtp_data[md_id].eint_type[i]);
+				"swtp-eint set EINT finished, irq=%d, setdebounce=%d, eint_type=%d\n",
+				swtp_data[md_id].irq,
+				swtp_data[md_id].setdebounce,
+				swtp_data[md_id].eint_type);
 		}
 	} else {
 		CCCI_LEGACY_ERR_LOG(md_id, SYS,
 			"%s can't find compatible node\n", __func__);
 		ret = -1;
-		}
 	}
 	register_ccci_sys_call_back(md_id, MD_SW_MD1_TX_POWER_REQ,
 		swtp_md_tx_power_req_hdlr);

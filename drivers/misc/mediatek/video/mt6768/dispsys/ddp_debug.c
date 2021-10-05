@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -83,7 +84,7 @@ static const long int DEFAULT_LOG_FPS_WND_SIZE = 30;
 unsigned char pq_debug_flag;
 unsigned char aal_debug_flag;
 
-static unsigned int dbg_log_level;
+static unsigned int dbg_log_level = 3;
 static unsigned int irq_log_level;
 static unsigned int dump_to_buffer;
 

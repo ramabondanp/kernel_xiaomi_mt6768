@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -29,7 +30,6 @@
 #include "xgf.h"
 #include "eara_job.h"
 #include "syslimiter.h"
-#include "uboost.h"
 
 #ifdef CONFIG_DRM_MEDIATEK
 #include "mtk_drm_arr.h"
@@ -39,8 +39,6 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/fpsgo.h>
-
-#define API_READY 0
 
 #define TARGET_UNLIMITED_FPS 240
 
@@ -121,7 +119,6 @@ static void fpsgo_notifier_wq_cb_vsync(unsigned long long ts)
 		return;
 
 	fpsgo_ctrl2fbt_vsync(ts);
-	fpsgo_uboost_traverse(ts);
 }
 
 static void fpsgo_notifier_wq_cb_dfrc_fps(int dfrc_fps)
@@ -794,14 +791,11 @@ static void __exit fpsgo_exit(void)
 		destroy_workqueue(g_psNotifyWorkQueue);
 		g_psNotifyWorkQueue = NULL;
 	}
-#ifdef CONFIG_DRM_MEDIATEK
+#if defined(CONFIG_DRM_MEDIATEK)
 	drm_unregister_fps_chg_callback(dfrc_fps_limit_cb);
-#else
-#if API_READY
+#elif defined(CONFIG_MTK_HIGH_FRAME_RATE)
 	disp_unregister_fps_chg_callback(dfrc_fps_limit_cb);
 #endif
-#endif
-	fpsgo_uboost_exit();
 	fbt_cpu_exit();
 	mtk_fstb_exit();
 	fpsgo_composer_exit();
@@ -828,7 +822,6 @@ static int __init fpsgo_init(void)
 	fbt_cpu_init();
 	mtk_fstb_init();
 	fpsgo_composer_init();
-	fpsgo_uboost_init();
 
 	fpsgo_switch_enable(1);
 
@@ -847,12 +840,10 @@ static int __init fpsgo_init(void)
 	fpsgo_get_nn_priority_fp = fpsgo_get_nn_priority;
 	fpsgo_get_nn_ttime_fp = fpsgo_get_nn_ttime;
 
-#ifdef CONFIG_DRM_MEDIATEK
+#if defined(CONFIG_DRM_MEDIATEK)
 	drm_register_fps_chg_callback(dfrc_fps_limit_cb);
-#else
-#if API_READY
+#elif defined(CONFIG_MTK_HIGH_FRAME_RATE)
 	disp_register_fps_chg_callback(dfrc_fps_limit_cb);
-#endif
 #endif
 
 	return 0;

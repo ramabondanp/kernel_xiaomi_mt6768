@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014 TRUSTONIC LIMITED
+ * Copyright (C) 2021 XiaoMi, Inc.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or

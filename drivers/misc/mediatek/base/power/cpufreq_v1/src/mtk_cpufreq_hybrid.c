@@ -57,9 +57,6 @@
 #include "mtk_cpufreq_hybrid.h"
 #include "mtk_cpufreq_opp_pv_table.h"
 #include "mtk_cpufreq_debug.h"
-#ifdef DSU_DVFS_ENABLE
-#include "swpm_v1/mtk_swpm_interface.h"
-#endif
 
 #ifdef CONFIG_MTK_CPU_MSSV
 extern unsigned int cpumssv_get_state(void);
@@ -1464,17 +1461,12 @@ void cpuhvfs_update_cci_map_tbl(unsigned int idx_1, unsigned int idx_2,
 
 void cpuhvfs_update_cci_mode(unsigned int mode, unsigned int use_id)
 {
-
-	/* mode = 0(Normal as 50%) mode = 1(Perf as 70%) */
-#ifdef DSU_DVFS_ENABLE
-	if (mode == PERF)
-		swpm_pmu_enable(0);
-	else
-		swpm_pmu_enable(1);
-#endif
-	csram_write(OFFS_CCI_TBL_USER, use_id);
-	csram_write(OFFS_CCI_TBL_MODE, mode);
-	csram_write(OFFS_CCI_TOGGLE_BIT, 1);
+	if (mode < NR_CCI_TBL) {
+		csram_write(OFFS_CCI_TBL_USER, use_id);
+		/* mode = 0(Normal as 50%) mode = 1(Perf as 70%) */
+		csram_write(OFFS_CCI_TBL_MODE, mode);
+		csram_write(OFFS_CCI_TOGGLE_BIT, 1);
+	}
 }
 
 unsigned int cpuhvfs_get_cci_mode(void)

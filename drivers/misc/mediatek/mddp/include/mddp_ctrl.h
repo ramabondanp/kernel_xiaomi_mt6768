@@ -3,6 +3,7 @@
  * mddp_ctrl.h - Public API/structure provided by ctrl.
  *
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef __MDDP_CTRL_H

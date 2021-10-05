@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2015-2019, MICROTRUST Incorporated
+ * Copyright (C) 2021 XiaoMi, Inc.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -55,6 +56,7 @@
 #define NQ_BLOCK_SIZE			(64)
 #define BLOCK_MAX_COUNT			(NQ_BUFF_SIZE / NQ_BLOCK_SIZE - 1)
 
+#define FP_BUFF_SIZE			(1024 * 1024)
 #define CTL_BUFF_SIZE			(0x1000)
 
 #define MESSAGE_LENGTH			(0x1000)

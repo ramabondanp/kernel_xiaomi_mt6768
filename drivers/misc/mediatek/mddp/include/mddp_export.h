@@ -3,6 +3,7 @@
  * mddp_export.h - Public API/structure provided for external modules.
  *
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef __MDDP_EXPORT_H

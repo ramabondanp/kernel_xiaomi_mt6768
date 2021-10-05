@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -38,18 +39,11 @@ int32_t sync_latest_data(void)
 
 	return 0;
 }
-int32_t get_ddr_act_times(int32_t freq_num,
-			  struct ddr_act_times *ddr_times)
+int32_t get_ddr_times(int32_t freq_num,
+		      struct ddr_times *ddr_times)
 {
 	if (swpm_sp_m.func_ready && ddr_times != NULL)
-		SWPM_OPS->ddr_act_times_get(freq_num, ddr_times);
-
-	return 0;
-}
-int32_t get_ddr_sr_pd_times(struct ddr_sr_pd_times *ddr_times)
-{
-	if (swpm_sp_m.func_ready && ddr_times != NULL)
-		SWPM_OPS->ddr_sr_pd_times_get(ddr_times);
+		SWPM_OPS->ddr_times_get(freq_num, ddr_times);
 
 	return 0;
 }
@@ -102,7 +96,7 @@ int32_t get_vcore_ip_vol_stats(int32_t ip_num,
 	return 0;
 }
 int32_t get_vcore_vol_duration(int32_t vol_num,
-			       struct vol_duration *duration)
+			       int64_t *duration)
 {
 	if (swpm_sp_m.func_ready && duration != NULL)
 		return SWPM_OPS->vcore_vol_duration_get(vol_num,
@@ -118,8 +112,7 @@ static int swpm_ops_func_ready_chk(void)
 
 	if (ops_chk &&
 	    ops_chk->cmd &&
-	    ops_chk->ddr_act_times_get &&
-	    ops_chk->ddr_sr_pd_times_get &&
+	    ops_chk->ddr_times_get &&
 	    ops_chk->ddr_freq_data_ip_stats_get &&
 	    ops_chk->vcore_ip_vol_stats_get &&
 	    ops_chk->vcore_vol_duration_get &&

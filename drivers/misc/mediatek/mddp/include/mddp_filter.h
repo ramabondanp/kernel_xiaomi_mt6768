@@ -3,6 +3,7 @@
  * mddp_filter.h - Public API/structure provided by filter.
  *
  * Copyright (c) 2020 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef __MDDP_FILTER_H

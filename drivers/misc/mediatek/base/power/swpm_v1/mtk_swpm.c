@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -44,16 +45,13 @@
 #define MAX(a, b)			((a) >= (b) ? (a) : (b))
 #define MIN(a, b)			((a) >= (b) ? (b) : (a))
 
-#define SWPM_OPS (swpm_m.plat_ops)
 /****************************************************************************
  *  Type Definitions
  ****************************************************************************/
 struct swpm_manager {
 	bool initialize;
-	bool plat_ready;
 	struct swpm_mem_ref_tbl *mem_ref_tbl;
 	unsigned int ref_tbl_size;
-	struct swpm_core_internal_ops *plat_ops;
 };
 
 /****************************************************************************
@@ -61,7 +59,6 @@ struct swpm_manager {
  ****************************************************************************/
 static struct swpm_manager swpm_m = {
 	.initialize = 0,
-	.plat_ready = 0,
 	.mem_ref_tbl = NULL,
 	.ref_tbl_size = 0,
 };
@@ -439,48 +436,9 @@ PROC_FOPS_RW(avg_window);
 PROC_FOPS_RW(log_interval);
 PROC_FOPS_RW(log_mask);
 
-static int swpm_core_ops_ready_chk(void)
-{
-	bool func_ready = false;
-	struct swpm_core_internal_ops *ops_chk = swpm_m.plat_ops;
-
-	if (ops_chk &&
-	    ops_chk->cmd)
-		func_ready = true;
-
-	return func_ready;
-}
 /***************************************************************************
  *  API
  ***************************************************************************/
-int swpm_core_ops_register(struct swpm_core_internal_ops *ops)
-{
-	if (!swpm_m.plat_ops && ops) {
-		swpm_m.plat_ops = ops;
-		swpm_m.plat_ready = swpm_core_ops_ready_chk();
-	} else
-		return -1;
-
-	return 0;
-}
-
-#undef swpm_pmu_enable
-int swpm_pmu_enable(enum swpm_pmu_user id,
-		    unsigned int enable)
-{
-	unsigned int cmd_code;
-
-	if (!swpm_m.plat_ready)
-		return SWPM_INIT_ERR;
-	else if (id >= NR_SWPM_PMU_USER)
-		return SWPM_ARGS_ERR;
-
-	cmd_code = (!!enable) | (id << SWPM_CODE_USER_BIT);
-	SWPM_OPS->cmd(SET_PMU, cmd_code);
-
-	return SWPM_SUCCESS;
-}
-
 int swpm_append_procfs(struct swpm_entry *p)
 {
 	if (!swpm_dir) {
