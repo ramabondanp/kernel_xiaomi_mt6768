@@ -27,6 +27,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  * Copyright (C) 2014-2015 ARM Limited
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (c) 2014-2015 MediaTek Inc.
  */
 
@@ -264,11 +265,6 @@ static void *__arm_v7s_alloc_table(int lvl, gfp_t gfp,
 		table = (void *)__get_dma_pages(__GFP_ZERO, get_order(size));
 	else if (lvl == 2)
 		table = kmem_cache_zalloc(data->l2_tables, gfp | GFP_DMA);
-
-	if (!table) {
-		pr_info("%s table is NULL, lvl:%d\n", __func__, lvl);
-		return NULL;
-	}
 
 	phys = virt_to_phys(table);
 	if (phys != (arm_v7s_iopte)phys) {

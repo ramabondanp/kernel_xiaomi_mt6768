@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2019 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Author: Sagy Shih <sagy.shih@mediatek.com>
  */
 
@@ -633,7 +634,7 @@ static int emimpu_probe(struct platform_device *pdev)
 
 	return ret;
 }
-
+/*
 static int __init emimpu_ap_region_init(void)
 {
 	struct emimpu_dev_t *emimpu_dev_ptr;
@@ -656,7 +657,7 @@ static int __init emimpu_ap_region_init(void)
 
 	return 0;
 }
-
+*/
 static int __init emimpu_drv_init(void)
 {
 	int ret;
@@ -675,7 +676,7 @@ static void __exit emimpu_drv_exit(void)
 	platform_driver_unregister(&emimpu_drv);
 }
 
-late_initcall_sync(emimpu_ap_region_init);
+/*late_initcall_sync(emimpu_ap_region_init);*/
 module_init(emimpu_drv_init);
 module_exit(emimpu_drv_exit);
 

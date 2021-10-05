@@ -3,6 +3,7 @@
  * drivers/staging/android/ion/ion.c
  *
  * Copyright (C) 2011 Google, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -325,6 +326,13 @@ static struct ion_buffer *ion_buffer_create(struct ion_heap *heap,
 		goto err1;
 	}
 
+	spin_lock(&heap->stat_lock);
+	heap->num_of_buffers++;
+	heap->num_of_alloc_bytes += len;
+	if (heap->num_of_alloc_bytes > heap->alloc_bytes_wm)
+		heap->alloc_bytes_wm = heap->num_of_alloc_bytes;
+	spin_unlock(&heap->stat_lock);
+
 	table = buffer->sg_table;
 	buffer->dev = dev;
 	buffer->size = len;
@@ -416,6 +424,12 @@ void ion_buffer_destroy(struct ion_buffer *buffer)
 
 	atomic_long_sub(buffer->size, &buffer->heap->total_allocated);
 	buffer->heap->ops->free(buffer);
+
+	spin_lock(&buffer->heap->stat_lock);
+	buffer->heap->num_of_buffers--;
+	buffer->heap->num_of_alloc_bytes -= buffer->size;
+	spin_unlock(&buffer->heap->stat_lock);
+
 	vfree(buffer->pages);
 	kfree(buffer);
 }
@@ -633,13 +647,6 @@ struct ion_handle *ion_alloc(struct ion_client *client, size_t len,
 
 	pr_debug("%s: len %zu align %zu heap_id_mask %u flags %x\n", __func__,
 		 len, align, heap_id_mask, flags);
-
-#if defined(CONFIG_MACH_MT6893)
-	if (heap_id_mask == ION_HEAP_MULTIMEDIA_MAP_MVA_MASK) {
-		IONMSG("%s fail, not support MAP_MVA heap\n", __func__);
-		return ERR_PTR(-EINVAL);
-	}
-#endif
 
 	/* For some case(C2 audio decoder), it can not set heap id in AOSP,
 	 * so mtk ion will set this heap to ion_mm_heap.
@@ -2229,6 +2236,14 @@ static int ion_debug_heap_show(struct seq_file *s, void *unused)
 				   map_mva_heap->id,
 				   map_mva_heap->free_list_size);
 	}
+
+	seq_puts(s, "----------------------------------------------------\n");
+	seq_printf(s, "%16.s %16zu\n", "num_of_alloc_bytes ",
+		   heap->num_of_alloc_bytes);
+	seq_printf(s, "%16.s %16zu\n", "num_of_buffers ",
+		   heap->num_of_buffers);
+	seq_printf(s, "%16.s %16zu\n", "alloc_bytes_wm ",
+		   heap->alloc_bytes_wm);
 	seq_puts(s, "----------------------------------------------------\n");
 
 	if (heap->debug_show)
@@ -2323,6 +2338,8 @@ static const struct file_operations proc_shrink_fops = {
 void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap)
 {
 #if IS_ENABLED(CONFIG_DEBUG_FS)
+	char debug_name[64];
+	struct dentry *heap_root;
 	struct dentry *debug_file;
 #endif
 #if IS_ENABLED(CONFIG_PROC_FS)
@@ -2334,6 +2351,7 @@ void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap)
 		       __func__);
 
 	spin_lock_init(&heap->free_lock);
+	spin_lock_init(&heap->stat_lock);
 	heap->free_list_size = 0;
 
 	if (heap->flags & ION_HEAP_FLAG_DEFER_FREE)
@@ -2343,6 +2361,35 @@ void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap)
 		ion_heap_init_shrinker(heap);
 
 	heap->dev = dev;
+	heap->num_of_buffers = 0;
+	heap->num_of_alloc_bytes = 0;
+	heap->alloc_bytes_wm = 0;
+
+#if IS_ENABLED(CONFIG_DEBUG_FS)
+	heap_root = debugfs_create_dir(heap->name, dev->debug_root);
+	debugfs_create_u64("num_of_buffers",
+			   0444, heap_root,
+			   &heap->num_of_buffers);
+	debugfs_create_u64("num_of_alloc_bytes",
+			   0444,
+			   heap_root,
+			   &heap->num_of_alloc_bytes);
+	debugfs_create_u64("alloc_bytes_wm",
+			   0444,
+			   heap_root,
+			   &heap->alloc_bytes_wm);
+
+	if (heap->shrinker.count_objects &&
+	    heap->shrinker.scan_objects) {
+		snprintf(debug_name, 64, "%s_shrink", heap->name);
+		debugfs_create_file(debug_name,
+				    0644,
+				    heap_root,
+				    heap,
+				    &debug_shrink_fops);
+	}
+#endif
+
 	down_write(&dev->lock);
 	/*
 	 * use negative heap->id to reverse the priority -- when traversing

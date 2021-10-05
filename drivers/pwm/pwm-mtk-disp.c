@@ -1,6 +1,7 @@
 /*
  * MediaTek display pulse-width-modulation controller driver.
  * Copyright (c) 2015 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Author: YH Huang <yh.huang@mediatek.com>
  *
  * This program is free software; you can redistribute it and/or modify

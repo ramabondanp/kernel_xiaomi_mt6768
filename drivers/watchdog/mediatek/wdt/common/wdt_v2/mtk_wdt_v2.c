@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 MediaTek Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -665,6 +666,9 @@ void wdt_arch_reset(char mode)
 
 	/* dump RGU registers */
 	wdt_dump_reg();
+
+	/* clear extra cnt to prevent from Q->R update cannot reboot automatically issue */
+	wdt_mode_val &= ~MTK_WDT_MODE_EXTRA_CNT;
 
 	mt_reg_sync_writel(wdt_mode_val, MTK_WDT_MODE);
 
