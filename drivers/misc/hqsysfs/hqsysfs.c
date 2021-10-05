@@ -45,7 +45,7 @@ static HW_INFO(HWID_FP, fingerprint);
 //static HW_INFO(HWID_TEE,tee);
 static HW_INFO(HWID_PCBA, pcba_config);
 
-#if defined(TARGET_PRODUCT_LANCELOT) || defined(TARGET_PRODUCT_SHIVA)
+#if defined(CONFIG_TARGET_PRODUCT_LANCELOTCOMMON) || defined(CONFIG_TARGET_PRODUCT_SHIVACOMMON)
 
 struct pcba_info pcba[] = {
 	{PCBA_J19_P0_1_CN, "PCBA_J19_P0-1_CN"},

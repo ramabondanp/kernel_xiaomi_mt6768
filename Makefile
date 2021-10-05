@@ -976,20 +976,6 @@ KBUILD_CFLAGS += -DFACTORY_VERSION_ENABLE
 endif
 # =============FACTORY==================================
 
-# =============PROJECT==================================
-# Add macros by TARGET_PRODUCT for different projects
-ifeq ($(CONFIG_TARGET_PRODUCT_LANCELOTCOMMON),y)
-# Define macros here only for lancelot project
-KBUILD_CFLAGS += -DTARGET_PRODUCT_LANCELOT
-else ifeq ($(CONFIG_TARGET_PRODUCT_SHIVACOMMON),y)
-# Define macros here only for shiva project
-KBUILD_CFLAGS += -DTARGET_PRODUCT_SHIVA
-else ifeq ($(CONFIG_TARGET_PRODUCT_MERLINCOMMON),y)
-# Define macros here only for merlin common project
-KBUILD_CFLAGS += -DTARGET_PRODUCT_MERLINCOMMON
-endif
-# =============PROJECT==================================
-
 # Use --build-id when available.
 LDFLAGS_BUILD_ID := $(patsubst -Wl$(comma)%,%,\
 			      $(call cc-ldoption, -Wl$(comma)--build-id,))
