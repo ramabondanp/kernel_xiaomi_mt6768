@@ -101,9 +101,8 @@ build_kernel() {
   make -j"$PROCS" O="$OUTDIR" \
                   ARCH=arm64 \
                   CC=clang \
-                  CLANG_TRIPLE=aarch64-linux-gnu- \
-                  CROSS_COMPILE=aarch64-linux-android- \
-                  CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+                  CROSS_COMPILE=aarch64-linux-gnu- \
+                  CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                   LD=ld.lld \
                   NM=llvm-nm \
                   OBJCOPY=llvm-objcopy
@@ -116,15 +115,7 @@ export OUTDIR=/root
 if [[ $CLONE == true ]]
 then
   echo "Cloning dependencies"
-  mkdir "$OUTDIR"/clang-llvm
-  mkdir "$OUTDIR"/gcc64-aosp
-  mkdir "$OUTDIR"/gcc32-aosp
-  ! [[ -f "$OUTDIR"/clang-r383902b1.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android11-qpr3-release/clang-r383902b1.tar.gz -P "$OUTDIR"
-  tar -C "$OUTDIR"/clang-llvm/ -zxvf "$OUTDIR"/clang-r383902b1.tar.gz
-  ! [[ -f "$OUTDIR"/android-11.0.0_r35.tar.gz ]] && wget https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/tags/android-11.0.0_r35.tar.gz -P "$OUTDIR"
-  tar -C "$OUTDIR"/gcc64-aosp/ -zxvf "$OUTDIR"/android-11.0.0_r35.tar.gz
-  ! [[ -f "$OUTDIR"/android-11.0.0_r34.tar.gz ]] && wget http://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/refs/tags/android-11.0.0_r34.tar.gz -P "$OUTDIR"
-  tar -C "$OUTDIR"/gcc32-aosp/ -zxvf "$OUTDIR"/android-11.0.0_r34.tar.gz
+  git clone https://github.com/rama982/clang --depth=1  "$OUTDIR"/clang-llvm
   git clone https://github.com/rama982/AnyKernel3 --depth=1 "$OUTDIR"/AnyKernel
 fi
 
@@ -141,7 +132,7 @@ export ZIPNAME="Genom-R"
 export IMAGE="${OUTDIR}/arch/arm64/boot/Image.gz-dtb"
 export DATE=$(date "+%m%d")
 export BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-export PATH="${OUTDIR}/clang-llvm/bin:${OUTDIR}/gcc64-aosp/bin:${OUTDIR}/gcc32-aosp/bin:${PATH}"
+export PATH="${OUTDIR}/clang-llvm/bin:${PATH}"
 export KBUILD_COMPILER_STRING="$(${OUTDIR}/clang-llvm/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')"
 export KBUILD_BUILD_HOST=$(uname -a | awk '{print $2}')
 export ARCH=arm64
